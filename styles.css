@@ -679,14 +679,26 @@ svg { width: 20px; height: 20px; flex: none; }
   .own     { margin: 6px 22px 0; }
   .kstrip  { padding: 2px 22px 6px; }
 
-  /* 2-column project board on wide desktop */
+  /* Masonry-style board on desktop: project blocks pack vertically into the
+     available space instead of leaving a tall gap beside a long project.
+     (A CSS grid makes every row as tall as its tallest project, which left
+     big blank space under short projects like BCP.) */
   .board-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0 24px;
+    display: block;
+    column-count: 2;
+    column-gap: 26px;
     padding: 0 22px;
   }
-  .proj-block { padding: 0; }
+  .board-grid .proj-block {
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+    width: 100%;
+    padding: 0;
+    margin: 0 0 20px;
+    display: inline-block;   /* helps WebKit keep a block intact in a column */
+    vertical-align: top;
+  }
   .own { margin: 0; }         /* inside .proj-block, no extra margin */
 
   /* FAB in content area */
