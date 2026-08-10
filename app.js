@@ -8,19 +8,21 @@ var A=window.Android||null;
 
 /* ---- STATUS CONFIG ---- */
 var ST_META=[
-  ['Pending',              'Pending',        'b-pn'],
-  ['In Progress',          'In Progress',    'b-ip'],
-  ['Awaiting Response',    'Await Response', 'b-ar'],
-  ['Awaiting Bank',        'Await Bank',     'b-ab'],
-  ['Awaiting Signoff',     'Await Signoff',  'b-asg'],
-  ['Awaiting Confirmation','Await Confirm',  'b-acf'],
-  ['Pending Testing',      'Testing',        'b-pt'],
-  ['Scheduled',            'Scheduled',      'b-sc'],
-  ['Completed',            'Done',           'b-dn'],
-  ['Cancelled',            'Cancelled',      'b-cx']
+  ['In Progress','In Progress','b-ip'],
+  ['On Hold',    'On Hold',    'b-ar'],
+  ['Dependency', 'Dependency', 'b-asg'],
+  ['Completed',  'Completed',  'b-dn']
 ];
 var STATUSES=ST_META.map(function(r){return r[0];});
-var AWAITS=['Awaiting Response','Awaiting Bank','Awaiting Signoff','Awaiting Confirmation'];
+/* legacy statuses collapse onto the new four */
+var STATUS_MAP={
+  'Pending':'In Progress','Pending Testing':'In Progress',
+  'Awaiting Response':'Dependency','Awaiting Bank':'Dependency',
+  'Awaiting Signoff':'Dependency','Awaiting Confirmation':'Dependency',
+  'Scheduled':'On Hold','Cancelled':'Completed'
+};
+/* "AWAITS" now means blocked on a dependency */
+var AWAITS=['Dependency'];
 function stShort(s){for(var i=0;i<ST_META.length;i++)if(ST_META[i][0]===s)return ST_META[i][1];return s;}
 function stCls(s){for(var i=0;i<ST_META.length;i++)if(ST_META[i][0]===s)return ST_META[i][2];return 'b-pn';}
 
@@ -96,7 +98,8 @@ var IC={
   ext:'<path d="M13.8 5.2h5v5M18.8 5.2l-8 8M18.5 13.8v4.9a.8.8 0 0 1-.8.8H5.8a.8.8 0 0 1-.8-.8V6.8a.8.8 0 0 1 .8-.8h4.9"/>',
   sun:'<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"/>',
   moon:'<path d="M21 12.8a9 9 0 1 1-9.8-9.8A7 7 0 0 0 21 12.8z"/>',
-  cloud:'<path d="M7 18h9.5a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 7.2 9.5 3.75 3.75 0 0 0 7 18z"/>'
+  cloud:'<path d="M7 18h9.5a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 7.2 9.5 3.75 3.75 0 0 0 7 18z"/>',
+  star:'<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.6l-5.08 2.7.98-5.68L3.75 9.6l5.7-.83z"/>'
 };
 function I(name,cls){return '<svg class="'+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+IC[name]+'</svg>';}
 
@@ -121,6 +124,7 @@ function loadState(){
     try{var p=JSON.parse(raw);if(p&&p.actionables){S=p;ensureDefaults();return;}}catch(e){}
   }
   S=window.buildSeed(Date.now());
+  ensureDefaults();
   saveState();
 }
 
@@ -139,12 +143,17 @@ function ensureDefaults(){
   S.people=S.people||[];S.projects=S.projects||[];
   /* SPOCs are global now — drop any legacy project binding */
   S.people.forEach(function(u){if(u.projectId!==undefined)delete u.projectId;});
+  /* built-in Personal project for quick self tasks */
+  if(!S.projects.some(function(p){return p.id==='__personal';}))
+    S.projects.push({id:'__personal',name:'Personal',code:'ME'});
   S.actionables.forEach(function(a){
     a.comments=a.comments||[];a.activity=a.activity||[];a.spocIds=a.spocIds||[];
     if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false};
     if(a.etaKind===undefined)a.etaKind=a.eta?'date':'none';
     if(a.etaEnd===undefined)a.etaEnd='';
     if(a.ticketUrl===undefined)a.ticketUrl='';
+    if(a.important===undefined)a.important=false;
+    if(STATUS_MAP[a.status]){a.status=STATUS_MAP[a.status];if(a.status==='Completed'&&!a.completedAt)a.completedAt=a.updatedAt||Date.now();}
   });
 }
 
@@ -224,14 +233,9 @@ function metrics(){
       if(k>=0&&k<=7)m.week.push(a);
       if(k===1)m.tomorrow.push(a);
     }else if(a.etaKind==='range'&&coversDay(a,t))m.today.push(a);
-    if(a.status==='Awaiting Bank'){m.awb.push(a);m.awaitAll.push(a);}
-    else if(a.status==='Awaiting Response'){m.awr.push(a);m.awaitAll.push(a);}
-    else if(a.status==='Awaiting Signoff'){m.aws.push(a);m.awaitAll.push(a);}
-    else if(a.status==='Awaiting Confirmation'){m.awc.push(a);m.awaitAll.push(a);}
+    if(a.status==='Dependency')m.awaitAll.push(a);
     else if(a.status==='In Progress')m.ip.push(a);
-    else if(a.status==='Pending')m.pn.push(a);
-    else if(a.status==='Pending Testing')m.pt.push(a);
-    else if(a.status==='Scheduled')m.sc.push(a);
+    else if(a.status==='On Hold')m.sc.push(a);
     if(isMine(a,mine))m.mine.push(a);
     if(remDue(a,t))m.remDueL.push(a);
     if(a.rem&&a.rem.on&&!a.rem.done&&a.rem.date===t)m.remToday.push(a);
@@ -264,6 +268,7 @@ function personStats(pid){
 
 /* ---- SORTING & FILTERING ---- */
 function smartCmp(a,b,t){
+  if(!!a.important!==!!b.important)return a.important?-1:1;
   var ea=endEta(a),eb=endEta(b);
   var oa=ea&&ea<t?0:1,ob=eb&&eb<t?0:1;
   if(oa!==ob)return oa-ob;
@@ -293,13 +298,10 @@ function quickPass(a,q,t,mine){
     case 'week':{if(!isOpen(a))return false;var e=endEta(a);if(!e)return false;var k=diffDays(e,t);return k>=0&&k<=7;}
     case 'overdue':return isOver(a,t);
     case 'followup':return remDue(a,t);
-    case 'awb':return isOpen(a)&&a.status==='Awaiting Bank';
-    case 'awr':return isOpen(a)&&a.status==='Awaiting Response';
-    case 'aws':return isOpen(a)&&a.status==='Awaiting Signoff';
-    case 'awc':return isOpen(a)&&a.status==='Awaiting Confirmation';
-    case 'awaiting':return isOpen(a)&&AWAITS.indexOf(a.status)>=0;
+    case 'important':return isOpen(a)&&!!a.important;
+    case 'awaiting':case 'dep':return isOpen(a)&&a.status==='Dependency';
     case 'inprog':return a.status==='In Progress';
-    case 'pending':return a.status==='Pending';
+    case 'onhold':return a.status==='On Hold';
     case 'completed':return a.status==='Completed';
     default:return true;
   }
@@ -342,6 +344,7 @@ function updateAct(id,patch){
     a[f]=patch[f];changed=true;
     if(f==='status'){if(patch[f]==='Completed')a.completedAt=Date.now();else if(a.completedAt)a.completedAt=null;}
   });
+  if(patch.important!==undefined&&!!patch.important!==!!a.important){a.important=!!patch.important;logAct(a,patch.important?'Marked important':'Unmarked important');changed=true;}
   if(patch.spocIds!==undefined){
     var oldK=a.spocIds.slice().sort().join(','),newK=patch.spocIds.slice().sort().join(',');
     if(oldK!==newK){logAct(a,'Owner/SPOC changed',spocLabel(a),patch.spocIds.length?patch.spocIds.map(function(i2){return personName(i2);}).join(' & '):'To be assigned');a.spocIds=patch.spocIds.slice();changed=true;}
@@ -375,8 +378,9 @@ function actRow(a,opts){
   var od=isOver(a,t);
   var done=a.status==='Completed'||a.status==='Cancelled';
   var desc=a.task?(a.task.length>90?a.task.slice(0,90)+'\u2026':a.task):'';
-  return '<button class="arow'+(od?' od':'')+(done?' done':'')+'" data-act="open" data-id="'+a.id+'">'+
+  return '<button class="arow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
+    (a.important?'<span class="impstar" title="Important">'+I('star')+'</span>':'')+
     '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
     (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
     '<div class="r2"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
@@ -390,8 +394,9 @@ function boardRow(a){
   var t=todayISO();var r=relEta(a);var od=isOver(a,t);
   var done=a.status==='Completed'||a.status==='Cancelled';
   var desc=a.task?(a.task.length>80?a.task.slice(0,80)+'\u2026':a.task):'';
-  return '<button class="orow'+(od?' od':'')+(done?' done':'')+'" data-act="open" data-id="'+a.id+'">'+
+  return '<button class="orow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
+    (a.important?'<span class="impstar" title="Important">'+I('star')+'</span>':'')+
     '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
     (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
     '<div class="r2"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
@@ -457,11 +462,13 @@ function vHome(){
   var m=metrics(),t=todayISO(),d=new Date();
   var dateLine=DOW[(d.getDay()+6)%7]+', '+fmtDY(t);
   var pills=['<button class="sumpill" data-act="kpi" data-q="all">'+m.open.length+' open</button>'];
+  var impN=m.open.filter(function(a){return a.important;}).length;
+  if(impN)             pills.push('<button class="sumpill sp-imp"   data-act="kpi" data-q="important">'+impN+' important</button>');
   if(m.mine.length)    pills.push('<button class="sumpill sp-mine"  data-act="kpi" data-q="mine">'+m.mine.length+' mine</button>');
   if(m.overdue.length) pills.push('<button class="sumpill sp-od"    data-act="kpi" data-q="overdue">'+m.overdue.length+' overdue</button>');
   if(m.today.length)   pills.push('<button class="sumpill sp-today" data-act="kpi" data-q="today">'+m.today.length+' due today</button>');
   if(m.week.length)    pills.push('<button class="sumpill sp-week"  data-act="kpi" data-q="week">'+m.week.length+' due this week</button>');
-  if(m.awaitAll.length)pills.push('<button class="sumpill sp-wait"  data-act="kpi" data-q="awaiting">'+m.awaitAll.length+' awaiting</button>');
+  if(m.awaitAll.length)pills.push('<button class="sumpill sp-wait"  data-act="kpi" data-q="awaiting">'+m.awaitAll.length+' dependency</button>');
   if(m.remDueL.length) pills.push('<button class="sumpill sp-fu"    data-act="kpi" data-q="followup">'+m.remDueL.length+' follow-ups due</button>');
   var isDark=(S.settings.theme||'dark')==='dark';
   var themeBtn='<button class="iconbtn" data-act="theme-toggle" title="Switch to '+(isDark?'light':'dark')+' theme">'+I(isDark?'sun':'moon')+'</button>';
@@ -469,6 +476,7 @@ function vHome(){
   var search='<button class="iconbtn" data-act="go-search">'+I('search')+'</button>';
   var h=topbar('Actionables',esc(dateLine),false,themeBtn+search+bell);
   h+='<div class="sumstrip">'+pills.join('')+'</div>';
+  h+='<button class="quickadd" data-act="quick-new">'+I('plus')+'Quick task for myself</button>';
   if(m.remDueL.length){
     var fus=sortActs(m.remDueL,'smart');
     h+='<div class="eyebrow">Follow-ups due<button class="lnk" data-act="kpi" data-q="followup">All '+fus.length+'</button></div>';
@@ -504,10 +512,9 @@ function vHome(){
 
 /* ---- ACTIONABLES LIST ---- */
 var QUICKS=[
-  ['all','All open'],['mine','Mine'],['followup','Follow-up due'],['overdue','Overdue'],
-  ['today','Due today'],['week','This week'],['awaiting','Awaiting'],
-  ['awb','Await bank'],['awr','Await response'],['aws','Await signoff'],['awc','Await confirm'],
-  ['inprog','In progress'],['pending','Pending'],['completed','Completed'],['everything','Everything']
+  ['all','All open'],['important','Important'],['mine','Mine'],['followup','Follow-up due'],
+  ['overdue','Overdue'],['today','Due today'],['week','This week'],
+  ['inprog','In progress'],['onhold','On hold'],['dep','Dependency'],['completed','Completed'],['everything','Everything']
 ];
 function vList(){
   var list=filteredActs(),t=todayISO(),mine=myIds();
@@ -590,8 +597,8 @@ function vProjectDetail(pid){
   list=seg==='done'?list.sort(function(x,y){return(y.completedAt||0)-(x.completedAt||0);}):sortActs(list,'smart');
   var h=topbar(o.name,o.code+' \u00b7 project view',true,
     '<button class="iconbtn" data-act="edit-proj" data-id="'+pid+'">'+I('edit')+'</button>');
-  h+='<div class="stats">'+stStat(st.open,'Open','var(--acc)')+stStat(st.od,'Overdue','var(--red)')+stStat(st.wait,'Awaiting','var(--amb)')+stStat(st.week,'Due this wk','var(--amb)')+stStat(st.fu,'Follow-ups','var(--pur)')+stStat(st.done30,'Done \u00b7 30d','var(--grn)')+'</div>';
-  var segs=[['open','Open'],['awaiting','Awaiting'],['overdue','Overdue'],['done','Completed']];
+  h+='<div class="stats">'+stStat(st.open,'Open','var(--acc)')+stStat(st.od,'Overdue','var(--red)')+stStat(st.wait,'Dependency','var(--amb)')+stStat(st.week,'Due this wk','var(--amb)')+stStat(st.fu,'Follow-ups','var(--pur)')+stStat(st.done30,'Done \u00b7 30d','var(--grn)')+'</div>';
+  var segs=[['open','Open'],['awaiting','Dependency'],['overdue','Overdue'],['done','Completed']];
   h+='<div class="chips" style="padding-top:16px">'+segs.map(function(s2){
     return '<button class="chip'+(seg===s2[0]?' on':'')+'" data-act="proj-seg" data-id="'+pid+'" data-seg="'+s2[0]+'">'+s2[1]+'</button>';
   }).join('')+'</div>';
@@ -665,7 +672,7 @@ function vReports(){
   var d=reportData(null);
   var h=topbar('Reports','Status & export',false,'');
   h+='<div class="eyebrow" style="margin-top:12px">Summary \u00b7 '+esc(fmtDY(todayISO()))+'</div>';
-  h+='<div class="pane"><div class="repnum">'+rn(d.open.length,'Open')+rn(d.overdue.length,'Overdue',d.overdue.length?'var(--red)':'')+''+rn(d.awaiting.length,'Awaiting',d.awaiting.length?'var(--amb)':'')+''+rn(d.fu.length,'Follow-ups',d.fu.length?'var(--pur)':'')+'</div>'+
+  h+='<div class="pane"><div class="repnum">'+rn(d.open.length,'Open')+rn(d.overdue.length,'Overdue',d.overdue.length?'var(--red)':'')+''+rn(d.awaiting.length,'Dependency',d.awaiting.length?'var(--amb)':'')+''+rn(d.fu.length,'Follow-ups',d.fu.length?'var(--pur)':'')+'</div>'+
     '<div style="font-size:.78rem;color:var(--tx2)">Due in 7 days: <b class="num">'+d.week.length+'</b> \u00b7 Completed this week: <b class="num">'+d.doneWeek.length+'</b></div></div>';
   h+='<div class="eyebrow">Export report</div>';
   h+='<div class="sect"><div class="note" style="padding:0 0 10px">Select a project, then download as PDF or Excel. Selecting a specific project downloads only that project\'s data.</div>'+
@@ -680,7 +687,7 @@ function vReports(){
     h+=list.length?'<div class="list">'+list.slice(0,8).map(function(a){return actRow(a);}).join('')+'</div>':emptyBox(emptyMsg,'');
   }
   section('Overdue / Breached',d.overdue,'Nothing overdue.');
-  section('Awaiting on others',d.awaiting,'No awaiting items.');
+  section('Blocked \u00b7 dependency',d.awaiting,'Nothing blocked on a dependency.');
   section('Follow-ups due',d.fu,'No follow-ups due.');
   section('Upcoming ETAs \u00b7 14 days',d.upcoming,'Nothing scheduled soon.');
   return h;
@@ -817,6 +824,7 @@ function renderDetail(rec){
   var t=todayISO(),od=isOver(a,t);
   $('.shead h2',rec.sheet).innerHTML=ttlHtml(a);
   var b='';
+  b+='<button class="impbtn'+(a.important?' on':'')+'" data-act="d-important">'+I('star')+(a.important?'Marked important':'Mark important')+'</button>';
   b+='<div class="nextact'+(od?' od':'')+'"><div class="l">'+(od?'OVERDUE \u00b7 Description':'Description / Task')+'</div>'+
     '<div class="t">'+esc(a.task)+'</div>'+
     (a.ticketUrl?'<a class="linkchip" href="'+esc(a.ticketUrl)+'">'+I('ext')+'Open ticket</a>':'')+
@@ -882,29 +890,52 @@ function renderDetail(rec){
 /* ---- ADD / EDIT FORM ---- */
 function openForm(id,prefill){
   var a=id?actById(id):null,f;
+  var quick=!!(prefill&&prefill.quick);
   if(a){
     f={projectId:a.projectId,ticket:a.ticket,ticketUrl:a.ticketUrl,lineItem:a.lineItem,task:a.task,
       spocIds:a.spocIds.slice(),etaKind:a.etaKind,eta:a.eta,etaEnd:a.etaEnd,
       remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',
-      status:a.status,notes:a.notes};
+      status:a.status,notes:a.notes,important:!!a.important,quick:false};
   }else{
-    var proj=(prefill&&prefill.projectId)||(S.projects[0]?S.projects[0].id:'');
+    var proj=quick?'__personal':((prefill&&prefill.projectId)||(S.projects[0]?S.projects[0].id:''));
     f={projectId:proj,ticket:'',ticketUrl:'',lineItem:'',task:'',spocIds:[],
       etaKind:prefill&&prefill.eta?'date':'none',eta:(prefill&&prefill.eta)||'',etaEnd:'',
-      remOn:false,remDate:'',remTime:'',remNote:'',status:'Pending',notes:''};
+      remOn:false,remDate:'',remTime:'',remNote:'',status:'In Progress',notes:'',
+      important:!!(prefill&&prefill.important),quick:quick};
   }
-  var rec=openSheet('<div class="shead"><h2>'+(id?'Edit actionable':'Add actionable')+'</h2>'+
+  var title=id?'Edit actionable':(quick?'Quick task':'Add actionable');
+  var rec=openSheet('<div class="shead"><h2>'+title+'</h2>'+
     '<button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody"></div>'+
     '<div class="sfoot"><button class="btn ghost" data-act="close-sheet">Cancel</button>'+
     '<button class="btn pri" data-act="form-save">Save</button></div>',
-    {full:true,tag:'form',data:{id:id||'',f:f}});
+    {full:!quick,tag:'form',data:{id:id||'',f:f}});
   renderForm(rec);
 }
 function renderForm(rec){
   var f=rec.data.f;
   var ppl=peopleSorted();
   f.spocIds=f.spocIds.filter(function(id){return !!personById(id);});
+  var impRow='<div class="fld wide"><label>Priority</label><div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('star')+'Mark as important</span><button class="switch'+(f.important?' on':'')+'" data-act="f-important"><i></i></button></div></div>';
+  var etaSel='<div class="fld'+(f.etaKind==='date'?'':' wide')+'"><label>ETA</label><select data-chg="f-etakind">'+
+    ETA_KINDS.map(function(k){return '<option value="'+k[0]+'"'+(f.etaKind===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+
+    '</select></div>'+
+    (f.etaKind==='date'?'<div class="fld"><label>Date</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div>':'')+
+    (f.etaKind==='range'?'<div class="fld"><label>From</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div>':'');
+  if(f.quick){
+    var bq='<div class="meta">'+
+      '<div class="fld wide"><label>Task *</label><input data-chg="f-line" placeholder="e.g. Prepare weekly status deck" value="'+esc(f.lineItem)+'"></div>'+
+      etaSel+
+      '<div class="fld wide"><label>Status</label><select data-chg="f-status">'+
+      STATUSES.filter(function(s){return s!=='Completed';}).map(function(s){return '<option'+(f.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
+      '</select></div>'+
+      impRow+
+      '<div class="fld wide"><label>Notes \u00b7 optional</label><textarea data-chg="f-task" placeholder="Any details\u2026">'+esc(f.task)+'</textarea></div>'+
+      '</div>'+
+      '<div class="note" style="padding:10px 0 0">Personal task \u00b7 no owner. Filed under the <b>Personal</b> project.</div>';
+    $('.sbody',rec.sheet).innerHTML=bq;
+    return;
+  }
   var b='<div class="meta">'+
     /* 1 — Project */
     '<div class="fld wide"><label>1 \u00b7 Project *</label><select data-chg="f-proj">'+
@@ -932,6 +963,7 @@ function renderForm(rec){
     STATUSES.filter(function(s){return rec.data.id||(s!=='Completed'&&s!=='Cancelled');})
       .map(function(s){return '<option'+(f.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
     '</select></div>'+
+    impRow+
     /* 7 — Ticket / Ref */
     '<div class="fld"><label>7 \u00b7 Ticket / Ref ID</label><input data-chg="f-ticket" placeholder="e.g. ORP-3902" value="'+esc(f.ticket)+'" autocapitalize="characters"></div>'+
     '<div class="fld"><label>Ticket link \u00b7 optional</label><input data-chg="f-url" inputmode="url" placeholder="https://\u2026" value="'+esc(f.ticketUrl)+'"></div>'+
@@ -947,15 +979,15 @@ function renderForm(rec){
 function saveForm(rec){
   var f=rec.data.f;
   if(!f.projectId){toast('Pick a project');return;}
-  if(!f.lineItem||!f.lineItem.trim()){toast('Add a line item');return;}
-  if(!f.task||!f.task.trim()){toast('Add a description');return;}
-  f.lineItem=f.lineItem.trim();f.task=f.task.trim();
+  if(!f.lineItem||!f.lineItem.trim()){toast(f.quick?'Add a task':'Add a line item');return;}
+  if(!f.quick&&(!f.task||!f.task.trim())){toast('Add a description');return;}
+  f.lineItem=f.lineItem.trim();f.task=(f.task||'').trim();
   if(f.etaKind==='date'&&!f.eta)f.etaKind='tbd';
   if(f.etaKind==='range'&&!f.eta&&!f.etaEnd)f.etaKind='tbd';
   if(f.etaKind==='range'&&f.eta&&f.etaEnd&&f.etaEnd<f.eta){var tmp=f.eta;f.eta=f.etaEnd;f.etaEnd=tmp;}
   if(rec.data.id){
     var a0=actById(rec.data.id);
-    updateAct(rec.data.id,{projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),lineItem:f.lineItem,task:f.task,spocIds:f.spocIds,etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,status:f.status,notes:f.notes});
+    updateAct(rec.data.id,{projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),lineItem:f.lineItem,task:f.task,spocIds:f.spocIds,etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,status:f.status,notes:f.notes,important:f.important});
     if(a0){
       var was=a0.rem&&a0.rem.on;
       if(f.remOn&&!was)remPatch(rec.data.id,{on:true,date:f.remDate,time:f.remTime,note:f.remNote,done:false},{e:'Reminder set',t:f.remDate?fmtDY(f.remDate):''});
@@ -967,7 +999,7 @@ function saveForm(rec){
     var now=Date.now();
     var a={id:uid('a'),projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),
       lineItem:f.lineItem,task:f.task,spocIds:f.spocIds.slice(),etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,
-      status:f.status,rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,done:false},
+      status:f.status,important:!!f.important,rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,done:false},
       notes:f.notes,comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null};
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
@@ -1090,7 +1122,7 @@ function exportPdf(projId,projLabel){
   /* Summary */
   doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20,26,36);doc.text('SUMMARY',M,y);y+=14;
   doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(45,55,70);
-  var srows=[['Open items',d.open.length],['Overdue / Breached',d.overdue.length],['Awaiting',d.awaiting.length],['Follow-ups due',d.fu.length],['Due this week',d.week.length],['Completed this week',d.doneWeek.length]];
+  var srows=[['Open items',d.open.length],['Overdue / Breached',d.overdue.length],['Dependency',d.awaiting.length],['Follow-ups due',d.fu.length],['Due this week',d.week.length],['Completed this week',d.doneWeek.length]];
   srows.forEach(function(r){doc.text(r[0]+': '+r[1],M,y);y+=14;});
   y+=8;
   /* Main table: Project | Line Item | Description | Owner | ETA | Status */
@@ -1112,7 +1144,7 @@ function exportPdf(projId,projLabel){
   }
   section('All Open Items ('+label+')',d.open,'No open items.');
   section('Overdue / Breached',d.overdue,'Nothing overdue.');
-  section('Awaiting on Others',d.awaiting,'No awaiting items.');
+  section('Blocked \u00b7 dependency',d.awaiting,'Nothing blocked on a dependency.');
   /* Footer */
   var pages=doc.internal.getNumberOfPages();
   for(var p=1;p<=pages;p++){doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(150,158,170);doc.text(label+' \u00b7 Project Status Report \u00b7 '+fmtDY(t),M,818);doc.text('Page '+p+' / '+pages,W-M,818,{align:'right'});}
@@ -1153,6 +1185,9 @@ document.addEventListener('click',function(e){
     /* Actionables */
     case 'open':openDetail(id);break;
     case 'add':openForm(null,view.name==='projectDetail'?{projectId:view.params.id}:null);break;
+    case 'quick-new':openForm(null,{quick:true});break;
+    case 'f-important':{var fri=sheetFor('form');if(fri){fri.data.f.important=!fri.data.f.important;renderForm(fri);}break;}
+    case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
     case 'open-filters':openFilters();break;
     case 'filters-clear':{var qk=filters.quick;filters=defaultFilters();filters.quick=qk;var fr=sheetFor('filters');if(fr)renderFilters(fr);render();break;}

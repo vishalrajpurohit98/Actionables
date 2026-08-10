@@ -1013,3 +1013,28 @@ html.light-theme .brows .orow.od { box-shadow: inset 3px 0 0 var(--red); }
 
 /* --- Keep one clearly-primary action; others stay quiet --- */
 .btn.pri { box-shadow: 0 1px 2px rgba(0,0,0,.16); }
+
+/* ---- Important flag + Quick task ---- */
+.impstar { display:inline-flex; color: var(--amb); flex:none; margin-right:2px; }
+.impstar svg { width:15px; height:15px; }
+.list .arow.imp, .brows .orow.imp { background: var(--amb-dim); }
+.sp-imp { color: var(--amb); background: var(--amb-dim); border-color: rgba(255,180,84,.28); }
+.impbtn {
+  display:inline-flex; align-items:center; gap:7px; width:100%; justify-content:center;
+  font-size:.82rem; font-weight:600; color: var(--amb);
+  background: var(--amb-dim); border:1px solid rgba(255,180,84,.32);
+  padding:10px 13px; border-radius:12px; margin-bottom:13px;
+}
+.impbtn svg { width:16px; height:16px; }
+.impbtn:not(.on) { color: var(--tx2); background: var(--sur2); border-color: var(--line2); }
+.impbtn:not(.on) svg { color: var(--tx3); }
+.quickadd {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:calc(100% - 32px); margin:0 16px 10px;
+  font-size:.82rem; font-weight:600; color: var(--tx2);
+  background: var(--sur); border:1px dashed var(--line2);
+  padding:11px; border-radius:12px;
+}
+.quickadd svg { width:16px; height:16px; color: var(--acc); }
+.quickadd:active { background: var(--sur2); transform: scale(.99); }
+@media (min-width: 1024px){ .quickadd { width:calc(100% - 44px); margin:0 22px 10px; } }
