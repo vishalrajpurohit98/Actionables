@@ -784,8 +784,7 @@ html.light-theme body { background: #E4ECF5; color: var(--tx); }
 .orow .rdesc { color: var(--tx3); }
 
 /* Light theme specific overrides for cards and surfaces */
-html.light-theme .arow,
-html.light-theme .orow { box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+/* per-row shadows removed — rows are grouped into hairline containers */
 html.light-theme .topbar { background: linear-gradient(var(--bg) 82%, transparent); }
 html.light-theme input,
 html.light-theme textarea,
@@ -848,12 +847,7 @@ body, input, textarea, select, button, .btn, .chip, .tab span {
 .sheet { border-radius: 22px 22px 0 0; }
 .grab { opacity: .8; }
 
-/* Card depth — subtle in dark, gentle shadow in light */
-.arow, .orow {
-  box-shadow: 0 1px 2px rgba(0,0,0,.18);
-}
-html.light-theme .arow,
-html.light-theme .orow,
+/* Card depth lives on grouped row containers now (see redesign layer) */
 html.light-theme .tbl,
 html.light-theme .pane,
 html.light-theme .stat {
@@ -921,3 +915,101 @@ html.light-theme .cloudgate { background: rgba(210,222,240,.9); }
   color: var(--tx3); font-size: .76rem; padding: 6px; background: none; border: 0;
 }
 .cloudcard .cg-skip:active { color: var(--tx2); }
+
+/* ============================================================
+   REDESIGN — quiet operations language (applied to the app)
+   Grouped hairline rows, dot-badges, subtle overdue spine,
+   less colour. Works in both dark and light themes.
+   ============================================================ */
+
+/* --- Grouped row containers: board groups + every list --- */
+.list, .brows {
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  overflow: hidden;
+  background: var(--sur);
+  box-shadow: 0 1px 2px rgba(0,0,0,.14);
+}
+html.light-theme .list,
+html.light-theme .brows {
+  box-shadow: 0 1px 3px rgba(30,50,90,.07), 0 1px 2px rgba(30,50,90,.04);
+}
+.list .arow,
+.brows .orow {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--line);
+}
+.list .arow:last-child,
+.brows .orow:last-child { border-bottom: 0; }
+.list .arow:active,
+.brows .orow:active { transform: none; background: var(--sur2); }
+
+/* Overdue = thin left spine (no layout shift), not a red card */
+.list .arow.od,
+.brows .orow.od {
+  border-left: 0;
+  padding-left: 13px;
+  box-shadow: inset 3px 0 0 var(--red);
+}
+html.light-theme .list .arow.od,
+html.light-theme .brows .orow.od { box-shadow: inset 3px 0 0 var(--red); }
+
+/* Completed / cancelled rows recede */
+.list .arow.done,
+.brows .orow.done { opacity: .62; }
+.list .arow.done .ttl,
+.brows .orow.done .ttl { text-decoration: line-through; text-decoration-color: var(--tx3); }
+
+/* --- Status: quiet dot-badges (keep the .b-* colour map) --- */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  text-transform: none;
+  font-size: .66rem; font-weight: 600; letter-spacing: .01em;
+  padding: 3px 9px 3px 8px; border-radius: 999px; border: 0;
+}
+.badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; opacity: .95; flex: none;
+}
+.b-pn { color: var(--tx2); background: var(--sur2); }
+.b-sc { color: var(--tx2); background: var(--sur2); }
+.b-ab { color: var(--amb); background: var(--amb-dim); }
+.b-cx { color: var(--tx3); background: var(--sur2); }
+
+/* --- ETA cues: coloured text, not filled chips --- */
+.datechip {
+  background: transparent;
+  border: 0;
+  padding: 3px 2px;
+  font-size: .72rem;
+}
+.dc-od, .dc-today { color: var(--red); font-weight: 700; }
+.dc-soon { color: var(--amb); }
+.dc-fut  { color: var(--tx2); }
+.dc-none { color: var(--tx3); }
+.dc-done { color: var(--grn); }
+.dc-tbd  { color: var(--amb); }
+.fu { background: transparent; padding: 3px 2px; }
+
+/* --- Remove the coloured accent bars on KPI/stat tiles --- */
+.kpi::before, .stat::before { display: none; }
+
+/* --- Summary strip: neutral counts; red reserved for priority --- */
+.sp-week, .sp-wait, .sp-fu, .sp-mine {
+  color: var(--tx2); background: var(--sur); border-color: var(--line);
+}
+
+/* --- Flatten the detail "next action" block --- */
+.nextact {
+  background: var(--acc-dim);
+  border: 0;
+  border-left: 3px solid var(--acc);
+  border-radius: 11px;
+}
+.nextact.od { background: var(--red-dim); border-left-color: var(--red); }
+
+/* --- Keep one clearly-primary action; others stay quiet --- */
+.btn.pri { box-shadow: 0 1px 2px rgba(0,0,0,.16); }

@@ -372,9 +372,10 @@ function ttlHtml(a){return a.ticket?'<span class="tk">'+esc(a.ticket)+'</span> \
 /* actRow: shows in list view — includes truncated description */
 function actRow(a,opts){
   opts=opts||{};var t=todayISO();var r=relEta(a);
-  var dim=a.status==='Completed'||a.status==='Cancelled'?' style="opacity:.55"':'';
+  var od=isOver(a,t);
+  var done=a.status==='Completed'||a.status==='Cancelled';
   var desc=a.task?(a.task.length>90?a.task.slice(0,90)+'\u2026':a.task):'';
-  return '<button class="arow" data-act="open" data-id="'+a.id+'"'+dim+'>'+
+  return '<button class="arow'+(od?' od':'')+(done?' done':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
     '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
     (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
@@ -387,8 +388,9 @@ function actRow(a,opts){
 /* boardRow: shows in project board — includes truncated description */
 function boardRow(a){
   var t=todayISO();var r=relEta(a);var od=isOver(a,t);
+  var done=a.status==='Completed'||a.status==='Cancelled';
   var desc=a.task?(a.task.length>80?a.task.slice(0,80)+'\u2026':a.task):'';
-  return '<button class="orow'+(od?' od':'')+'" data-act="open" data-id="'+a.id+'">'+
+  return '<button class="orow'+(od?' od':'')+(done?' done':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
     '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
     (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
