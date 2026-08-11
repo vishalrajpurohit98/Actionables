@@ -1048,3 +1048,11 @@ html.light-theme .toast-act{color:#8ab4ff;}
 .tagmrow input{flex:1;min-width:0;background:var(--sur2);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;color:var(--tx);font-size:.85rem;}
 .tagmrow .c{font-family:var(--mono);font-size:.7rem;color:var(--tx3);min-width:20px;text-align:right;}
 .btn.mini{flex:none;height:32px;padding:0 10px;font-size:.74rem;}
+
+/* ---- Version history ---- */
+.verlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.verrow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);}
+.verrow:last-child{border-bottom:0;}
+.verrow .w{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.verrow .w b{font-size:.86rem;font-weight:600;}
+.verrow .w .s{font-size:.72rem;color:var(--tx3);}

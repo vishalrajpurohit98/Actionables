@@ -126,10 +126,11 @@ function loadState(){
   try{if(A&&A.loadData)raw=A.loadData()||'';}catch(e){raw='';}
   if(!raw){try{raw=localStorage.getItem('act_data')||'';}catch(e){raw='';}}
   if(raw){
-    try{var p=JSON.parse(raw);if(p&&p.actionables){S=p;ensureDefaults();return;}}catch(e){}
+    try{var p=JSON.parse(raw);if(p&&p.actionables){S=p;ensureDefaults();snapshot('Opened');return;}}catch(e){}
   }
   S=window.buildSeed(Date.now());
   ensureDefaults();
+  snapshot('First run');
   saveState();
 }
 
@@ -146,8 +147,6 @@ function ensureDefaults(){
   var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'blue',font:'default'};
   for(var k in d)if(S.settings[k]===undefined)S.settings[k]=d[k];
   S.people=S.people||[];S.projects=S.projects||[];
-  if(!S.tombstones||typeof S.tombstones!=='object')S.tombstones={};
-  var _tcut=Date.now()-30*86400000;for(var _tk in S.tombstones){if(S.tombstones[_tk]<_tcut)delete S.tombstones[_tk];}
   /* SPOCs are global now — drop any legacy project binding */
   S.people.forEach(function(u){if(u.projectId!==undefined)delete u.projectId;});
   /* built-in Personal project for quick self tasks */
@@ -772,6 +771,7 @@ function vSettings(){
     '<button class="rowline" data-act="tmpl-download">'+I('dl')+'<span class="t">Download data template (Excel)<br><span class="s">Export all data to an editable .xlsx</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="tmpl-import">'+I('doc')+'<span class="t">Update from template<br><span class="s">Load an edited .xlsx to update &amp; add items</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="tag-manage">'+I('filter')+'<span class="t">Manage tags<br><span class="s">Rename or delete tags across all tasks</span></span>'+I('chevR')+'</button>'+
+    '<button class="rowline" data-act="versions-open">'+I('clock')+'<span class="t">Version history<br><span class="s">Roll back to a recent saved state</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="reseed">'+I('doc')+'<span class="t">Reset to original data<br><span class="s">Replace all data with the BCP / ICICI / SCB demo set</span></span>'+I('chevR')+'</button>'+
     '</div>';
   /* Sync (Firebase) */
@@ -1207,6 +1207,9 @@ document.addEventListener('click',function(e){
     case 'd-tag-del':{var dr1=sheetFor('detail');if(dr1){var a1=actById(dr1.data.id);if(a1){var dd=(el.getAttribute('data-tag')||'').toLowerCase();updateAct(dr1.data.id,{tags:(a1.tags||[]).filter(function(x){return x.toLowerCase()!==dd;})});renderDetail(dr1);render();}}break;}
     case 'd-tag-add':{var dr2=sheetFor('detail');if(dr2){var a2=actById(dr2.data.id);if(a2){var nt2=(a2.tags||[]).slice();addTagTo(nt2,el.getAttribute('data-tag'));updateAct(dr2.data.id,{tags:nt2});renderDetail(dr2);render();}}break;}
     case 'tag-manage':openTagManager();break;
+    case 'versions-open':openVersions();break;
+    case 'version-snap':{snapshot('Manual restore point');var _vr=sheetFor('versions');if(_vr)renderVersions(_vr);toast('Restore point saved');break;}
+    case 'version-restore':{var _vi=parseInt(el.getAttribute('data-i'),10);var _va=loadVersions(),_vv=_va[_vi];if(_vv)confirmSheet('Restore this version?',esc(_vv.reason)+' \u2014 '+relTime(_vv.ts)+' \u00b7 '+_vv.count+' task'+(_vv.count===1?'':'s')+'. This replaces current data and syncs to your other device.','Restore',false,function(){restoreVersion(_vi);});break;}
     case 'tag-rename':{var tm=sheetFor('tagmgr');if(tm){var orig=el.getAttribute('data-tag'),inps=tm.sheet.querySelectorAll('input[data-tagorig]'),inp=null;for(var _i=0;_i<inps.length;_i++)if(inps[_i].getAttribute('data-tagorig')===orig){inp=inps[_i];break;}var nv=inp?inp.value:'';if(nv&&nv.trim()&&renameTag(orig,nv)){renderTagManager(tm);render();toast('Tag renamed');}else toast('Enter a new tag name');}break;}
     case 'tag-delete':{var tm2=sheetFor('tagmgr');if(tm2){var tgd=el.getAttribute('data-tag');confirmSheet('Delete tag?','Remove \u201c'+tgd+'\u201d from all tasks.','Delete',true,function(){deleteTag(tgd);renderTagManager(tm2);render();toast('Tag deleted');});}break;}
     case 'd-tag-addbuf':{var dr3=sheetFor('detail');if(dr3){var a3=actById(dr3.data.id);if(a3){var nt3=(a3.tags||[]).slice(),di=$('#dTagIn',dr3.sheet);if(di&&di.value){parseTagList(di.value).forEach(function(t){addTagTo(nt3,t);});di.value='';}updateAct(dr3.data.id,{tags:nt3});renderDetail(dr3);render();}}break;}
@@ -1260,7 +1263,7 @@ document.addEventListener('click',function(e){
     case 'd-complete':{var dr=sheetFor('detail');if(dr){updateAct(dr.data.id,{status:'Completed'});var a2=actById(dr.data.id);if(a2){logAct(a2,'Completed');saveState();}renderDetail(dr);render();toast('Completed');}break;}
     case 'd-reopen':{var dr2=sheetFor('detail');if(dr2){updateAct(dr2.data.id,{status:'In Progress'});var a3=actById(dr2.data.id);if(a3){logAct(a3,'Reopened');saveState();}renderDetail(dr2);render();toast('Reopened');}break;}
     case 'd-edit':{var dr3=sheetFor('detail');if(dr3)openForm(dr3.data.id);break;}
-    case 'd-delete':{var dr4=sheetFor('detail');if(dr4){var aa=actById(dr4.data.id);if(aa){var _ix=S.actionables.indexOf(aa),_rm=aa;S.actionables.splice(_ix,1);S.tombstones[_rm.id]=Date.now();saveState();closeSheet(dr4);render();toast('Deleted',{label:'Undo',fn:function(){delete S.tombstones[_rm.id];S.actionables.splice(Math.min(_ix,S.actionables.length),0,_rm);saveState();render();toast('Restored');}});}}break;}
+    case 'd-delete':{var dr4=sheetFor('detail');if(dr4){var aa=actById(dr4.data.id);if(aa){var _ix=S.actionables.indexOf(aa),_rm=aa;S.actionables.splice(_ix,1);saveState();closeSheet(dr4);render();toast('Deleted',{label:'Undo',fn:function(){S.actionables.splice(Math.min(_ix,S.actionables.length),0,_rm);saveState();render();toast('Restored');}});}}break;}
     case 'd-comment':{var dr5=sheetFor('detail');if(dr5){var inp=$('#cmtIn',dr5.sheet);var txt=(inp&&inp.value||'').trim();if(!txt)break;addComment(dr5.data.id,txt);renderDetail(dr5);render();}break;}
     /* Reminders */
     case 'rem-add':{var rr=sheetFor('detail');if(rr){remPatch(rr.data.id,{on:true,done:false,date:todayISO(),time:'',note:''},{e:'Reminder set',t:fmtDY(todayISO())});renderDetail(rr);render();}break;}
@@ -1319,7 +1322,7 @@ document.addEventListener('click',function(e){
           var pp=JSON.parse(raw);
           if(!pp||!pp.actionables)throw new Error('bad');
           confirmSheet('Replace all data?','Current data will be overwritten with the backup.','Restore backup',true,function(){
-            S=pp;ensureDefaults();saveState();applyTheme();closeSheet(ir);filters=defaultFilters();render();syncSchedule();toast('Backup restored successfully');
+            snapshot('Before restore');S=pp;ensureDefaults();saveState();applyTheme();closeSheet(ir);filters=defaultFilters();render();syncSchedule();toast('Backup restored successfully');
           });
         }catch(e3){toast('Not a valid backup JSON');}
       }
@@ -1346,7 +1349,7 @@ document.addEventListener('click',function(e){
           confirmSheet('Apply template update?',
             c.updated+' updated \u00b7 '+c.added+' added \u00b7 '+c.deleted+' deleted'+extra+'. Items not in the file are left unchanged.',
             'Apply update',c.deleted>0,function(){
-              S=clone;ensureDefaults();saveState();applyTheme();closeSheet(trec);filters=defaultFilters();render();syncSchedule();toast('Data updated from template');
+              snapshot('Before template import');S=clone;ensureDefaults();saveState();applyTheme();closeSheet(trec);filters=defaultFilters();render();syncSchedule();toast('Data updated from template');
             });
         };
         fr.readAsArrayBuffer(file);
@@ -1354,7 +1357,7 @@ document.addEventListener('click',function(e){
       tinp.click();
       break;
     }
-    case 'reseed':confirmSheet('Reset to demo data?','All current data will be replaced with the BCP / ICICI / SCB demo set.','Reset',true,function(){S=window.buildSeed(Date.now());saveState();applyTheme();filters=defaultFilters();render();syncSchedule();toast('Demo data restored');});break;
+    case 'reseed':confirmSheet('Reset to demo data?','All current data will be replaced with the BCP / ICICI / SCB demo set.','Reset',true,function(){snapshot('Before reset');S=window.buildSeed(Date.now());saveState();applyTheme();filters=defaultFilters();render();syncSchedule();toast('Demo data restored');});break;
   }
 });
 
@@ -1426,7 +1429,8 @@ window.__onResume=function(){render();};
 window.__getState=function(){return S;};
 window.__applyCloudState=function(obj){
   if(!obj||!obj.actionables)return;
-  S=mergeStates(S,obj);ensureDefaults();
+  snapshot('Before sync');
+  S=obj;ensureDefaults();
   try{localStorage.setItem('act_data',JSON.stringify(S));}catch(e){}
   applyTheme();
   render();                                   /* sheets live in #sheets, untouched by render() */
@@ -1538,7 +1542,7 @@ function runTemplateImport(wb){
     var id=String(hval(row,am,['id'])||'').trim();
     var line=cap(String(hval(row,am,['lineitem','line','title'])||'').trim(),200);
     var del=String(hval(row,am,['delete','remove'])||'').trim().toLowerCase();
-    if(del==='yes'||del==='y'||del==='x'||del==='true'||del==='1'){if(id&&actById(id)){S.actionables=S.actionables.filter(function(z){return z.id!==id;});S.tombstones=S.tombstones||{};S.tombstones[id]=Date.now();c.deleted++;}continue;}
+    if(del==='yes'||del==='y'||del==='x'||del==='true'||del==='1'){if(id&&actById(id)){S.actionables=S.actionables.filter(function(z){return z.id!==id;});c.deleted++;}continue;}
     if(!line)continue;
     var proj=findOrAddProject(hval(row,am,['project','projectname']),c);
     var spocIds=ownersToIds(hval(row,am,['ownerspoc','owner','spoc','owners']),function(n){return findOrAddPerson(n,c);});
@@ -1599,23 +1603,6 @@ function tagEditHtml(tags,delAct,addAct,addbufAct,inputId){
 /* ================= Review additions: caps, sync-merge, sync badge, tag manager ================= */
 function cap(s,n){s=String(s==null?'':s);return s.length>n?s.slice(0,n):s;}
 
-/* Record-level merge for cloud sync: newest updatedAt wins per task; deletions
-   propagate via tombstones. Single-doc model preserved (no schema migration). */
-function mergeStates(local,remote){
-  local=local||{};remote=remote||{};
-  var cutoff=Date.now()-30*86400000,tomb={};
-  function absorb(src){var tt=src&&src.tombstones;if(tt)for(var k in tt){if(tt[k]>cutoff)tomb[k]=Math.max(tomb[k]||0,tt[k]);}}
-  absorb(local);absorb(remote);
-  var byId={};
-  (local.actionables||[]).forEach(function(a){byId[a.id]=a;});
-  (remote.actionables||[]).forEach(function(a){var ex=byId[a.id];if(!ex||(a.updatedAt||0)>(ex.updatedAt||0))byId[a.id]=a;});
-  var acts=[];for(var id in byId){var a=byId[id];if((tomb[id]||0)>=(a.updatedAt||0))continue;acts.push(a);}
-  function unionById(la,ra){var seen={},out=[];(la||[]).forEach(function(x){if(x&&!seen[x.id]){seen[x.id]=1;out.push(x);}});(ra||[]).forEach(function(x){if(x&&!seen[x.id]){seen[x.id]=1;out.push(x);}});return out;}
-  return {version:3,actionables:acts,tombstones:tomb,
-    projects:unionById(local.projects,remote.projects),
-    people:unionById(local.people,remote.people),
-    settings:local.settings||remote.settings||{}};
-}
 
 /* Sync status dot in the home header (only when cloud sync is configured). */
 function cloudBadgeHtml(){
@@ -1656,4 +1643,47 @@ function renderTagManager(rec){
       '<button class="btn danger mini" data-act="tag-delete" data-tag="'+esc(t)+'">Delete</button></div>';
   }).join('')+'</div>'):'<div class="note">No tags yet. Add tags to tasks and they\u2019ll appear here to rename or delete.</div>';
   $('.sbody',rec.sheet).innerHTML='<p style="color:var(--tx2);font-size:.83rem;margin-bottom:12px">Rename applies everywhere the tag is used; delete removes it from all tasks.</p>'+body;
+}
+
+/* ================= On-device version history (restore points) ================= */
+var VERSIONS_KEEP=6;
+function loadVersions(){try{return JSON.parse(localStorage.getItem('act_versions')||'[]');}catch(e){return [];}}
+function snapshot(reason){
+  try{
+    if(!S||!S.actionables)return;
+    var data=JSON.stringify(S);
+    var arr=loadVersions();
+    if(arr.length&&arr[0].data===data)return;           /* skip if nothing changed */
+    arr.unshift({ts:Date.now(),reason:reason||'Restore point',count:S.actionables.length,data:data});
+    while(arr.length>VERSIONS_KEEP)arr.pop();
+    localStorage.setItem('act_versions',JSON.stringify(arr));
+  }catch(e){}
+}
+function relTime(ts){
+  var s=Math.max(0,Math.round((Date.now()-ts)/1000));
+  if(s<60)return 'just now';
+  var mn=Math.round(s/60);if(mn<60)return mn+' min ago';
+  var hr=Math.round(mn/60);if(hr<24)return hr+' hr ago';
+  var d=Math.round(hr/24);return d+' day'+(d>1?'s':'')+' ago';
+}
+function restoreVersion(i){
+  var arr=loadVersions(),v=arr[i];if(!v)return;
+  snapshot('Before restore');                            /* so the rollback itself is undoable */
+  try{S=JSON.parse(v.data);}catch(e){toast('Could not read that version');return;}
+  ensureDefaults();saveState();applyTheme();filters=defaultFilters();
+  var vr=sheetFor('versions');if(vr)closeSheet(vr);
+  render();if(window.syncSchedule)syncSchedule();
+  toast('Restored version from '+relTime(v.ts));
+}
+function openVersions(){var rec=openSheet('<div class="shead"><h2>Version history</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody"></div>',{tag:'versions'});renderVersions(rec);}
+function renderVersions(rec){
+  var arr=loadVersions();
+  var rows=arr.length?('<div class="verlist">'+arr.map(function(v,i){
+    return '<div class="verrow"><span class="w"><b>'+esc(v.reason)+'</b><span class="s">'+relTime(v.ts)+' \u00b7 '+v.count+' task'+(v.count===1?'':'s')+'</span></span>'+
+      '<button class="btn ghost mini" data-act="version-restore" data-i="'+i+'">Restore</button></div>';
+  }).join('')+'</div>'):'<div class="note">No restore points yet. They\u2019ll appear here as you use the app.</div>';
+  $('.sbody',rec.sheet).innerHTML=
+    '<p style="color:var(--tx2);font-size:.83rem;line-height:1.5;margin-bottom:12px">Up to '+VERSIONS_KEEP+' recent states are saved on this device \u2014 when you open the app, before a sync overwrites data, and before resets or imports. Restoring replaces current data and syncs it to your other device.</p>'+
+    '<button class="btn ghost" style="margin-bottom:14px" data-act="version-snap">'+I('check')+'Create restore point now</button>'+
+    rows;
 }
