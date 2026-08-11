@@ -196,6 +196,7 @@ function personProjectCodes(pid){
   return codes;
 }
 function actById(id){for(var i=0;i<S.actionables.length;i++)if(S.actionables[i].id===id)return S.actionables[i];return null;}
+function mainActs(){return S.actionables.filter(function(a){return a.projectId!=='__personal';});}
 function isOpen(a){return a.status!=='Completed';}
 function spocLabel(a){if(!a.spocIds.length)return 'To be assigned';return a.spocIds.map(function(id){return personName(id);}).join(' & ');}
 function spocKey(a){return a.spocIds.length?a.spocIds.slice().sort().join('+'):'__tbc';}
@@ -229,7 +230,7 @@ function metrics(){
   var m={open:[],overdue:[],today:[],week:[],tomorrow:[],mine:[],
     awaitAll:[],ip:[],sc:[],done30:[],remDueL:[],remToday:[]};
   var cutoff=Date.now()-30*86400000;
-  S.actionables.forEach(function(a){
+  mainActs().forEach(function(a){
     if(a.status==='Completed'){if(a.completedAt&&a.completedAt>=cutoff)m.done30.push(a);return;}
     m.open.push(a);
     var end=endEta(a);
@@ -262,7 +263,7 @@ function projStats(pid){
 }
 function personStats(pid){
   var t=todayISO(),st={open:0,od:0,fu:0,week:0};
-  S.actionables.forEach(function(a){
+  mainActs().forEach(function(a){
     if(!isOpen(a))return;
     var hit=pid==='__tbc'?a.spocIds.length===0:a.spocIds.indexOf(pid)>=0;
     if(!hit)return;
@@ -314,7 +315,7 @@ function quickPass(a,q,t,mine){
 }
 function filteredActs(){
   var t=todayISO(),mine=myIds(),q=filters.q.trim().toLowerCase();
-  var list=S.actionables.filter(function(a){
+  var list=mainActs().filter(function(a){
     if(!quickPass(a,filters.quick,t,mine))return false;
     if(filters.project.length&&filters.project.indexOf(a.projectId)<0)return false;
     if(filters.spoc.length){var hit=false;for(var i=0;i<filters.spoc.length;i++){var sid=filters.spoc[i];if(sid==='__tbc'?a.spocIds.length===0:a.spocIds.indexOf(sid)>=0){hit=true;break;}}if(!hit)return false;}
@@ -503,6 +504,7 @@ function vHome(){
   h+='<div class="eyebrow">Project &amp; Owner/SPOC<span style="font-size:.7rem;color:var(--tx3);font-weight:500;letter-spacing:0;text-transform:none">'+m.open.length+' open</span></div>';
   h+='<div class="board-grid">';
   S.projects.forEach(function(o){
+    if(o.id==='__personal')return;
     var items=sortActs(m.open.filter(function(a){return a.projectId===o.id;}),'smart');
     if(!items.length)return;
     h+='<div class="proj-block'+(o.id==='__personal'?' personal':'')+'"><button class="ownhead" data-act="proj-filter" data-id="'+o.id+'">'+
@@ -534,11 +536,11 @@ function vList(){
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
-    var n=S.actionables.filter(function(a){return quickPass(a,q[0],t,mine);}).length;
+    var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
       '" data-act="quick" data-q="'+q[0]+'">'+q[1]+'<span class="n">'+n+'</span></button>';
   }).join('')+'</div>';
-  var _tags=allTags();
+  var _tags=(function(){var seen={},o=[];mainActs().forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();
   if(_tags.length)h+='<div class="chips tagchips">'+_tags.map(function(tg){var on=filters.tag&&filters.tag.toLowerCase()===tg.toLowerCase();return '<button class="chip tagf'+(on?' on':'')+'" data-act="tagfilter" data-tag="'+esc(tg)+'">#'+esc(tg)+'</button>';}).join('')+'</div>';
   h+=list.length?'<div class="list">'+list.map(function(a){return actRow(a);}).join('')+'</div>':
     emptyBox('No actionables found',filters.q||advCount()?'Try different search or filters.':'Add your first actionable.');
@@ -553,7 +555,7 @@ function vCalendar(){
   var first=new Date(y,mth,1),startIdx=(first.getDay()+6)%7,daysIn=new Date(y,mth+1,0).getDate();
   var daysPrev=new Date(y,mth,0).getDate();
   var byDay={};
-  S.actionables.forEach(function(a){
+  mainActs().forEach(function(a){
     if(a.etaKind==='date'&&a.eta)(byDay[a.eta]=byDay[a.eta]||[]).push(a);
     else if(a.etaKind==='range'){if(a.eta)(byDay[a.eta]=byDay[a.eta]||[]).push(a);if(a.etaEnd&&a.etaEnd!==a.eta)(byDay[a.etaEnd]=byDay[a.etaEnd]||[]).push(a);}
   });
@@ -573,7 +575,7 @@ function vCalendar(){
   h+='<div class="dow">'+DOW.map(function(dd){return '<span>'+dd[0]+dd[1]+'</span>';}).join('')+'</div>';
   h+='<div class="calgrid">'+cells+'</div>';
   var monthKey=y+'-'+pad(mth+1);
-  var inMonth=sortActs(S.actionables.filter(function(a){return(a.eta&&a.eta.indexOf(monthKey)===0)||(a.etaEnd&&a.etaEnd.indexOf(monthKey)===0);}),'eta');
+  var inMonth=sortActs(mainActs().filter(function(a){return(a.eta&&a.eta.indexOf(monthKey)===0)||(a.etaEnd&&a.etaEnd.indexOf(monthKey)===0);}),'eta');
   h+='<div class="eyebrow">Scheduled in '+MON[mth]+'</div>';
   h+=inMonth.length?'<div class="list">'+inMonth.map(function(a){return actRow(a);}).join('')+'</div>':emptyBox('Nothing scheduled','No ETAs in '+MON[mth]+' '+y+'.');
   return h;
@@ -582,9 +584,10 @@ function vCalendar(){
 /* ---- PROJECTS ---- */
 function stStat(v,l,k){return '<div class="stat" style="--k:'+k+'"><div class="v">'+v+'</div><div class="l">'+l+'</div></div>';}
 function vProjects(){
-  var h=topbar('Projects',S.projects.length+' projects',false,
+  var _projs=S.projects.filter(function(o){return o.id!=='__personal';});
+  var h=topbar('Projects',_projs.length+' projects',false,
     '<button class="iconbtn" data-act="add-project">'+I('plus')+'</button>');
-  h+='<div style="height:12px"></div><div class="list">'+S.projects.map(function(o){
+  h+='<div style="height:12px"></div><div class="list">'+_projs.map(function(o){
     var st=projStats(o.id);
     return '<button class="arow" data-act="proj-nav" data-id="'+o.id+'">'+
       '<div class="r1"><span class="ttl">'+esc(o.name)+'</span><span class="own">'+esc(o.code||'')+'</span><span class="sp"></span>'+I('chevR')+'</div>'+
@@ -659,7 +662,7 @@ function vPersonDetail(pid){
   var u=isTbc?{name:'To be assigned'}:personById(pid);
   if(!u)return topbar('Owner/SPOC','',true,'');
   var st=personStats(pid);
-  var list=sortActs(S.actionables.filter(function(a){if(!isOpen(a))return false;return isTbc?a.spocIds.length===0:a.spocIds.indexOf(pid)>=0;}),'smart');
+  var list=sortActs(mainActs().filter(function(a){if(!isOpen(a))return false;return isTbc?a.spocIds.length===0:a.spocIds.indexOf(pid)>=0;}),'smart');
   var codes=isTbc?[]:personProjectCodes(pid);
   var sub=isTbc?'Unassigned items':(codes.length?'Owner/SPOC \u00b7 '+codes.join(', '):'Owner/SPOC \u00b7 no active projects');
   var h=topbar(u.name,sub,true,'');
@@ -669,9 +672,10 @@ function vPersonDetail(pid){
 }
 
 /* ---- REPORTS ---- */
-function reportData(projId){
+function reportData(projId,inclPersonal){
   var t=todayISO();
-  var pool=projId?S.actionables.filter(function(a){return a.projectId===projId;}):S.actionables.slice();
+  var base=inclPersonal?S.actionables:mainActs();
+  var pool=projId?base.filter(function(a){return a.projectId===projId;}):base.slice();
   var open=pool.filter(isOpen);
   return{
     open:open,
@@ -1001,6 +1005,7 @@ function renderForm(rec){
 }
 function saveForm(rec){
   var f=rec.data.f;
+  var _goPersonal=false;
   f.tags=f.tags||[];var _ti=$('#fTagIn',rec.sheet);if(_ti&&_ti.value){parseTagList(_ti.value).forEach(function(t){addTagTo(f.tags,t);});_ti.value='';}
   if(!f.projectId){toast('Pick a project');return;}
   if(!f.lineItem||!f.lineItem.trim()){toast(f.quick?'Add a task':'Add a line item');return;}
@@ -1028,9 +1033,10 @@ function saveForm(rec){
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
     if(a.rem.on)logAct(a,'Reminder set','',a.rem.date?fmtDY(a.rem.date):'');
-    S.actionables.unshift(a);saveState();toast('Actionable created');
+    S.actionables.unshift(a);saveState();toast(f.projectId==='__personal'?'Added to your tasks':'Actionable created');_goPersonal=(f.projectId==='__personal');
   }
   closeSheet(rec);var det=sheetFor('detail');if(det)renderDetail(det);render();
+  if(_goPersonal)nav('projectDetail',{id:'__personal',seg:'open'});
 }
 
 /* ---- FILTERS ---- */
@@ -1069,8 +1075,8 @@ function renderFilters(rec){
 
 /* ---- DAY SHEET ---- */
 function openDay(iso){
-  var items=sortActs(S.actionables.filter(function(a){return coversDay(a,iso);}), 'smart');
-  var fus=S.actionables.filter(function(a){return isOpen(a)&&a.rem&&a.rem.on&&!a.rem.done&&a.rem.date===iso;});
+  var items=sortActs(mainActs().filter(function(a){return coversDay(a,iso);}), 'smart');
+  var fus=mainActs().filter(function(a){return isOpen(a)&&a.rem&&a.rem.on&&!a.rem.done&&a.rem.date===iso;});
   openSheet('<div class="shead"><h2>'+esc(fmtDY(iso))+' \u00b7 '+items.length+' due</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody">'+
     (items.length?items.map(function(a){return actRow(a);}).join('<div style="height:8px"></div>'):emptyBox('Nothing due','No actionables have this ETA.'))+
@@ -1133,7 +1139,7 @@ function exportExcel(projId,projLabel){
 /* PDF: Project | Line Item | Description | Owner | ETA | Status  (no Remarks) */
 function exportPdf(projId,projLabel){
   if(!pdfReady()){toast('Export engine loading \u2014 try again');return;}
-  var d=reportData(projId||null);
+  var d=reportData(projId||null,true);
   var t=todayISO();
   var label=projLabel||'All Projects';
   var jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:'pt',format:'a4'});
