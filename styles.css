@@ -1061,3 +1061,79 @@ html.light-theme .toast-act{color:#8ab4ff;}
 .syncbtn svg{transition:transform .15s;}
 .syncbtn.spin svg{animation:syncspin .8s linear infinite;}
 @keyframes syncspin{to{transform:rotate(360deg);}}
+
+/* ============================================================
+   V2 POLISH — reusable ETA, refined task rows, overdue hierarchy
+   ============================================================ */
+:root{--od-bg:rgba(255,86,86,.06);--od-bg2:rgba(255,86,86,.11);--od-bg-sev:rgba(255,86,86,.12);}
+html.light-theme{--od-bg:rgba(206,42,42,.045);--od-bg2:rgba(206,42,42,.08);--od-bg-sev:rgba(206,42,42,.09);}
+
+/* header hierarchy */
+.topbar .tt h1{font-size:1.16rem;font-weight:700;letter-spacing:-.02em;}
+.topbar .tt .sub{font-size:.74rem;color:var(--tx3);font-weight:500;margin-top:2px;letter-spacing:.01em;}
+
+/* grouped row containers */
+.list,.brows{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--sur);gap:0;}
+
+/* ---- V2 task row: content column + ETA column ---- */
+.trow{display:flex;gap:16px;align-items:flex-start;width:100%;text-align:left;padding:14px 16px;border:0;border-radius:0;background:transparent;box-shadow:none;cursor:pointer;position:relative;transition:background .12s ease;}
+.list .trow,.brows .trow{border-bottom:1px solid var(--line);}
+.list .trow:last-child,.brows .trow:last-child{border-bottom:0;}
+.trow:hover{background:var(--sur2);}
+.trow:active{transform:none;background:var(--sur2);}
+.row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;}
+.row-title{font-size:.92rem;font-weight:650;color:var(--tx);line-height:1.34;letter-spacing:-.01em;}
+.row-title .tk{font-family:var(--mono);font-size:.74rem;font-weight:600;color:var(--acc);background:var(--acc-dim);padding:1px 6px;border-radius:5px;margin-right:1px;}
+.row-desc{font-size:.8rem;color:var(--tx3);line-height:1.42;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.row-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:1px;}
+.row-meta .who{font-size:.72rem;color:var(--tx2);}
+.row-meta .who.un{color:var(--tx3);font-style:italic;}
+.row-meta .own{font-family:var(--mono);font-size:.62rem;color:var(--tx3);}
+.row-side{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:9px;min-width:92px;padding-top:1px;}
+.row-prio{display:inline-flex;align-items:center;gap:4px;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--amb);background:var(--amb-dim);padding:2px 8px;border-radius:999px;}
+.row-prio svg{width:11px;height:11px;}
+
+/* state layering: neutralise older tints; V2 uses spine + subtle bg */
+.list .trow.imp,.brows .trow.imp{background:transparent;}
+.list .trow.personal,.brows .trow.personal{background:var(--grn-dim);}
+.trow.done{opacity:.66;}
+.trow.done .row-title{text-decoration:line-through;text-decoration-color:var(--tx3);}
+
+/* overdue hierarchy — thin red left border + subtle red tint (never a full red card) */
+.list .trow.od,.brows .trow.od{box-shadow:inset 3px 0 0 var(--red);background:var(--od-bg);padding-left:16px;}
+.list .trow.od:hover,.brows .trow.od:hover{background:var(--od-bg2);}
+.list .trow.severe,.brows .trow.severe{box-shadow:inset 3px 0 0 var(--red);background:var(--od-bg-sev);padding-left:16px;}
+.list .trow.severe:hover,.brows .trow.severe:hover{background:var(--od-bg2);}
+
+/* ---- reusable ETA component (date over label) ---- */
+.eta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;line-height:1.1;text-align:right;}
+.eta-d{font-size:.78rem;font-weight:700;letter-spacing:.02em;font-variant-numeric:tabular-nums;color:var(--tx);white-space:nowrap;}
+.eta-l{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--tx3);white-space:nowrap;}
+.eta-future .eta-l{color:var(--tx3);text-transform:none;letter-spacing:0;font-weight:600;font-size:.66rem;}
+.eta-today .eta-d,.eta-today .eta-l{color:var(--amb);}
+.eta-tomorrow .eta-l{color:var(--amb);}
+.eta-over .eta-d,.eta-over .eta-l{color:var(--red);}
+.eta-severe .eta-d{color:var(--red);}
+.eta-severe .eta-l{color:#fff;background:var(--red);padding:2px 7px;border-radius:5px;letter-spacing:.03em;}
+.eta-none .eta-d{color:var(--tx3);font-weight:700;}
+.eta-none .eta-l{color:var(--tx3);text-transform:none;letter-spacing:0;font-weight:600;font-size:.66rem;}
+.eta-done .eta-d,.eta-done .eta-l{color:var(--grn);}
+
+/* detail: ETA inside the description callout */
+.nextact .na-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:9px;}
+.na-l{font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);padding-top:3px;}
+.nextact.od .na-l{color:var(--red);}
+.nextact.severe{border-left-color:var(--red);}
+.nextact .eta{align-items:flex-end;}
+
+/* notifications / follow-ups: ETA on the right */
+.notif{display:flex;align-items:flex-start;gap:11px;}
+.notif .w{flex:1;min-width:0;}
+.notif .eta{margin-left:auto;flex:none;}
+
+/* mobile density */
+@media (max-width:560px){
+  .trow{padding:13px 13px;gap:11px;}
+  .row-side{min-width:82px;}
+  .row-title{font-size:.9rem;}
+}

@@ -383,33 +383,34 @@ function ttlHtml(a){return a.ticket?'<span class="tk">'+esc(a.ticket)+'</span> \
 
 /* actRow: shows in list view — includes truncated description */
 function actRow(a,opts){
-  opts=opts||{};var t=todayISO();var r=relEta(a);
-  var od=isOver(a,t);
-  var done=a.status==='Completed';
-  var desc=a.task?(a.task.length>90?a.task.slice(0,90)+'\u2026':a.task):'';
-  return '<button class="arow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
-    '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
-    (a.important?'<span class="impstar" title="Important">'+I('star')+'</span>':'')+
-    '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
-    (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
-    '<div class="r2"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
-    '<span class="who'+(a.spocIds.length?'':' un')+'">'+esc(spocLabel(a))+'</span>'+
-    fuChip(a,t)+tagsHtml(a)+'<span class="sp"></span><span class="own">'+esc(projCode(a.projectId))+'</span>'+
-    '</div></button>';
+  opts=opts||{};var t=todayISO();
+  var st=etaState(a),od=(st==='over'||st==='severe'),severe=(st==='severe'),done=a.status==='Completed';
+  var desc=a.task?(a.task.length>110?a.task.slice(0,110)+'\u2026':a.task):'';
+  return '<button class="arow trow'+(od?' od':'')+(severe?' severe':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
+    '<div class="row-main">'+
+      '<div class="row-title">'+ttlHtml(a)+'</div>'+
+      (desc?'<div class="row-desc">'+esc(desc)+'</div>':'')+
+      '<div class="row-meta"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
+        '<span class="who'+(a.spocIds.length?'':' un')+'">'+esc(spocLabel(a))+'</span>'+
+        fuChip(a,t)+tagsHtml(a)+'<span class="sp"></span><span class="own">'+esc(projCode(a.projectId))+'</span></div>'+
+    '</div>'+
+    '<div class="row-side">'+etaView(a)+(a.important?'<div class="row-prio">'+I('star')+'Important</div>':'')+'</div>'+
+  '</button>';
 }
 
 /* boardRow: shows in project board — includes truncated description */
 function boardRow(a){
-  var t=todayISO();var r=relEta(a);var od=isOver(a,t);
-  var done=a.status==='Completed';
-  var desc=a.task?(a.task.length>80?a.task.slice(0,80)+'\u2026':a.task):'';
-  return '<button class="orow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
-    '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
-    (a.important?'<span class="impstar" title="Important">'+I('star')+'</span>':'')+
-    '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
-    (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
-    '<div class="r2"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
-    fuChip(a,t)+tagsHtml(a)+'</div></button>';
+  var t=todayISO();
+  var st=etaState(a),od=(st==='over'||st==='severe'),severe=(st==='severe'),done=a.status==='Completed';
+  var desc=a.task?(a.task.length>90?a.task.slice(0,90)+'\u2026':a.task):'';
+  return '<button class="orow trow'+(od?' od':'')+(severe?' severe':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
+    '<div class="row-main">'+
+      '<div class="row-title">'+ttlHtml(a)+'</div>'+
+      (desc?'<div class="row-desc">'+esc(desc)+'</div>':'')+
+      '<div class="row-meta"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+fuChip(a,t)+tagsHtml(a)+'</div>'+
+    '</div>'+
+    '<div class="row-side">'+etaView(a)+(a.important?'<div class="row-prio">'+I('star')+'Important</div>':'')+'</div>'+
+  '</button>';
 }
 
 function emptyBox(t1,t2){return '<div class="empty"><div class="t1">'+esc(t1)+'</div><div class="t2">'+esc(t2)+'</div></div>';}
@@ -498,7 +499,7 @@ function vHome(){
         '<div class="h">'+ttlHtml(a)+'</div>'+
         '<div class="b">'+esc(a.rem.note||'Follow up')+'</div>'+
         '<div class="b" style="color:var(--tx3)">'+esc(spocLabel(a))+' \u00b7 '+esc(projCode(a.projectId))+'</div>'+
-        '</span></button>';
+        '</span>'+etaView(a)+'</button>';
     }).join('')+'</div>';
   }
   h+='<div class="eyebrow">Project &amp; Owner/SPOC<span style="font-size:.7rem;color:var(--tx3);font-weight:500;letter-spacing:0;text-transform:none">'+m.open.length+' open</span></div>';
@@ -728,7 +729,7 @@ function vNotifications(){
         '<div class="h">'+ttlHtml(a)+'</div>'+
         '<div class="b">'+esc(subFn(a))+'</div>'+
         '<div class="b" style="color:var(--tx3)">'+esc(spocLabel(a))+' \u00b7 '+esc(projCode(a.projectId))+'</div>'+
-        '</span></button>';}).join('')+'</div>';
+        '</span>'+etaView(a)+'</button>';}).join('')+'</div>';
   }
   block('Overdue / Breached','n-od','alert',sortActs(m.overdue,'smart'),function(a){return 'Was due '+fmtD(endEta(a));});
   block('Due today','n-due','clock',m.today,function(a){return a.task;});
@@ -849,7 +850,8 @@ function renderDetail(rec){
   $('.shead h2',rec.sheet).innerHTML=ttlHtml(a);
   var b='';
   b+='<button class="impbtn'+(a.important?' on':'')+'" data-act="d-important">'+I('star')+(a.important?'Marked important':'Mark important')+'</button>';
-  b+='<div class="nextact'+(od?' od':'')+'"><div class="l">'+(od?'OVERDUE \u00b7 Description':'Description / Task')+'</div>'+
+  b+='<div class="nextact'+(od?' od':'')+(etaState(a)==='severe'?' severe':'')+'">'+
+    '<div class="na-head"><span class="na-l">'+(od?'OVERDUE':'DESCRIPTION / TASK')+'</span>'+etaView(a)+'</div>'+
     '<div class="t">'+esc(a.task)+'</div>'+
     (a.ticketUrl?'<a class="linkchip" href="'+esc(a.ticketUrl)+'">'+I('ext')+'Open ticket</a>':'')+
     '</div>';
@@ -1708,4 +1710,25 @@ function renderVersions(rec){
     '<p style="color:var(--tx2);font-size:.83rem;line-height:1.5;margin-bottom:12px">Up to '+VERSIONS_KEEP+' recent states are saved on this device \u2014 when you open the app, before a sync overwrites data, and before resets or imports. Restoring replaces current data and syncs it to your other device.</p>'+
     '<button class="btn ghost" style="margin-bottom:14px" data-act="version-snap">'+I('check')+'Create restore point now</button>'+
     rows;
+}
+
+/* ================= V2 reusable ETA component ================= */
+function etaDate(iso){if(!iso)return '';var p=iso.split('-');return pad(+p[2])+' '+String(MON[(+p[1])-1]||'').toUpperCase();}
+function etaState(a){
+  if(a.status==='Completed')return 'done';
+  if(a.etaKind==='tbd'||a.etaKind==='none'||!endEta(a))return 'none';
+  var k=diffDays(endEta(a),todayISO());
+  if(k>=2)return 'future';if(k===1)return 'tomorrow';if(k===0)return 'today';
+  return (-k>=8)?'severe':'over';
+}
+function etaView(a){
+  var st=etaState(a),d='',l='';
+  if(st==='done'){var cd=a.completedAt?isoFromMs(a.completedAt):(endEta(a)||'');d=cd?etaDate(cd):'';l='COMPLETED';}
+  else if(st==='none'){if(a.etaKind==='tbd'){d='TBD';l='Awaiting date';}else{d='NO ETA';l='Awaiting update';}}
+  else{var end=endEta(a),k=diffDays(end,todayISO());d=etaDate(end);
+    if(st==='future')l='Due in '+k+' day'+(k===1?'':'s');
+    else if(st==='tomorrow')l='DUE TOMORROW';
+    else if(st==='today')l='DUE TODAY';
+    else{var late=-k;l=late+' DAY'+(late===1?'':'S')+' DELAYED';}}
+  return '<div class="eta eta-'+st+'">'+(d?'<div class="eta-d">'+esc(d)+'</div>':'')+'<div class="eta-l">'+esc(l)+'</div></div>';
 }
