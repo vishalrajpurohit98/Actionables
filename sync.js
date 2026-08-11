@@ -167,6 +167,27 @@
       pushTimer = setTimeout(function () { pushTimer = null; pushNow(); }, 450);
     },
     signOut: function () { if (auth) auth.signOut(); },
+    /* Manual "Sync now": probe the server, push local up, and flip to Synced.
+       Forces the round-trip instead of waiting for Firestore's passive confirm. */
+    syncNow: function () {
+      if (!ref) return Promise.resolve('signin');
+      setLabel('Syncing\u2026');
+      return new Promise(function (resolve) {
+        var done = false;
+        var to = setTimeout(function () {
+          if (done) return; done = true;
+          setLabel('Offline (cached)'); resolve('offline');
+        }, 12000);
+        ref.get({ source: 'server' }).then(function () {
+          if (done) return; done = true; clearTimeout(to);
+          pushNow();                 // upload this device's data (guarded: non-empty)
+          setLabel('Synced'); resolve('ok');
+        }).catch(function () {
+          if (done) return; done = true; clearTimeout(to);
+          setLabel('Offline (cached)'); resolve('offline');
+        });
+      });
+    },
     init: function () {
       if (started) return; started = true;
       notify();

@@ -104,7 +104,8 @@ var IC={
   sun:'<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"/>',
   moon:'<path d="M21 12.8a9 9 0 1 1-9.8-9.8A7 7 0 0 0 21 12.8z"/>',
   cloud:'<path d="M7 18h9.5a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 7.2 9.5 3.75 3.75 0 0 0 7 18z"/>',
-  star:'<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.6l-5.08 2.7.98-5.68L3.75 9.6l5.7-.83z"/>'
+  star:'<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.6l-5.08 2.7.98-5.68L3.75 9.6l5.7-.83z"/>',
+  refresh:'<path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/>'
 };
 function I(name,cls){return '<svg class="'+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+IC[name]+'</svg>';}
 
@@ -482,7 +483,7 @@ function vHome(){
   var themeBtn='<button class="iconbtn" data-act="theme-toggle" title="Switch to '+(isDark?'light':'dark')+' theme">'+I(isDark?'sun':'moon')+'</button>';
   var bell='<button class="iconbtn" data-act="go-notif">'+I('bell')+(notifBadgeOn(m)?'<span class="dot"></span>':'')+' </button>';
   var search='<button class="iconbtn" data-act="go-search">'+I('search')+'</button>';
-  var h=topbar('Actionables',esc(dateLine),false,cloudBadgeHtml()+themeBtn+search+bell);
+  var h=topbar('Actionables',esc(dateLine),false,cloudSyncBtnHtml()+cloudBadgeHtml()+themeBtn+search+bell);
   h+='<div class="sumstrip">'+pills.join('')+'</div>';
   h+='<div class="selfrow">'+
     '<button class="quickadd" data-act="quick-new">'+I('plus')+'Quick task for myself</button>'+
@@ -1225,6 +1226,17 @@ document.addEventListener('click',function(e){
     }
     case 'set-accent':{S.settings.accent=el.getAttribute('data-k');saveState();applyTheme();render();break;}
     case 'set-font':{S.settings.font=el.getAttribute('data-k');saveState();applyTheme();render();toast('Font: '+el.textContent);break;}
+    case 'cloud-sync':{
+      if(!(window.Cloud&&window.Cloud.syncNow)){toast('Sync isn\u2019t set up on this device');break;}
+      el.classList.add('spin');
+      window.Cloud.syncNow().then(function(r){
+        el.classList.remove('spin');
+        if(window.__cloudStatusChanged)window.__cloudStatusChanged();
+        var el2=document.querySelector('.syncbadge');if(el2&&window.Cloud.status){var st=window.Cloud.status();el2.className='syncbadge '+syncCls(st.label);el2.title=st.label||'';}
+        toast(r==='ok'?'Synced':(r==='signin'?'Sign in to sync (Settings \u2192 Sync)':'Can\u2019t reach the sync server \u2014 will sync when back online'));
+      }).catch(function(){el.classList.remove('spin');});
+      break;
+    }
     case 'cloud-signout':{if(window.Cloud&&window.Cloud.signOut){confirmSheet('Sign out of sync?','This device will stop syncing until you sign in again. Your data stays saved locally.','Sign out',false,function(){window.Cloud.signOut();render();toast('Signed out of sync');});}break;}
     /* Actionables */
     case 'open':openDetail(id);break;
@@ -1612,7 +1624,12 @@ function cap(s,n){s=String(s==null?'':s);return s.length>n?s.slice(0,n):s;}
 function cloudBadgeHtml(){
   if(!(window.Cloud&&window.Cloud.status))return '';
   var st=window.Cloud.status();if(!st.configured)return '';
-  return '<span class="syncbadge '+syncCls(st.label)+'" data-act="go-settings" title="'+esc(st.label||'')+'"><i></i></span>';
+  return '<span class="syncbadge '+syncCls(st.label)+'" title="'+esc(st.label||'')+'"><i></i></span>';
+}
+function cloudSyncBtnHtml(){
+  if(!(window.Cloud&&window.Cloud.status))return '';
+  var st=window.Cloud.status();if(!st.configured)return '';
+  return '<button class="iconbtn syncbtn" data-act="cloud-sync" title="Sync now">'+I('refresh')+'</button>';
 }
 function syncCls(lbl){lbl=lbl||'';if(/synced/i.test(lbl))return 'sy-ok';if(/error/i.test(lbl))return 'sy-err';if(/offline|cache|connect|load|sign|out/i.test(lbl))return 'sy-warn';return 'sy-idle';}
 window.__cloudStatusChanged=function(){

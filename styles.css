@@ -1056,3 +1056,8 @@ html.light-theme .toast-act{color:#8ab4ff;}
 .verrow .w{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
 .verrow .w b{font-size:.86rem;font-weight:600;}
 .verrow .w .s{font-size:.72rem;color:var(--tx3);}
+
+/* ---- Sync-now button ---- */
+.syncbtn svg{transition:transform .15s;}
+.syncbtn.spin svg{animation:syncspin .8s linear infinite;}
+@keyframes syncspin{to{transform:rotate(360deg);}}
