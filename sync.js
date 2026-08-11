@@ -148,7 +148,9 @@
   function pushNow() {
     if (!ref) return;
     try {
-      var json = JSON.stringify(window.__getState());
+      var st = window.__getState();
+      if (!st || !st.actionables || st.actionables.length === 0) return; /* never upload a blank state that would wipe the other device */
+      var json = JSON.stringify(st);
       ref.set({ json: json, updatedAt: Date.now() }).catch(function () {});
     } catch (e) {}
   }

@@ -126,7 +126,7 @@ function loadState(){
   try{if(A&&A.loadData)raw=A.loadData()||'';}catch(e){raw='';}
   if(!raw){try{raw=localStorage.getItem('act_data')||'';}catch(e){raw='';}}
   if(raw){
-    try{var p=JSON.parse(raw);if(p&&p.actionables){S=p;ensureDefaults();snapshot('Opened');return;}}catch(e){}
+    try{var p=JSON.parse(raw);if(p&&p.actionables){if(p.actionables.length===0){var _rv=newestNonEmptyVersion();if(_rv){S=_rv;ensureDefaults();snapshot('Recovered from restore point');saveState();return;}}S=p;ensureDefaults();snapshot('Opened');return;}}catch(e){}
   }
   S=window.buildSeed(Date.now());
   ensureDefaults();
@@ -1429,6 +1429,10 @@ window.__onResume=function(){render();};
 window.__getState=function(){return S;};
 window.__applyCloudState=function(obj){
   if(!obj||!obj.actionables)return;
+  if(obj.actionables.length===0&&S&&S.actionables&&S.actionables.length>0){
+    if(window.Cloud&&window.Cloud.push)window.Cloud.push();   /* cloud is blank but we have data -> push ours up, don't self-wipe */
+    return;
+  }
   snapshot('Before sync');
   S=obj;ensureDefaults();
   try{localStorage.setItem('act_data',JSON.stringify(S));}catch(e){}
@@ -1648,6 +1652,7 @@ function renderTagManager(rec){
 /* ================= On-device version history (restore points) ================= */
 var VERSIONS_KEEP=6;
 function loadVersions(){try{return JSON.parse(localStorage.getItem('act_versions')||'[]');}catch(e){return [];}}
+function newestNonEmptyVersion(){try{var arr=loadVersions();for(var i=0;i<arr.length;i++){var d=JSON.parse(arr[i].data);if(d&&d.actionables&&d.actionables.length>0)return d;}}catch(e){}return null;}
 function snapshot(reason){
   try{
     if(!S||!S.actionables)return;
