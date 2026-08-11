@@ -32,6 +32,7 @@ var DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 /* ---- APPEARANCE: accent palettes + font presets ---- */
 var ACCENTS={
+  orange: {c:'#F97316', d:'rgba(249,115,22,.15)', name:'Orange'},
   blue:   {c:'#3B82F6', d:'rgba(59,130,246,.14)',  name:'Blue'},
   violet: {c:'#8B5CF6', d:'rgba(139,92,246,.14)',  name:'Violet'},
   indigo: {c:'#6366F1', d:'rgba(99,102,241,.14)',  name:'Indigo'},
@@ -145,7 +146,7 @@ function ensureDefaults(){
   }
   S.version=S.version||3;
   S.settings=S.settings||{};
-  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'blue',font:'default'};
+  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default'};
   for(var k in d)if(S.settings[k]===undefined)S.settings[k]=d[k];
   S.people=S.people||[];S.projects=S.projects||[];
   /* SPOCs are global now — drop any legacy project binding */
@@ -177,7 +178,7 @@ function applyTheme(){
   var s=(S&&S.settings)?S.settings:{};
   var root=document.documentElement;
   root.className=(s.theme||'dark')==='light'?'light-theme':'';
-  var acc=ACCENTS[s.accent||'blue']||ACCENTS.blue;
+  var acc=ACCENTS[s.accent||'orange']||ACCENTS.orange;
   root.style.setProperty('--acc',acc.c);
   root.style.setProperty('--acc-dim',acc.d);
   root.style.setProperty('--font',FONT_STACK[s.font||'default']||FONT_STACK.default);
@@ -755,7 +756,7 @@ function vSettings(){
     I(isDark?'sun':'moon')+(isDark?'Switch to Light':'Switch to Dark')+
     '</button></div>'+
     '<div class="fld" style="margin-top:16px"><label>Accent colour</label>'+
-    '<div class="swatches">'+Object.keys(ACCENTS).map(function(k){var a=ACCENTS[k];var on=(s.accent||'blue')===k;return '<button class="swatch'+(on?' on':'')+'" data-act="set-accent" data-k="'+k+'" style="--sw:'+a.c+'" title="'+a.name+'">'+(on?I('check'):'')+'</button>';}).join('')+'</div></div>'+
+    '<div class="swatches">'+Object.keys(ACCENTS).map(function(k){var a=ACCENTS[k];var on=(s.accent||'orange')===k;return '<button class="swatch'+(on?' on':'')+'" data-act="set-accent" data-k="'+k+'" style="--sw:'+a.c+'" title="'+a.name+'">'+(on?I('check'):'')+'</button>';}).join('')+'</div></div>'+
     '<div class="fld" style="margin-top:16px"><label>Font style</label>'+
     '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:4px">'+FONTS.map(function(fo){var on=(s.font||'default')===fo[0];return '<button class="chip'+(on?' on':'')+'" data-act="set-font" data-k="'+fo[0]+'" style="font-family:'+FONT_STACK[fo[0]]+'">'+fo[1]+'</button>';}).join('')+'</div></div>'+
     '</div>';

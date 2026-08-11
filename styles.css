@@ -1137,3 +1137,56 @@ html.light-theme{--od-bg:rgba(206,42,42,.045);--od-bg2:rgba(206,42,42,.08);--od-
   .row-side{min-width:82px;}
   .row-title{font-size:.9rem;}
 }
+
+/* ============================================================
+   V2.1 REFINEMENT — outlined status chips, owner headers,
+   quieter header, integrated bottom nav, compact FAB
+   (light-blue / white / accent identity; 8px rhythm)
+   ============================================================ */
+:root{--st-blue:#4f7dea;--st-blue-bg:rgba(79,125,234,.12);--nav-bg:rgba(15,20,28,.98);}
+html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgba(255,255,255,.98);}
+
+/* --- card hierarchy: title loudest, description readable-secondary, ETA prominent --- */
+.row-title{font-size:.95rem;font-weight:680;color:var(--tx);}
+.row-desc{color:var(--tx2);}
+.eta-d{font-size:.82rem;font-weight:750;}
+
+/* --- status chips → outlined pill + dot; subtle, professional --- */
+.badge{background:transparent;border:1px solid var(--line2);color:var(--tx2);font-weight:650;padding:3px 9px 3px 8px;}
+.badge::before{opacity:1;}
+.b-ip{color:var(--amb);border-color:var(--amb);background:var(--amb-dim);}            /* In Progress → amber   */
+.b-ar{color:var(--tx2);border-color:var(--line2);background:var(--sur2);}             /* On Hold     → slate   */
+.b-asg{color:var(--st-blue);border-color:var(--st-blue);background:var(--st-blue-bg);}/* Dependency  → blue    */
+.b-dn{color:var(--grn);border-color:var(--grn);background:var(--grn-dim);}            /* Completed   → green   */
+.b-pn,.b-sc,.b-cx{color:var(--tx2);border-color:var(--line2);background:var(--sur2);} /* fallback    → gray    */
+
+/* --- owner headers (e.g. MANAN · 4) distinct from task cards --- */
+.grp{font-size:.72rem;font-weight:700;letter-spacing:.05em;color:var(--tx2);gap:7px;padding:13px 2px 7px;}
+.grp svg{width:14px;height:14px;color:var(--tx3);flex:none;}
+.grp .n{font-family:var(--mono);color:var(--tx2);font-weight:700;letter-spacing:0;}
+.grp.tbc{color:var(--tx3);}
+
+/* --- header controls: quieter so the title + date dominate --- */
+.topbar{gap:2px;}
+.topbar .iconbtn{background:transparent;border:0;color:var(--tx3);width:36px;height:36px;}
+.topbar .iconbtn:hover{background:var(--sur2);color:var(--tx2);}
+.topbar .iconbtn:active{background:var(--sur2);}
+.topbar .iconbtn .dot{background:var(--red);top:6px;right:6px;}   /* notification badge — red, only when unread (JS-conditional) */
+.syncbadge.sy-ok{display:none;}                                   /* no permanent green dot; appears only on offline/error */
+
+/* --- floating Add: compact, neutral shadow --- */
+.fab{padding:12px 15px;border-radius:14px;font-size:.82rem;box-shadow:0 6px 18px rgba(0,0,0,.28);}
+.fab svg{width:16px;height:16px;}
+
+/* --- bottom navigation: integrated + clear active state (mobile) --- */
+.tab.on{color:var(--acc);}
+.tab.on span{font-weight:700;}
+@media (max-width:1023px){
+  .tabbar{background:var(--nav-bg);border-top:1px solid var(--line);backdrop-filter:blur(12px);}
+  .tab{gap:4px;padding-top:3px;}
+  .tab svg{width:22px;height:22px;}
+  .tab span{font-size:.6rem;font-weight:600;letter-spacing:.01em;}
+  .tab.on svg{transform:translateY(-.5px);}
+  .tab.on::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:26px;height:3px;border-radius:0 0 4px 4px;background:var(--acc);}
+  .fab{right:16px;bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 14px);}
+}
