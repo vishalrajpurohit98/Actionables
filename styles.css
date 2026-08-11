@@ -1038,3 +1038,22 @@ html.light-theme .brows .orow.od { box-shadow: inset 3px 0 0 var(--red); }
 .quickadd svg { width:16px; height:16px; color: var(--acc); }
 .quickadd:active { background: var(--sur2); transform: scale(.99); }
 @media (min-width: 1024px){ .quickadd { width:calc(100% - 44px); margin:0 22px 10px; } }
+
+/* ---- Tags, personal-project (green), self-task buttons ---- */
+.rtags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;}
+.rtag{font-size:.6rem;font-weight:600;color:var(--acc);background:var(--acc-dim);border-radius:5px;padding:1px 6px;letter-spacing:.01em;}
+.rtag.more{color:var(--tx3);background:var(--sur2);}
+.tagchips{margin-top:2px;}
+.tagchips .chip{font-weight:600;}
+.chip.tagf.on,.chip.tagpick.on{background:var(--acc);border-color:var(--acc);color:var(--bg);}
+/* personal project = green identity */
+.list .arow.personal,.brows .orow.personal{background:var(--grn-dim);}
+.arow.personal .own{color:var(--grn);}
+.proj-block.personal .ownhead h3{color:var(--grn);}
+.proj-block.personal .ownhead h3::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--grn);margin-right:7px;vertical-align:middle;}
+/* two self-task buttons side by side */
+.selfrow{display:flex;gap:10px;margin:0 16px 10px;}
+.selfrow .quickadd{width:auto;flex:1;margin:0;}
+.viewself{border-style:solid;border-color:var(--grn);color:var(--grn);}
+.viewself svg{color:var(--grn);}
+@media (min-width:1024px){ .selfrow{margin:0 22px 10px;} }

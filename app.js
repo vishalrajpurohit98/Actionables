@@ -113,7 +113,7 @@ var calState=null;
 var exportSel={projId:''};
 
 function defaultFilters(){
-  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false};
+  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tag:''};
 }
 
 function loadState(){
@@ -153,6 +153,7 @@ function ensureDefaults(){
     if(a.etaEnd===undefined)a.etaEnd='';
     if(a.ticketUrl===undefined)a.ticketUrl='';
     if(a.important===undefined)a.important=false;
+    if(!Array.isArray(a.tags))a.tags=[];
     if(STATUS_MAP[a.status]){a.status=STATUS_MAP[a.status];if(a.status==='Completed'&&!a.completedAt)a.completedAt=a.updatedAt||Date.now();}
   });
 }
@@ -313,6 +314,7 @@ function filteredActs(){
     if(filters.project.length&&filters.project.indexOf(a.projectId)<0)return false;
     if(filters.spoc.length){var hit=false;for(var i=0;i<filters.spoc.length;i++){var sid=filters.spoc[i];if(sid==='__tbc'?a.spocIds.length===0:a.spocIds.indexOf(sid)>=0){hit=true;break;}}if(!hit)return false;}
     if(filters.status.length&&filters.status.indexOf(a.status)<0)return false;
+    if(filters.tag){var tl=filters.tag.toLowerCase(),ht=false,tg=a.tags||[];for(var ti=0;ti<tg.length;ti++)if(tg[ti].toLowerCase()===tl){ht=true;break;}if(!ht)return false;}
     if(filters.fOd&&!isOver(a,t))return false;
     if(filters.fFu&&!remDue(a,t))return false;
     if(filters.fTk&&!a.ticket)return false;
@@ -326,7 +328,7 @@ function filteredActs(){
 }
 function advCount(){
   return filters.project.length+filters.spoc.length+filters.status.length+
-    (filters.from?1:0)+(filters.to?1:0)+(filters.fOd?1:0)+(filters.fFu?1:0)+(filters.fTk?1:0)+(filters.sort!=='smart'?1:0);
+    (filters.from?1:0)+(filters.to?1:0)+(filters.fOd?1:0)+(filters.fFu?1:0)+(filters.fTk?1:0)+(filters.tag?1:0)+(filters.sort!=='smart'?1:0);
 }
 
 /* ---- MUTATIONS ---- */
@@ -345,6 +347,7 @@ function updateAct(id,patch){
     if(f==='status'){if(patch[f]==='Completed')a.completedAt=Date.now();else if(a.completedAt)a.completedAt=null;}
   });
   if(patch.important!==undefined&&!!patch.important!==!!a.important){a.important=!!patch.important;logAct(a,patch.important?'Marked important':'Unmarked important');changed=true;}
+  if(patch.tags!==undefined){var okt=(a.tags||[]).slice().sort().join('\u0001'),nkt=patch.tags.slice().sort().join('\u0001');if(okt!==nkt){a.tags=patch.tags.slice();logAct(a,'Tags updated','',patch.tags.join(', '));changed=true;}}
   if(patch.spocIds!==undefined){
     var oldK=a.spocIds.slice().sort().join(','),newK=patch.spocIds.slice().sort().join(',');
     if(oldK!==newK){logAct(a,'Owner/SPOC changed',spocLabel(a),patch.spocIds.length?patch.spocIds.map(function(i2){return personName(i2);}).join(' & '):'To be assigned');a.spocIds=patch.spocIds.slice();changed=true;}
@@ -378,14 +381,14 @@ function actRow(a,opts){
   var od=isOver(a,t);
   var done=a.status==='Completed'||a.status==='Cancelled';
   var desc=a.task?(a.task.length>90?a.task.slice(0,90)+'\u2026':a.task):'';
-  return '<button class="arow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+'" data-act="open" data-id="'+a.id+'">'+
+  return '<button class="arow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
     (a.important?'<span class="impstar" title="Important">'+I('star')+'</span>':'')+
     '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
     (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
     '<div class="r2"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
     '<span class="who'+(a.spocIds.length?'':' un')+'">'+esc(spocLabel(a))+'</span>'+
-    fuChip(a,t)+'<span class="sp"></span><span class="own">'+esc(projCode(a.projectId))+'</span>'+
+    fuChip(a,t)+tagsHtml(a)+'<span class="sp"></span><span class="own">'+esc(projCode(a.projectId))+'</span>'+
     '</div></button>';
 }
 
@@ -394,13 +397,13 @@ function boardRow(a){
   var t=todayISO();var r=relEta(a);var od=isOver(a,t);
   var done=a.status==='Completed'||a.status==='Cancelled';
   var desc=a.task?(a.task.length>80?a.task.slice(0,80)+'\u2026':a.task):'';
-  return '<button class="orow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+'" data-act="open" data-id="'+a.id+'">'+
+  return '<button class="orow'+(od?' od':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="r1"><span class="ttl">'+ttlHtml(a)+'</span><span class="sp"></span>'+
     (a.important?'<span class="impstar" title="Important">'+I('star')+'</span>':'')+
     '<span class="datechip '+r.cls+'">'+esc(r.t)+'</span></div>'+
     (desc?'<div class="rdesc">'+esc(desc)+'</div>':'')+
     '<div class="r2"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
-    fuChip(a,t)+'</div></button>';
+    fuChip(a,t)+tagsHtml(a)+'</div></button>';
 }
 
 function emptyBox(t1,t2){return '<div class="empty"><div class="t1">'+esc(t1)+'</div><div class="t2">'+esc(t2)+'</div></div>';}
@@ -476,7 +479,10 @@ function vHome(){
   var search='<button class="iconbtn" data-act="go-search">'+I('search')+'</button>';
   var h=topbar('Actionables',esc(dateLine),false,themeBtn+search+bell);
   h+='<div class="sumstrip">'+pills.join('')+'</div>';
-  h+='<button class="quickadd" data-act="quick-new">'+I('plus')+'Quick task for myself</button>';
+  h+='<div class="selfrow">'+
+    '<button class="quickadd" data-act="quick-new">'+I('plus')+'Quick task for myself</button>'+
+    '<button class="quickadd viewself" data-act="view-personal">'+I('person')+'View your tasks</button>'+
+    '</div>';
   if(m.remDueL.length){
     var fus=sortActs(m.remDueL,'smart');
     h+='<div class="eyebrow">Follow-ups due<button class="lnk" data-act="kpi" data-q="followup">All '+fus.length+'</button></div>';
@@ -494,7 +500,7 @@ function vHome(){
   S.projects.forEach(function(o){
     var items=sortActs(m.open.filter(function(a){return a.projectId===o.id;}),'smart');
     if(!items.length)return;
-    h+='<div class="proj-block"><button class="ownhead" data-act="proj-filter" data-id="'+o.id+'">'+
+    h+='<div class="proj-block'+(o.id==='__personal'?' personal':'')+'"><button class="ownhead" data-act="proj-filter" data-id="'+o.id+'">'+
       '<h3>'+esc(o.name)+'</h3><span class="cnt">'+items.length+' open</span>'+
       '<span class="sp"></span>'+I('filter')+'</button>';
     grouped(items).forEach(function(g){
@@ -527,6 +533,8 @@ function vList(){
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
       '" data-act="quick" data-q="'+q[0]+'">'+q[1]+'<span class="n">'+n+'</span></button>';
   }).join('')+'</div>';
+  var _tags=allTags();
+  if(_tags.length)h+='<div class="chips tagchips">'+_tags.map(function(tg){var on=filters.tag&&filters.tag.toLowerCase()===tg.toLowerCase();return '<button class="chip tagf'+(on?' on':'')+'" data-act="tagfilter" data-tag="'+esc(tg)+'">#'+esc(tg)+'</button>';}).join('')+'</div>';
   h+=list.length?'<div class="list">'+list.map(function(a){return actRow(a);}).join('')+'</div>':
     emptyBox('No actionables found',filters.q||advCount()?'Try different search or filters.':'Add your first actionable.');
   return h;
@@ -749,6 +757,8 @@ function vSettings(){
   h+='<div class="eyebrow">Data</div><div class="pane">'+
     '<button class="rowline" data-act="backup">'+I('dl')+'<span class="t">Back up data<br><span class="s">Export all data to JSON file (Downloads)</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="import">'+I('edit')+'<span class="t">Import backup<br><span class="s">Restore from a JSON backup file</span></span>'+I('chevR')+'</button>'+
+    '<button class="rowline" data-act="tmpl-download">'+I('dl')+'<span class="t">Download data template (Excel)<br><span class="s">Export all data to an editable .xlsx</span></span>'+I('chevR')+'</button>'+
+    '<button class="rowline" data-act="tmpl-import">'+I('doc')+'<span class="t">Update from template<br><span class="s">Load an edited .xlsx to update &amp; add items</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="reseed">'+I('doc')+'<span class="t">Reset to original data<br><span class="s">Replace all data with the BCP / ICICI / SCB demo set</span></span>'+I('chevR')+'</button>'+
     '</div>';
   /* Sync (Firebase) */
@@ -843,6 +853,7 @@ function renderDetail(rec){
     '<button class="chip" data-act="d-spoc-new">+ New</button>'+
     (a.spocIds.length?'':'<span class="chip" style="border-style:dashed;color:var(--tx3)">To be assigned</span>')+
     '</div>';
+  b+='<div class="eyebrow" style="padding:16px 0 8px">Tags</div>'+tagEditHtml(a.tags,'d-tag-del','d-tag-add','d-tag-addbuf','dTagIn');
   b+='<div class="eyebrow" style="padding:16px 0 8px">Timeline</div><div class="meta">'+
     '<div class="fld"><label>Status</label><select data-chg="d-status">'+
     STATUSES.map(function(s){return '<option'+(s===a.status?' selected':'')+'>'+s+'</option>';}).join('')+
@@ -895,13 +906,13 @@ function openForm(id,prefill){
     f={projectId:a.projectId,ticket:a.ticket,ticketUrl:a.ticketUrl,lineItem:a.lineItem,task:a.task,
       spocIds:a.spocIds.slice(),etaKind:a.etaKind,eta:a.eta,etaEnd:a.etaEnd,
       remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',
-      status:a.status,notes:a.notes,important:!!a.important,quick:false};
+      status:a.status,notes:a.notes,important:!!a.important,tags:(a.tags||[]).slice(),quick:false};
   }else{
     var proj=quick?'__personal':((prefill&&prefill.projectId)||(S.projects[0]?S.projects[0].id:''));
     f={projectId:proj,ticket:'',ticketUrl:'',lineItem:'',task:'',spocIds:[],
       etaKind:prefill&&prefill.eta?'date':'none',eta:(prefill&&prefill.eta)||'',etaEnd:'',
       remOn:false,remDate:'',remTime:'',remNote:'',status:'In Progress',notes:'',
-      important:!!(prefill&&prefill.important),quick:quick};
+      important:!!(prefill&&prefill.important),tags:[],quick:quick};
   }
   var title=id?'Edit actionable':(quick?'Quick task':'Add actionable');
   var rec=openSheet('<div class="shead"><h2>'+title+'</h2>'+
@@ -922,6 +933,7 @@ function renderForm(rec){
     '</select></div>'+
     (f.etaKind==='date'?'<div class="fld"><label>Date</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div>':'')+
     (f.etaKind==='range'?'<div class="fld"><label>From</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div>':'');
+  var tagRow='<div class="fld wide"><label>Tags</label>'+tagEditHtml(f.tags,'f-tag-del','f-tag-add','f-tag-addbuf','fTagIn')+'</div>';
   if(f.quick){
     var bq='<div class="meta">'+
       '<div class="fld wide"><label>Task *</label><input data-chg="f-line" placeholder="e.g. Prepare weekly status deck" value="'+esc(f.lineItem)+'"></div>'+
@@ -930,6 +942,7 @@ function renderForm(rec){
       STATUSES.filter(function(s){return s!=='Completed';}).map(function(s){return '<option'+(f.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
       '</select></div>'+
       impRow+
+      tagRow+
       '<div class="fld wide"><label>Notes \u00b7 optional</label><textarea data-chg="f-task" placeholder="Any details\u2026">'+esc(f.task)+'</textarea></div>'+
       '</div>'+
       '<div class="note" style="padding:10px 0 0">Personal task \u00b7 no owner. Filed under the <b>Personal</b> project.</div>';
@@ -964,6 +977,7 @@ function renderForm(rec){
       .map(function(s){return '<option'+(f.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
     '</select></div>'+
     impRow+
+    tagRow+
     /* 7 — Ticket / Ref */
     '<div class="fld"><label>7 \u00b7 Ticket / Ref ID</label><input data-chg="f-ticket" placeholder="e.g. ORP-3902" value="'+esc(f.ticket)+'" autocapitalize="characters"></div>'+
     '<div class="fld"><label>Ticket link \u00b7 optional</label><input data-chg="f-url" inputmode="url" placeholder="https://\u2026" value="'+esc(f.ticketUrl)+'"></div>'+
@@ -978,6 +992,7 @@ function renderForm(rec){
 }
 function saveForm(rec){
   var f=rec.data.f;
+  f.tags=f.tags||[];var _ti=$('#fTagIn',rec.sheet);if(_ti&&_ti.value){parseTagList(_ti.value).forEach(function(t){addTagTo(f.tags,t);});_ti.value='';}
   if(!f.projectId){toast('Pick a project');return;}
   if(!f.lineItem||!f.lineItem.trim()){toast(f.quick?'Add a task':'Add a line item');return;}
   if(!f.quick&&(!f.task||!f.task.trim())){toast('Add a description');return;}
@@ -987,7 +1002,7 @@ function saveForm(rec){
   if(f.etaKind==='range'&&f.eta&&f.etaEnd&&f.etaEnd<f.eta){var tmp=f.eta;f.eta=f.etaEnd;f.etaEnd=tmp;}
   if(rec.data.id){
     var a0=actById(rec.data.id);
-    updateAct(rec.data.id,{projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),lineItem:f.lineItem,task:f.task,spocIds:f.spocIds,etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,status:f.status,notes:f.notes,important:f.important});
+    updateAct(rec.data.id,{projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),lineItem:f.lineItem,task:f.task,spocIds:f.spocIds,etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,status:f.status,notes:f.notes,important:f.important,tags:f.tags});
     if(a0){
       var was=a0.rem&&a0.rem.on;
       if(f.remOn&&!was)remPatch(rec.data.id,{on:true,date:f.remDate,time:f.remTime,note:f.remNote,done:false},{e:'Reminder set',t:f.remDate?fmtDY(f.remDate):''});
@@ -999,7 +1014,7 @@ function saveForm(rec){
     var now=Date.now();
     var a={id:uid('a'),projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),
       lineItem:f.lineItem,task:f.task,spocIds:f.spocIds.slice(),etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,
-      status:f.status,important:!!f.important,rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,done:false},
+      status:f.status,important:!!f.important,tags:(f.tags||[]).slice(),rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,done:false},
       notes:f.notes,comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null};
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
@@ -1169,6 +1184,14 @@ document.addEventListener('click',function(e){
     case 'back':goBack();break;
     case 'kpi':{filters=defaultFilters();filters.quick=el.getAttribute('data-q');nav('list',{});break;}
     case 'quick':filters.quick=el.getAttribute('data-q');render();break;
+    case 'view-personal':filters=defaultFilters();nav('projectDetail',{id:'__personal',seg:'open'});break;
+    case 'tagfilter':{var tgf=el.getAttribute('data-tag')||'';filters.tag=(filters.tag&&filters.tag.toLowerCase()===tgf.toLowerCase())?'':tgf;render();break;}
+    case 'f-tag-del':{var fr1=sheetFor('form');if(fr1){var td=(el.getAttribute('data-tag')||'').toLowerCase();fr1.data.f.tags=(fr1.data.f.tags||[]).filter(function(x){return x.toLowerCase()!==td;});renderForm(fr1);}break;}
+    case 'f-tag-add':{var fr2=sheetFor('form');if(fr2){fr2.data.f.tags=fr2.data.f.tags||[];addTagTo(fr2.data.f.tags,el.getAttribute('data-tag'));renderForm(fr2);}break;}
+    case 'f-tag-addbuf':{var fr3=sheetFor('form');if(fr3){fr3.data.f.tags=fr3.data.f.tags||[];var fi=$('#fTagIn',fr3.sheet);if(fi&&fi.value){parseTagList(fi.value).forEach(function(t){addTagTo(fr3.data.f.tags,t);});fi.value='';}renderForm(fr3);}break;}
+    case 'd-tag-del':{var dr1=sheetFor('detail');if(dr1){var a1=actById(dr1.data.id);if(a1){var dd=(el.getAttribute('data-tag')||'').toLowerCase();updateAct(dr1.data.id,{tags:(a1.tags||[]).filter(function(x){return x.toLowerCase()!==dd;})});renderDetail(dr1);render();}}break;}
+    case 'd-tag-add':{var dr2=sheetFor('detail');if(dr2){var a2=actById(dr2.data.id);if(a2){var nt2=(a2.tags||[]).slice();addTagTo(nt2,el.getAttribute('data-tag'));updateAct(dr2.data.id,{tags:nt2});renderDetail(dr2);render();}}break;}
+    case 'd-tag-addbuf':{var dr3=sheetFor('detail');if(dr3){var a3=actById(dr3.data.id);if(a3){var nt3=(a3.tags||[]).slice(),di=$('#dTagIn',dr3.sheet);if(di&&di.value){parseTagList(di.value).forEach(function(t){addTagTo(nt3,t);});di.value='';}updateAct(dr3.data.id,{tags:nt3});renderDetail(dr3);render();}}break;}
     case 'go-search':filters=defaultFilters();nav('list',{});setTimeout(function(){var i=$('#srch');if(i)i.focus();},60);break;
     case 'go-notif':nav('notifications',{});break;
     case 'notif-read':S.settings.notifSeenDate=todayISO();saveState();render();toast('Marked as read');break;
@@ -1283,6 +1306,35 @@ document.addEventListener('click',function(e){
       }
       break;
     }
+    case 'tmpl-download':exportTemplate();break;
+    case 'tmpl-import':openTemplateImport();break;
+    case 'tmpl-file':{
+      var trec=sheetFor('tmplimport');if(!trec)break;
+      var tinp=$('#tmplFileInput',trec.sheet);if(!tinp)break;
+      tinp.onchange=function(){
+        var file=tinp.files&&tinp.files[0];if(!file)return;
+        if(!xlsxReady()){toast('Import engine loading \u2014 try again');return;}
+        var fr=new FileReader();
+        fr.onload=function(ev){
+          var wb;try{wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});}catch(e){toast('Could not read the Excel file');return;}
+          var orig=S,clone;try{clone=JSON.parse(JSON.stringify(S));}catch(e){toast('Import failed');return;}
+          S=clone;var c;
+          try{c=runTemplateImport(wb);}
+          catch(e){S=orig;toast(e&&e.message==='NO_SHEET'?'No \u201cActionables\u201d sheet found':'Could not process the template');return;}
+          S=orig;
+          var extra=(c.projNew||c.spocNew)?' \u00b7 '+c.projNew+' new project(s), '+c.spocNew+' new SPOC(s)':'';
+          var st=$('#tmplStatus',trec.sheet);if(st)st.textContent='Preview \u2014 '+c.updated+' update \u00b7 '+c.added+' add \u00b7 '+c.deleted+' delete'+extra+'.';
+          confirmSheet('Apply template update?',
+            c.updated+' updated \u00b7 '+c.added+' added \u00b7 '+c.deleted+' deleted'+extra+'. Items not in the file are left unchanged.',
+            'Apply update',c.deleted>0,function(){
+              S=clone;ensureDefaults();saveState();applyTheme();closeSheet(trec);filters=defaultFilters();render();syncSchedule();toast('Data updated from template');
+            });
+        };
+        fr.readAsArrayBuffer(file);
+      };
+      tinp.click();
+      break;
+    }
     case 'reseed':confirmSheet('Reset to demo data?','All current data will be replaced with the BCP / ICICI / SCB demo set.','Reset',true,function(){S=window.buildSeed(Date.now());saveState();applyTheme();filters=defaultFilters();render();syncSchedule();toast('Demo data restored');});break;
   }
 });
@@ -1369,3 +1421,158 @@ applyTheme();
 syncSchedule();
 render();
 try{if(window.Cloud&&window.Cloud.init)window.Cloud.init();}catch(e){}
+
+/* ================= Excel round-trip template ================= */
+function isoFromMs(ms){if(!ms)return '';var d=new Date(ms);function p(n){return(n<10?'0':'')+n;}return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+function dateToMs(iso){var p=String(iso).split('-');if(p.length!==3)return Date.now();return new Date(+p[0],+p[1]-1,+p[2],10,0,0).getTime();}
+var TMPL_MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function parseTmplDate(v){
+  if(v==null)return '';
+  if(typeof v==='number'&&isFinite(v)){var dc=new Date(Math.round((v-25569)*86400000));if(!isNaN(dc)){function p(n){return(n<10?'0':'')+n;}return dc.getUTCFullYear()+'-'+p(dc.getUTCMonth()+1)+'-'+p(dc.getUTCDate());}}
+  var s=String(v).trim();if(!s)return '';
+  if(/^tbd$/i.test(s))return 'TBD';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  var m=s.match(/^(\d{1,2})\s*(?:st|nd|rd|th)?\s*([A-Za-z]{3,})\.?\s*(\d{4})?$/);
+  if(m){var mo=TMPL_MON[m[2].slice(0,3).toLowerCase()];if(mo){var yr=m[3]?+m[3]:(new Date()).getFullYear();function q(n){return(n<10?'0':'')+n;}return yr+'-'+q(mo)+'-'+q(+m[1]);}}
+  var d2=new Date(s);if(!isNaN(d2)){function r(n){return(n<10?'0':'')+n;}return d2.getFullYear()+'-'+r(d2.getMonth()+1)+'-'+r(d2.getDate());}
+  return '';
+}
+function hmap(rows){var h=(rows&&rows[0])||[],m={};for(var i=0;i<h.length;i++){var k=String(h[i]==null?'':h[i]).toLowerCase().replace(/[^a-z0-9]/g,'');if(k&&m[k]===undefined)m[k]=i;}return m;}
+function hval(row,map,keys){for(var i=0;i<keys.length;i++){var idx=map[keys[i]];if(idx!==undefined){var v=row[idx];return v==null?'':v;}}return '';}
+function ownersToIds(str,add){if(!str)return [];return String(str).split(/[,\/]/).map(function(x){return x.trim();}).filter(Boolean).map(function(n){return add(n);}).filter(Boolean);}
+function findOrAddProject(name,c){name=String(name==null?'':name).trim();if(!name)return (S.projects[0]?S.projects[0].id:'');for(var i=0;i<S.projects.length;i++)if(S.projects[i].name.toLowerCase()===name.toLowerCase())return S.projects[i].id;var np={id:uid('p'),name:name,code:name.slice(0,4).toUpperCase()};S.projects.push(np);if(c)c.projNew++;return np.id;}
+function findOrAddPerson(name,c){name=String(name==null?'':name).trim();if(!name)return null;for(var i=0;i<S.people.length;i++)if(S.people[i].name.toLowerCase()===name.toLowerCase())return S.people[i].id;var nu={id:uid('u'),name:name};S.people.push(nu);if(c)c.spocNew++;return nu.id;}
+function sheetRows(wb,name){var ws=wb.Sheets[name];if(!ws)return [];return XLSX.utils.sheet_to_json(ws,{header:1,defval:''});}
+
+function exportTemplate(){
+  if(!xlsxReady()){toast('Export engine loading \u2014 try again');return;}
+  var XU=XLSX.utils,wb=XU.book_new();
+  var info=[
+   ['Actionables \u2014 data template (round-trip)'],
+   ['Edit this file, then load it back via Settings \u2192 Update from template.'],
+   [''],
+   ['ID','Do NOT change or clear the ID on existing rows \u2014 it is how the app matches & updates them. Leave ID blank for NEW rows.'],
+   ['Delete?','On the Actionables tab, type Yes to remove that row on import. Blank = keep.'],
+   ['Status','Allowed: In Progress / On Hold / Dependency / Completed. Anything else becomes In Progress.'],
+   ['Owner / SPOC','Name(s) from the SPOCs tab, comma-separated. Blank = to be assigned. New names are created automatically.'],
+   ['Project','Name from the Projects tab. New names are created automatically.'],
+   ['Important','Yes / No.'],
+   ['ETA / due date','A date YYYY-MM-DD, or TBD, or blank. For a range put the start here and the end in ETA end.'],
+   ['Follow-up date','Optional YYYY-MM-DD (turns on a reminder). Follow-up note is optional.'],
+   ['Completed date','Only for Completed items; blank = today.'],
+   [''],
+   ['Items not present in this file are left untouched \u2014 nothing is deleted unless Delete? = Yes.']
+  ];
+  var wsi=XU.aoa_to_sheet(info);wsi['!cols']=[{wch:16},{wch:104}];XU.book_append_sheet(wb,wsi,'Read me');
+  var wsp=XU.aoa_to_sheet([['ID','Project name','Short code']].concat(S.projects.map(function(p){return [p.id,p.name,p.code||''];})));
+  wsp['!cols']=[{wch:16},{wch:26},{wch:12}];XU.book_append_sheet(wb,wsp,'Projects');
+  var wsu=XU.aoa_to_sheet([['ID','SPOC / Owner name']].concat(S.people.map(function(u){return [u.id,u.name];})));
+  wsu['!cols']=[{wch:16},{wch:28}];XU.book_append_sheet(wb,wsu,'SPOCs');
+  var aHead=['ID','Project','Ticket / Ref ID','Ticket link','Line item','Description / update','Owner / SPOC','Status','Important','ETA / due date','ETA end (range only)','Follow-up date','Follow-up note','Remarks / notes','Tags','Completed date','Delete?'];
+  var aRows=S.actionables.map(function(a){
+    var eta='',ee='';
+    if(a.etaKind==='tbd')eta='TBD';
+    else if(a.etaKind==='range'){eta=a.eta||'';ee=a.etaEnd||'';}
+    else if(a.etaKind==='date')eta=a.eta||'';
+    var rem=a.rem||{};
+    return [a.id,projName(a.projectId),a.ticket||'',a.ticketUrl||'',a.lineItem||'',a.task||'',
+      (a.spocIds||[]).map(function(id){return personName(id);}).join(', '),
+      a.status,a.important?'Yes':'No',eta,ee,
+      rem.on?(rem.date||''):'',rem.on?(rem.note||''):'',a.notes||'',(a.tags||[]).join(', '),
+      (a.status==='Completed'&&a.completedAt)?isoFromMs(a.completedAt):'',''];
+  });
+  var wsa=XU.aoa_to_sheet([aHead].concat(aRows));
+  wsa['!cols']=[{wch:20},{wch:14},{wch:16},{wch:22},{wch:34},{wch:46},{wch:22},{wch:14},{wch:10},{wch:15},{wch:16},{wch:14},{wch:28},{wch:40},{wch:20},{wch:15},{wch:8}];
+  XU.book_append_sheet(wb,wsa,'Actionables');
+  var b64=XLSX.write(wb,{bookType:'xlsx',type:'base64'});
+  deliverFile(b64,'Actionables-Template-'+stamp()+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+function openTemplateImport(){
+  openSheet('<div class="shead"><h2>Update from template</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
+    '<div class="sbody"><p style="color:var(--tx2);font-size:.83rem;line-height:1.5;margin-bottom:12px">Pick the edited Excel template (.xlsx). Existing rows are matched by their <b>ID</b> and updated; rows with a blank ID are added; set <b>Delete?</b> to Yes to remove a row. Items not in the file are left unchanged.</p>'+
+    '<button class="btn ghost" data-act="tmpl-file">'+I('dl')+'Choose Excel file</button>'+
+    '<input id="tmplFileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">'+
+    '<div id="tmplStatus" class="note" style="padding:12px 0 0"></div></div>',{tag:'tmplimport'});
+}
+
+function runTemplateImport(wb){
+  var c={updated:0,added:0,deleted:0,projNew:0,spocNew:0};
+  var pr=sheetRows(wb,'Projects');
+  if(pr.length){var pm=hmap(pr);for(var i=1;i<pr.length;i++){var r=pr[i];if(!r)continue;
+    var pid=String(hval(r,pm,['id'])||'').trim(),pname=String(hval(r,pm,['projectname','project','name'])||'').trim(),pcode=String(hval(r,pm,['shortcode','code'])||'').trim();
+    if(!pname)continue;var p=pid?projById(pid):null;
+    if(!p)for(var j=0;j<S.projects.length;j++)if(S.projects[j].name.toLowerCase()===pname.toLowerCase()){p=S.projects[j];break;}
+    if(p){p.name=pname;if(pcode)p.code=pcode;}else{S.projects.push({id:pid||uid('p'),name:pname,code:pcode||pname.slice(0,4).toUpperCase()});c.projNew++;}
+  }}
+  var ur=sheetRows(wb,'SPOCs');
+  if(ur.length){var um=hmap(ur);for(var k=1;k<ur.length;k++){var u=ur[k];if(!u)continue;
+    var uid2=String(hval(u,um,['id'])||'').trim(),uname=String(hval(u,um,['spocownername','spocname','ownername','name','spoc'])||'').trim();
+    if(!uname)continue;var pu=uid2?personById(uid2):null;
+    if(!pu)for(var j2=0;j2<S.people.length;j2++)if(S.people[j2].name.toLowerCase()===uname.toLowerCase()){pu=S.people[j2];break;}
+    if(pu){pu.name=uname;}else{S.people.push({id:uid2||uid('u'),name:uname});c.spocNew++;}
+  }}
+  var ar=sheetRows(wb,'Actionables');
+  if(!ar.length)throw new Error('NO_SHEET');
+  var am=hmap(ar),now=Date.now();
+  for(var x=1;x<ar.length;x++){var row=ar[x];if(!row)continue;
+    var id=String(hval(row,am,['id'])||'').trim();
+    var line=String(hval(row,am,['lineitem','line','title'])||'').trim();
+    var del=String(hval(row,am,['delete','remove'])||'').trim().toLowerCase();
+    if(del==='yes'||del==='y'||del==='x'||del==='true'||del==='1'){if(id&&actById(id)){S.actionables=S.actionables.filter(function(z){return z.id!==id;});c.deleted++;}continue;}
+    if(!line)continue;
+    var proj=findOrAddProject(hval(row,am,['project','projectname']),c);
+    var spocIds=ownersToIds(hval(row,am,['ownerspoc','owner','spoc','owners']),function(n){return findOrAddPerson(n,c);});
+    var stIn=String(hval(row,am,['status'])||'').trim();
+    var status=STATUSES.indexOf(stIn)>=0?stIn:(STATUS_MAP[stIn]||'In Progress');
+    var important=/^(yes|y|true|1)$/i.test(String(hval(row,am,['important'])||'').trim());
+    var task=String(hval(row,am,['descriptionupdate','description','update','task'])||'').trim();
+    var ticket=String(hval(row,am,['ticketrefid','ticket','refid','ticketref'])||'').trim();
+    var ticketUrl=String(hval(row,am,['ticketlink','link','url'])||'').trim();
+    var notes=String(hval(row,am,['remarksnotes','remarks','notes'])||'').trim();
+    var tags=parseTagList(hval(row,am,['tags','tag']));
+    var fdate=parseTmplDate(hval(row,am,['followupdate','followup']));if(fdate==='TBD')fdate='';
+    var fnote=String(hval(row,am,['followupnote','followupnotes'])||'').trim();
+    var cdate=parseTmplDate(hval(row,am,['completeddate','completed','completeddatew']));if(cdate==='TBD')cdate='';
+    var e1=parseTmplDate(hval(row,am,['etaduedate','eta','due','etadate']));
+    var e2=parseTmplDate(hval(row,am,['etaendrangeonly','etaend','end']));
+    var ek,ev,ee;
+    if(e1==='TBD'){ek='tbd';ev='';ee='';}
+    else if(e1&&e2&&e2!=='TBD'){ek='range';ev=e1;ee=e2;}
+    else if(e1){ek='date';ev=e1;ee='';}
+    else{ek='none';ev='';ee='';}
+    var a=id?actById(id):null;
+    if(a){
+      a.projectId=proj;a.ticket=ticket;a.ticketUrl=ticketUrl;a.lineItem=line;a.task=task;
+      a.spocIds=spocIds.slice();a.etaKind=ek;a.eta=ev;a.etaEnd=ee;a.status=status;a.important=important;a.notes=notes;a.tags=tags;
+      a.rem=a.rem||{on:false,date:'',time:'',note:'',done:false};
+      a.rem.on=!!fdate;a.rem.date=fdate||'';a.rem.note=fnote;if(!fdate)a.rem.done=false;
+      a.completedAt=(status==='Completed')?(cdate?dateToMs(cdate):(a.completedAt||now)):null;
+      a.updatedAt=now;logAct(a,'Updated via template');c.updated++;
+    }else{
+      var na={id:uid('a'),projectId:proj,ticket:ticket,ticketUrl:ticketUrl,lineItem:line,task:task,
+        spocIds:spocIds.slice(),etaKind:ek,eta:ev,etaEnd:ee,status:status,important:important,tags:tags,
+        rem:{on:!!fdate,date:fdate||'',time:'',note:fnote,done:false},notes:notes,comments:[],
+        activity:[{ts:now,user:(S.settings&&S.settings.userName)||'You',event:'Created',from:'',to:''}],
+        createdAt:now,updatedAt:now,completedAt:(status==='Completed')?(cdate?dateToMs(cdate):now):null};
+      if(na.spocIds.length)logAct(na,'Owner/SPOC assigned','',na.spocIds.map(function(id2){return personName(id2);}).join(' & '));
+      S.actionables.unshift(na);c.added++;
+    }
+  }
+  return c;
+}
+
+/* ================= Tags helpers ================= */
+function normTag(s){return String(s==null?'':s).replace(/,/g,' ').replace(/\s+/g,' ').trim().slice(0,28);}
+function allTags(){var seen={},out=[];S.actionables.forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;out.push(t);}});});return out.sort(function(x,y){return x.toLowerCase()<y.toLowerCase()?-1:1;});}
+function addTagTo(arr,t){t=normTag(t);if(!t)return;for(var i=0;i<arr.length;i++)if(arr[i].toLowerCase()===t.toLowerCase())return;arr.push(t);}
+function parseTagList(str){var out=[];String(str==null?'':str).split(',').forEach(function(x){addTagTo(out,x);});return out;}
+function tagsHtml(a){if(!a.tags||!a.tags.length)return '';var sh=a.tags.slice(0,3).map(function(t){return '<span class="rtag">'+esc(t)+'</span>';}).join('');if(a.tags.length>3)sh+='<span class="rtag more">+'+(a.tags.length-3)+'</span>';return '<span class="rtags">'+sh+'</span>';}
+function tagEditHtml(tags,delAct,addAct,addbufAct,inputId){
+  tags=tags||[];
+  var chips=tags.map(function(t){return '<button class="chip on tagpick" data-act="'+delAct+'" data-tag="'+esc(t)+'">'+esc(t)+' \u2715</button>';}).join('');
+  var lower={};tags.forEach(function(t){lower[t.toLowerCase()]=1;});
+  var sugg=allTags().filter(function(t){return !lower[t.toLowerCase()];}).slice(0,8).map(function(t){return '<button class="chip tagpick" data-act="'+addAct+'" data-tag="'+esc(t)+'">'+esc(t)+'</button>';}).join('');
+  return '<div class="chips tagchips">'+(chips+sugg||'<span class="chip" style="border-style:dashed;color:var(--tx3)">No tags yet</span>')+'</div>'+
+    '<div class="cmtrow" style="margin-top:8px"><input id="'+inputId+'" placeholder="Type a tag, comma to add several\u2026"><button class="btn ghost" style="flex:none;width:70px;height:42px" data-act="'+addbufAct+'">Add</button></div>';
+}
