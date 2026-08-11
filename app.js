@@ -538,6 +538,16 @@ function vList(){
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
+  var _cp=filters.project.length===1?filters.project[0]:'__all';
+  var _cs=filters.spoc.length===1?filters.spoc[0]:'__all';
+  var _projs=S.projects.filter(function(o){return o.id!=='__personal';});
+  var _seen={},_sids=[];mainActs().forEach(function(a){if(_cp!=='__all'&&a.projectId!==_cp)return;(a.spocIds||[]).forEach(function(id){if(!_seen[id]){_seen[id]=1;_sids.push(id);}});});
+  _sids.sort(function(x,y){return personName(x).toLowerCase()<personName(y).toLowerCase()?-1:1;});
+  if(_cs!=='__all'&&_cs!=='__tbc'&&_sids.indexOf(_cs)<0)_cs='__all';
+  h+='<div class="viewsel">'+
+     '<div class="vs-field"><span class="vs-l">Project</span><div class="vs-sel"><select data-chg="lst-proj"><option value="__all"'+(_cp==='__all'?' selected':'')+'>All projects</option>'+_projs.map(function(o){return '<option value="'+o.id+'"'+(_cp===o.id?' selected':'')+'>'+esc(o.name)+'</option>';}).join('')+'</select>'+I('chevR')+'</div></div>'+
+     '<div class="vs-field"><span class="vs-l">SPOC / Owner</span><div class="vs-sel"><select data-chg="lst-spoc"><option value="__all"'+(_cs==='__all'?' selected':'')+'>All SPOCs</option>'+_sids.map(function(id){return '<option value="'+id+'"'+(_cs===id?' selected':'')+'>'+esc(personName(id))+'</option>';}).join('')+'<option value="__none"'+(_cs==='__tbc'?' selected':'')+'>Unassigned</option></select>'+I('chevR')+'</div></div>'+
+     '</div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
     var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
@@ -943,7 +953,7 @@ function openForm(id,prefill){
       status:a.status,notes:a.notes,important:!!a.important,tags:(a.tags||[]).slice(),quick:false};
   }else{
     var proj=quick?'__personal':((prefill&&prefill.projectId)||(S.projects[0]?S.projects[0].id:''));
-    f={projectId:proj,ticket:'',ticketUrl:'',lineItem:'',task:'',spocIds:[],
+    f={projectId:proj,ticket:'',ticketUrl:'',lineItem:'',task:'',spocIds:(prefill&&prefill.spocIds)?prefill.spocIds.slice():[],
       etaKind:prefill&&prefill.eta?'date':'none',eta:(prefill&&prefill.eta)||'',etaEnd:'',
       remOn:false,remDate:'',remTime:'',remNote:'',status:'In Progress',notes:'',
       important:!!(prefill&&prefill.important),tags:[],quick:quick};
@@ -1398,6 +1408,8 @@ document.addEventListener('change',function(e){
     }
     return;
   }
+  if(chg==='lst-proj'){filters.project=(v==='__all')?[]:[v];filters.spoc=[];render();return;}
+  if(chg==='lst-spoc'){filters.spoc=(v==='__all')?[]:(v==='__none'?['__tbc']:[v]);render();return;}
   if(chg==='psort'){peopleView.sort=v;render();return;}
   if(chg==='flt-sort'){filters.sort=v;render();return;}
   if(chg==='flt-from'){filters.from=v;render();return;}
@@ -1763,3 +1775,4 @@ function ownerSelHtml(f){
 function formValid(f){return !!(f.lineItem&&f.lineItem.trim())&&(f.quick||!!(f.task&&f.task.trim()));}
 function updateSaveBtn(rec,f){var sv=$('.sfoot .btn.pri',rec.sheet);if(sv){var ok=formValid(f);sv.disabled=!ok;if(ok)sv.classList.add('ready');else sv.classList.remove('ready');}}
 function wireOwnerSearch(rec){var os=$('#fOwnerSearch',rec.sheet);if(!os)return;os.addEventListener('input',function(){var q=this.value.toLowerCase(),opts=rec.sheet.querySelectorAll('.own-opt');for(var i=0;i<opts.length;i++){if(opts[i].classList.contains('add'))continue;var nm=opts[i].getAttribute('data-name')||'';opts[i].style.display=(!q||nm.indexOf(q)>=0)?'':'none';}});}
+

@@ -1269,3 +1269,12 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .sbody{padding-bottom:calc(26px + env(safe-area-inset-bottom));}
 .sbody input,.sbody textarea,.sbody select{scroll-margin-bottom:120px;}
 @supports (height:100dvh){ .sheet.full{height:92dvh;max-height:92dvh;} }
+
+/* ---- In-app widget screens: project/SPOC dropdown row ---- */
+.viewsel{display:grid;grid-template-columns:1fr 1fr;gap:11px;padding:14px 16px 4px;}
+@media(max-width:560px){.viewsel{grid-template-columns:1fr;}}
+.vs-l{display:block;font-size:.64rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin:0 0 6px 2px;}
+.vs-sel{position:relative;}
+.vs-sel select{appearance:none;-webkit-appearance:none;width:100%;background:var(--sur);border:1px solid var(--line2);border-radius:12px;padding:12px 38px 12px 13px;font:inherit;font-size:.9rem;font-weight:500;color:var(--tx);cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+.vs-sel select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-dim);}
+.vs-sel svg{position:absolute;right:11px;top:50%;transform:translateY(-50%) rotate(90deg);width:16px;height:16px;color:var(--tx3);pointer-events:none;}
