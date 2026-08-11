@@ -82,6 +82,7 @@
           '<button class="btn pri" id="cgIn">Sign in</button>' +
           '<button class="btn ghost" id="cgUp">Create account</button>' +
         '</div>' +
+        '<button class="cg-skip" id="cgReset">Forgot password?</button>' +
         '<button class="cg-skip" id="cgSkip">Use offline only on this device</button>' +
       '</div>';
     document.body.appendChild(g);
@@ -101,6 +102,13 @@
       if (c.p.length < 6) { setGateErr(g, 'Password must be at least 6 characters'); return; }
       busy(true); setGateErr(g, '');
       auth.createUserWithEmailAndPassword(c.e, c.p).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
+    });
+    g.querySelector('#cgReset').addEventListener('click', function () {
+      var c = creds();
+      if (!c.e) { setGateErr(g, 'Enter your email above, then tap Forgot password.'); return; }
+      auth.sendPasswordResetEmail(c.e)
+        .then(function () { setGateErr(g, 'Password reset email sent to ' + c.e + '.'); })
+        .catch(function (err) { setGateErr(g, pretty(err)); });
     });
     g.querySelector('#cgSkip').addEventListener('click', function () {
       offlineOnly = true; gate(false); setLabel('Offline only (this device)');

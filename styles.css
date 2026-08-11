@@ -80,22 +80,8 @@ svg { width: 20px; height: 20px; flex: none; }
 }
 
 /* ---------- hero ---------- */
-.hero { padding: 4px 16px 12px; }
-.hero .hi { font-size: .8rem; color: var(--tx3); }
-.hero .brief { font-size: .95rem; color: var(--tx2); margin-top: 2px; }
-.hero .brief b { color: var(--red); font-weight: 600; }
 
 /* ---------- KPI strip (2-row horizontal) ---------- */
-.kstrip {
-  display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(2, auto);
-  gap: 8px;
-  overflow-x: auto;
-  padding: 2px 16px 6px;
-  scrollbar-width: none;
-}
-.kstrip::-webkit-scrollbar { display: none; }
 .kpi {
   width: 122px;
   background: var(--sur);
@@ -168,13 +154,8 @@ svg { width: 20px; height: 20px; flex: none; }
 .b-pn  { color: var(--tx2); background: var(--sur2); border: 1px solid var(--line2); }
 .b-ip  { color: var(--acc); background: var(--acc-dim); }
 .b-ar  { color: var(--amb); background: var(--amb-dim); }
-.b-ab  { color: var(--amb); background: var(--amb-dim); border: 1px solid rgba(255, 180, 84, .35); }
 .b-asg { color: var(--pur); background: var(--pur-dim); }
-.b-acf { color: var(--amb); background: var(--amb-dim); }
-.b-pt  { color: var(--tea); background: var(--tea-dim); }
-.b-sc  { color: var(--tx2); background: var(--sur2); border: 1px dashed var(--line2); }
 .b-dn  { color: var(--grn); background: var(--grn-dim); }
-.b-cx  { color: var(--tx3); background: transparent; border: 1px solid var(--line); }
 
 /* follow-up flag */
 .fu {
@@ -277,8 +258,6 @@ svg { width: 20px; height: 20px; flex: none; }
 .trow .c.red { color: var(--red); }
 .trow .c.amb { color: var(--amb); }
 .g-spoc { grid-template-columns: 1fr 46px 46px 46px; }
-.wbar { height: 6px; border-radius: 3px; background: var(--sur2); overflow: hidden; }
-.wbar i { display: block; height: 100%; background: var(--acc); border-radius: 3px; }
 
 /* ---------- calendar ---------- */
 .calhead { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; padding: 6px 16px 4px; }
@@ -677,7 +656,6 @@ svg { width: 20px; height: 20px; flex: none; }
   .note    { padding: 10px 22px 0; }
   .sumstrip { padding: 2px 22px 14px; }
   .own     { margin: 6px 22px 0; }
-  .kstrip  { padding: 2px 22px 6px; }
 
   /* Masonry-style board on desktop: project blocks pack vertically into the
      available space instead of leaving a tall gap beside a long project.
@@ -975,9 +953,6 @@ html.light-theme .brows .orow.od { box-shadow: inset 3px 0 0 var(--red); }
   background: currentColor; opacity: .95; flex: none;
 }
 .b-pn { color: var(--tx2); background: var(--sur2); }
-.b-sc { color: var(--tx2); background: var(--sur2); }
-.b-ab { color: var(--amb); background: var(--amb-dim); }
-.b-cx { color: var(--tx3); background: var(--sur2); }
 
 /* --- ETA cues: coloured text, not filled chips --- */
 .datechip {
@@ -1057,3 +1032,19 @@ html.light-theme .brows .orow.od { box-shadow: inset 3px 0 0 var(--red); }
 .viewself{border-style:solid;border-color:var(--grn);color:var(--grn);}
 .viewself svg{color:var(--grn);}
 @media (min-width:1024px){ .selfrow{margin:0 22px 10px;} }
+
+/* ---- Review additions: toast Undo, sync badge, tag manager ---- */
+.toast-act{margin-left:14px;background:none;border:0;color:var(--acc);font-weight:700;font-size:.82rem;cursor:pointer;padding:0;}
+html.light-theme .toast-act{color:#8ab4ff;}
+.syncbadge{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;}
+.syncbadge i{width:9px;height:9px;border-radius:50%;background:var(--tx3);box-shadow:0 0 0 3px transparent;}
+.syncbadge.sy-ok i{background:var(--grn);}
+.syncbadge.sy-warn i{background:var(--amb);}
+.syncbadge.sy-err i{background:var(--red);}
+.syncbadge.sy-idle i{background:var(--tx3);}
+.taglist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.tagmrow{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);}
+.tagmrow:last-child{border-bottom:0;}
+.tagmrow input{flex:1;min-width:0;background:var(--sur2);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;color:var(--tx);font-size:.85rem;}
+.tagmrow .c{font-family:var(--mono);font-size:.7rem;color:var(--tx3);min-width:20px;text-align:right;}
+.btn.mini{flex:none;height:32px;padding:0 10px;font-size:.74rem;}
