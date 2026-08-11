@@ -116,6 +116,7 @@ var view={name:'home',params:{}};
 var history_=[];
 var sheetStack=[];
 var filters=defaultFilters();
+var peopleView={sort:'open',filt:'all'};
 var calState=null;
 var exportSel={projId:''};
 
@@ -637,28 +638,44 @@ function vProjectDetail(pid){
 
 /* ---- PEOPLE / SPOCs ---- */
 function vPeople(){
-  var h=topbar('Owners / SPOCs','People responsible for follow-through',false,
-    '<button class="iconbtn" data-act="add-person">'+I('plus')+'</button>');
-  h+='<div style="height:12px"></div><div class="tbl">'+
-    '<div class="trow head g-spoc"><span>Owner / SPOC</span><span style="text-align:right">Open</span><span style="text-align:right">OD</span><span style="text-align:right">FU</span></div>'+
-    peopleSorted().map(function(u){
-      var st=personStats(u.id);
-      var codes=personProjectCodes(u.id);
-      var tag=codes.length?codes.slice(0,3).join(', ')+(codes.length>3?' +'+(codes.length-3):''):'\u2014';
-      return '<button class="trow g-spoc" data-act="person" data-id="'+u.id+'">'+
-        '<span class="name">'+esc(u.name)+' <span class="own" style="margin-left:5px">'+esc(tag)+'</span></span>'+
-        '<span class="c'+(st.open?'':' z')+'">'+st.open+'</span>'+
-        '<span class="c'+(st.od?' red':' z')+'">'+st.od+'</span>'+
-        '<span class="c'+(st.fu?' amb':' z')+'">'+st.fu+'</span></button>';
-    }).join('')+
-    (function(){var st=personStats('__tbc');if(!st.open)return '';
-      return '<button class="trow g-spoc" data-act="person" data-id="__tbc">'+
-        '<span class="name" style="color:var(--tx3);font-style:italic">To be assigned</span>'+
-        '<span class="c">'+st.open+'</span><span class="c'+(st.od?' red':' z')+'">'+st.od+'</span>'+
-        '<span class="c'+(st.fu?' amb':' z')+'">'+st.fu+'</span></button>';})()+'</div>';
-  h+='<div class="note">Owner / SPOC = the person responsible for this line item or task.</div>';
+  var pv=peopleView;
+  var ppl=peopleSorted().slice();
+  var freq={};ppl.forEach(function(u){var k=u.name.toLowerCase();freq[k]=(freq[k]||0)+1;});
+  var rows=ppl.map(function(u){
+    var st=personStats(u.id),sub='';
+    if(freq[u.name.toLowerCase()]>1){var codes=personProjectCodes(u.id);sub=codes.length?codes[0]:('#'+String(u.id).slice(-4));}
+    return {id:u.id,name:u.name,sub:sub,st:st,tbc:false};
+  });
+  var tb=personStats('__tbc');
+  if(tb.open||tb.od||tb.fu)rows.push({id:'__tbc',name:'To be assigned',sub:'',st:tb,tbc:true});
+  rows=rows.filter(function(r){
+    if(pv.filt==='open')return r.st.open>0;
+    if(pv.filt==='overdue')return r.st.od>0;
+    if(pv.filt==='followup')return r.st.fu>0;
+    return true;
+  });
+  var key={open:'open',overdue:'od',followup:'fu'}[pv.sort];
+  if(pv.sort==='az')rows.sort(function(a,b){return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});
+  else rows.sort(function(a,b){return (b.st[key]-a.st[key])||(b.st.open-a.st.open)||(a.name.toLowerCase()<b.name.toLowerCase()?-1:1);});
+  var filts=[['all','All'],['open','Open'],['overdue','Overdue'],['followup','Follow-up']];
+  var sorts=[['open','Highest Open'],['overdue','Highest Overdue'],['followup','Highest Follow-up'],['az','A\u2013Z']];
+  var h=topbar('Owners / SPOCs',ppl.length+' people',false,'<button class="iconbtn" data-act="add-person">'+I('plus')+'</button>');
+  h+='<div class="chips" style="margin-top:6px">'+filts.map(function(x){return '<button class="chip'+(pv.filt===x[0]?' on':'')+'" data-act="pfilt" data-k="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div>';
+  h+='<div class="sortrow"><span>Sort by</span><select data-chg="psort">'+sorts.map(function(x){return '<option value="'+x[0]+'"'+(pv.sort===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div>';
+  h+=rows.length?('<div class="list plist">'+rows.map(function(r){
+    return '<button class="prow'+(r.tbc?' tbc':'')+'" data-act="person" data-id="'+r.id+'">'+
+      '<span class="p-ic">'+I('person')+'</span>'+
+      '<span class="p-name">'+esc(r.name)+(r.sub?'<span class="p-sub">'+esc(r.sub)+'</span>':'')+'</span>'+
+      '<span class="p-stats">'+
+        '<span class="p-stat p-open"><b>'+r.st.open+'</b><i>Open</i></span>'+
+        '<span class="p-stat'+(r.st.od?' hot':' z')+'"><b>'+r.st.od+'</b><i>Overdue</i></span>'+
+        '<span class="p-stat'+(r.st.fu?' warm':' z')+'"><b>'+r.st.fu+'</b><i>Follow-up</i></span>'+
+      '</span></button>';
+  }).join('')+'</div>'):emptyBox('No matches','No owners match this filter.');
+  h+='<div class="note">Owner / SPOC = the person responsible for a line item. Counts exclude personal tasks.</div>';
   return h;
 }
+
 function vPersonDetail(pid){
   var isTbc=pid==='__tbc';
   var u=isTbc?{name:'To be assigned'}:personById(pid);
@@ -942,71 +959,44 @@ function openForm(id,prefill){
 }
 function renderForm(rec){
   var f=rec.data.f;
-  var ppl=peopleSorted();
   f.spocIds=f.spocIds.filter(function(id){return !!personById(id);});
-  var impRow='<div class="fld wide"><label>Priority</label><div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('star')+'Mark as important</span><button class="switch'+(f.important?' on':'')+'" data-act="f-important"><i></i></button></div></div>';
-  var etaSel='<div class="fld'+(f.etaKind==='date'?'':' wide')+'"><label>ETA</label><select data-chg="f-etakind">'+
-    ETA_KINDS.map(function(k){return '<option value="'+k[0]+'"'+(f.etaKind===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+
-    '</select></div>'+
-    (f.etaKind==='date'?'<div class="fld"><label>Date</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div>':'')+
-    (f.etaKind==='range'?'<div class="fld"><label>From</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div>':'');
-  var tagRow='<div class="fld wide"><label>Tags</label>'+tagEditHtml(f.tags,'f-tag-del','f-tag-add','f-tag-addbuf','fTagIn')+'</div>';
+  var impToggle='<div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('star')+'Mark as important</span><button class="switch'+(f.important?' on':'')+'" data-act="f-important"><i></i></button></div>';
   if(f.quick){
     var bq='<div class="meta">'+
-      '<div class="fld wide"><label>Task *</label><input data-chg="f-line" placeholder="e.g. Prepare weekly status deck" value="'+esc(f.lineItem)+'"></div>'+
-      etaSel+
-      '<div class="fld wide"><label>Status</label><select data-chg="f-status">'+
-      STATUSES.filter(function(s){return s!=='Completed';}).map(function(s){return '<option'+(f.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
-      '</select></div>'+
-      impRow+
-      tagRow+
+      '<div class="fld wide"><label>Task <span class="req">*</span></label><input data-chg="f-line" placeholder="e.g. Prepare weekly status deck" value="'+esc(f.lineItem)+'"></div>'+
+      '<div class="fld wide"><label>Status</label>'+statusPickHtml(f,false)+'</div>'+
+      '<div class="fld wide"><label>ETA</label>'+etaPickHtml(f)+'</div>'+
+      '<div class="fld wide"><label>Priority</label>'+impToggle+'</div>'+
+      '<div class="fld wide"><label>Tags</label>'+tagEditHtml(f.tags,'f-tag-del','f-tag-add','f-tag-addbuf','fTagIn')+'</div>'+
       '<div class="fld wide"><label>Notes \u00b7 optional</label><textarea data-chg="f-task" placeholder="Any details\u2026">'+esc(f.task)+'</textarea></div>'+
       '</div>'+
-      '<div class="note" style="padding:10px 0 0">Personal task \u00b7 no owner. Filed under the <b>Personal</b> project.</div>';
-    $('.sbody',rec.sheet).innerHTML=bq;
-    return;
+      '<div class="note">Personal task \u00b7 no owner. Filed under the <b>Personal</b> project.</div>';
+    $('.sbody',rec.sheet).innerHTML=bq;updateSaveBtn(rec,f);wireOwnerSearch(rec);return;
   }
-  var b='<div class="meta">'+
-    /* 1 — Project */
-    '<div class="fld wide"><label>1 \u00b7 Project *</label><select data-chg="f-proj">'+
-    S.projects.map(function(o){return '<option value="'+o.id+'"'+(f.projectId===o.id?' selected':'')+'>'+esc(o.name)+'</option>';}).join('')+
-    '<option value="__new">+ New project\u2026</option></select></div>'+
-    /* 2 — Line Item */
-    '<div class="fld wide"><label>2 \u00b7 Line Item *</label><input data-chg="f-line" placeholder="e.g. ORP-3902 Downtime requirement" value="'+esc(f.lineItem)+'"></div>'+
-    /* 3 — Description */
-    '<div class="fld wide"><label>3 \u00b7 Description \u00b7 latest update *</label><textarea data-chg="f-task" placeholder="e.g. Bank to confirm downtime of 3\u20135 days.">'+esc(f.task)+'</textarea></div>'+
-    /* 4 — Owner / SPOC (filtered by project) */
-    '<div class="fld wide"><label>4 \u00b7 Owner / SPOC</label>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:2px">'+
-    ppl.map(function(u){var on=f.spocIds.indexOf(u.id)>=0;return '<button class="chip'+(on?' on':'')+'" data-act="f-spoc" data-id="'+u.id+'">'+esc(u.name)+'</button>';}).join('')+
-    '<button class="chip" data-act="f-spoc-new">+ New</button>'+
-    (f.spocIds.length?'':'<span class="chip" style="border-style:dashed;color:var(--tx3)">To be assigned</span>')+
-    '</div></div>'+
-    /* 5 — ETA */
-    '<div class="fld'+(f.etaKind==='date'?'':' wide')+'"><label>5 \u00b7 ETA</label><select data-chg="f-etakind">'+
-    ETA_KINDS.map(function(k){return '<option value="'+k[0]+'"'+(f.etaKind===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+
-    '</select></div>'+
-    (f.etaKind==='date'?'<div class="fld"><label>Date</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div>':'')+
-    (f.etaKind==='range'?'<div class="fld"><label>From</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div>':'')+
-    /* 6 — Status */
-    '<div class="fld wide"><label>6 \u00b7 Status *</label><select data-chg="f-status">'+
-    STATUSES.filter(function(s){return rec.data.id||(s!=='Completed');})
-      .map(function(s){return '<option'+(f.status===s?' selected':'')+'>'+s+'</option>';}).join('')+
-    '</select></div>'+
-    impRow+
-    tagRow+
-    /* 7 — Ticket / Ref */
-    '<div class="fld"><label>7 \u00b7 Ticket / Ref ID</label><input data-chg="f-ticket" placeholder="e.g. ORP-3902" value="'+esc(f.ticket)+'" autocapitalize="characters"></div>'+
-    '<div class="fld"><label>Ticket link \u00b7 optional</label><input data-chg="f-url" inputmode="url" placeholder="https://\u2026" value="'+esc(f.ticketUrl)+'"></div>'+
-    /* 8 — Reminder */
-    '<div class="fld wide"><label>8 \u00b7 Follow-up reminder</label><select data-chg="f-remon">'+
-    '<option value=""'+(f.remOn?'':' selected')+'>No reminder</option><option value="1"'+(f.remOn?' selected':'')+'>Set follow-up reminder</option></select></div>'+
-    (f.remOn?'<div class="fld"><label>Date</label><input type="date" data-chg="f-remdate" value="'+esc(f.remDate)+'"></div><div class="fld"><label>Time \u00b7 optional</label><input type="time" data-chg="f-remtime" value="'+esc(f.remTime)+'"></div><div class="fld wide"><label>Note</label><input data-chg="f-remnote" placeholder="What to chase\u2026" value="'+esc(f.remNote)+'"></div>':'')+
-    /* 9 — Remarks */
-    '<div class="fld wide"><label>9 \u00b7 Remarks</label><textarea data-chg="f-notes" placeholder="Background, context, remarks\u2026">'+esc(f.notes)+'</textarea></div>'+
+  var b=
+    '<div class="sech first">Basic details</div><div class="meta">'+
+      '<div class="fld wide"><label>1 \u00b7 Line item <span class="req">*</span></label><input data-chg="f-line" placeholder="e.g. ORP-3902 Downtime requirement" value="'+esc(f.lineItem)+'"></div>'+
+      '<div class="fld wide"><label>2 \u00b7 Description \u00b7 latest update <span class="req">*</span></label><textarea data-chg="f-task" placeholder="e.g. Bank to confirm downtime of 3\u20135 days.">'+esc(f.task)+'</textarea></div>'+
+      '<div class="fld wide"><label>3 \u00b7 Project <span class="req">*</span></label><select data-chg="f-proj">'+
+        S.projects.map(function(o){return '<option value="'+o.id+'"'+(f.projectId===o.id?' selected':'')+'>'+esc(o.name)+'</option>';}).join('')+'<option value="__new">+ New project\u2026</option></select></div>'+
+      '<div class="fld"><label>4 \u00b7 Ticket / Ref ID</label><input data-chg="f-ticket" placeholder="e.g. ORP-3902" value="'+esc(f.ticket)+'" autocapitalize="characters"></div>'+
+      '<div class="fld"><label>Ticket link \u00b7 optional</label><input data-chg="f-url" inputmode="url" placeholder="https://\u2026" value="'+esc(f.ticketUrl)+'"></div>'+
+    '</div>'+
+    '<div class="sech">Assignment</div><div class="meta">'+
+      '<div class="fld wide"><label>5 \u00b7 Owner / SPOC</label>'+ownerSelHtml(f)+'</div>'+
+      '<div class="fld wide"><label>6 \u00b7 Priority</label>'+impToggle+'</div>'+
+      '<div class="fld wide"><label>7 \u00b7 Tags</label>'+tagEditHtml(f.tags,'f-tag-del','f-tag-add','f-tag-addbuf','fTagIn')+'</div>'+
+    '</div>'+
+    '<div class="sech">Schedule</div><div class="meta">'+
+      '<div class="fld wide"><label>8 \u00b7 Status <span class="req">*</span></label>'+statusPickHtml(f,!!rec.data.id)+'</div>'+
+      '<div class="fld wide"><label>9 \u00b7 ETA</label>'+etaPickHtml(f)+'</div>'+
+      '<div class="fld wide"><label>10 \u00b7 Follow-up reminder</label><select data-chg="f-remon"><option value=""'+(f.remOn?'':' selected')+'>No reminder</option><option value="1"'+(f.remOn?' selected':'')+'>Set follow-up reminder</option></select></div>'+
+      (f.remOn?'<div class="fld"><label>Date</label><input type="date" data-chg="f-remdate" value="'+esc(f.remDate)+'"></div><div class="fld"><label>Time \u00b7 optional</label><input type="time" data-chg="f-remtime" value="'+esc(f.remTime)+'"></div><div class="fld wide"><label>Note</label><input data-chg="f-remnote" placeholder="What to chase\u2026" value="'+esc(f.remNote)+'"></div>':'')+
+      '<div class="fld wide"><label>11 \u00b7 Remarks</label><textarea data-chg="f-notes" placeholder="Background, context, remarks\u2026">'+esc(f.notes)+'</textarea></div>'+
     '</div>';
-  $('.sbody',rec.sheet).innerHTML=b;
+  $('.sbody',rec.sheet).innerHTML=b;updateSaveBtn(rec,f);wireOwnerSearch(rec);
 }
+
 function saveForm(rec){
   var f=rec.data.f;
   var _goPersonal=false;
@@ -1246,6 +1236,9 @@ document.addEventListener('click',function(e){
     case 'add':openForm(null,view.name==='projectDetail'?{projectId:view.params.id}:null);break;
     case 'quick-new':openForm(null,{quick:true});break;
     case 'f-important':{var fri=sheetFor('form');if(fri){fri.data.f.important=!fri.data.f.important;renderForm(fri);}break;}
+    case 'f-eta-quick':{var frq=sheetFor('form');if(frq){var fk=el.getAttribute('data-k'),ff=frq.data.f,tt=todayISO();if(fk==='today'){ff.etaKind='date';ff.eta=tt;ff.etaEnd='';}else if(fk==='tomorrow'){ff.etaKind='date';ff.eta=addDaysISO(tt,1);ff.etaEnd='';}else if(fk==='week'){ff.etaKind='date';ff.eta=endOfWeekISO(tt);ff.etaEnd='';}else if(fk==='custom'){ff.etaKind='date';ff.etaEnd='';}else{ff.etaKind='none';ff.eta='';ff.etaEnd='';}renderForm(frq);}break;}
+    case 'f-status-set':{var frs=sheetFor('form');if(frs){frs.data.f.status=el.getAttribute('data-k');renderForm(frs);}break;}
+    case 'pfilt':peopleView.filt=el.getAttribute('data-k');render();break;
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
     case 'open-filters':openFilters();break;
@@ -1405,6 +1398,7 @@ document.addEventListener('change',function(e){
     }
     return;
   }
+  if(chg==='psort'){peopleView.sort=v;render();return;}
   if(chg==='flt-sort'){filters.sort=v;render();return;}
   if(chg==='flt-from'){filters.from=v;render();return;}
   if(chg==='flt-to'){filters.to=v;render();return;}
@@ -1733,3 +1727,39 @@ function etaView(a){
     else{var late=-k;l=late+' DAY'+(late===1?'':'S')+' DELAYED';}}
   return '<div class="eta eta-'+st+'">'+(d?'<div class="eta-d">'+esc(d)+'</div>':'')+'<div class="eta-l">'+esc(l)+'</div></div>';
 }
+
+/* ================= Form helpers (V2.2) ================= */
+function ownersByRecent(){
+  var last={};
+  S.actionables.forEach(function(a){(a.spocIds||[]).forEach(function(id){last[id]=Math.max(last[id]||0,a.updatedAt||0);});});
+  return peopleSorted().slice().sort(function(a,b){var la=last[a.id]||0,lb=last[b.id]||0;if(la!==lb)return lb-la;return a.name.toLowerCase()<b.name.toLowerCase()?-1:1;});
+}
+function endOfWeekISO(t){var p=t.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);var add=(5-d.getDay()+7)%7;return addDaysISO(t,add);}
+function etaPickHtml(f){
+  var t=todayISO(),isDate=f.etaKind==='date',isRange=f.etaKind==='range';
+  var today=isDate&&f.eta===t,tmr=isDate&&f.eta===addDaysISO(t,1),wk=isDate&&f.eta===endOfWeekISO(t);
+  var custom=(isDate&&!today&&!tmr&&!wk)||isRange, none=(f.etaKind==='none'||f.etaKind==='tbd');
+  function c(k,lab,on){return '<button class="etachip'+(on?' on':'')+'" data-act="f-eta-quick" data-k="'+k+'">'+lab+'</button>';}
+  var chips='<div class="etapick">'+c('today','Today',today)+c('tomorrow','Tomorrow',tmr)+c('week','This week',wk)+c('custom','Custom date',custom)+c('none','No ETA',none)+'</div>';
+  var inp='';
+  if(isRange)inp='<div class="etadates"><div class="fld"><label>From</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div></div>';
+  else if(isDate)inp='<div class="etadates"><div class="fld wide"><label>Pick a date</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div></div>';
+  return chips+inp;
+}
+function statusPickHtml(f,allowCompleted){
+  return '<div class="statuspick">'+STATUSES.filter(function(s){return allowCompleted||s!=='Completed';}).map(function(s){
+    var on=f.status===s;return '<button class="badge stpick '+stCls(s)+(on?' on':'')+'" data-act="f-status-set" data-k="'+esc(s)+'">'+esc(s)+'</button>';
+  }).join('')+'</div>';
+}
+function ownerSelHtml(f){
+  var sel=f.spocIds.length
+    ? f.spocIds.map(function(id){return '<button class="ownchip sel" data-act="f-spoc" data-id="'+id+'">'+I('check')+'<span>'+esc(personName(id))+'</span><b>\u00d7</b></button>';}).join('')
+    : '<span class="ownchip tbc">'+I('person')+'<span>To be assigned</span></span>';
+  var opts=ownersByRecent().map(function(u){var on=f.spocIds.indexOf(u.id)>=0;return '<button class="own-opt'+(on?' on':'')+'" data-act="f-spoc" data-id="'+u.id+'" data-name="'+esc(u.name.toLowerCase())+'">'+esc(u.name)+(on?'<span class="ok">'+I('check')+'</span>':'')+'</button>';}).join('');
+  return '<div class="ownsel"><div class="ownchips">'+sel+'</div>'+
+    '<input id="fOwnerSearch" class="ownsearch" placeholder="Search people to assign\u2026" autocomplete="off">'+
+    '<div class="ownopts">'+opts+'<button class="own-opt add" data-act="f-spoc-new" data-name="new person">'+I('plus')+'New person</button></div></div>';
+}
+function formValid(f){return !!(f.lineItem&&f.lineItem.trim())&&(f.quick||!!(f.task&&f.task.trim()));}
+function updateSaveBtn(rec,f){var sv=$('.sfoot .btn.pri',rec.sheet);if(sv){var ok=formValid(f);sv.disabled=!ok;if(ok)sv.classList.add('ready');else sv.classList.remove('ready');}}
+function wireOwnerSearch(rec){var os=$('#fOwnerSearch',rec.sheet);if(!os)return;os.addEventListener('input',function(){var q=this.value.toLowerCase(),opts=rec.sheet.querySelectorAll('.own-opt');for(var i=0;i<opts.length;i++){if(opts[i].classList.contains('add'))continue;var nm=opts[i].getAttribute('data-name')||'';opts[i].style.display=(!q||nm.indexOf(q)>=0)?'':'none';}});}
