@@ -1345,3 +1345,30 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
   .railtag{background:var(--sur2);border:1px solid var(--line2);color:var(--tx2);border-radius:999px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer;}
   .railtag.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);}
 }
+
+/* ============================================================
+   V4.4 — group toggle desktop-hidden (it's in the sidebar); multi-select tag dropdown
+   ============================================================ */
+/* On desktop, "Group by" lives in the sidebar — hide the in-content toggle.
+   On mobile there is no sidebar, so the in-content toggle stays. */
+@media (min-width:1024px){ .grouprow{display:none;} }
+
+.tagrow{display:flex;align-items:center;gap:9px;padding:9px 16px 2px;}
+.tagdrop{position:relative;}
+.tagdrop-btn{display:inline-flex;align-items:center;gap:7px;background:var(--sur);border:1px solid var(--line2);border-radius:10px;padding:7px 11px 7px 10px;font:inherit;font-size:.8rem;font-weight:600;color:var(--tx2);cursor:pointer;transition:border-color .12s,color .12s;}
+.tagdrop-btn svg{width:15px;height:15px;flex:none;color:var(--tx3);}
+.tagdrop-btn svg:last-child{transition:transform .2s;margin-left:2px;}
+.tagdrop-btn.open svg:last-child{transform:rotate(90deg);}
+.tagdrop-btn.has{border-color:var(--acc);color:var(--acc);}
+.tagdrop-btn.has svg{color:var(--acc);}
+.td-l{white-space:nowrap;}
+.td-n{flex:none;font-size:.66rem;font-weight:800;font-family:var(--mono);background:var(--acc);color:#fff;border-radius:999px;padding:0 6px;min-width:18px;text-align:center;}
+.tagdrop-scrim{position:fixed;inset:0;z-index:29;background:transparent;}
+.tagdrop-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:210px;max-height:280px;overflow-y:auto;background:var(--sur);border:1px solid var(--line2);border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.32);padding:6px;}
+.tagopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border:0;background:transparent;border-radius:8px;font:inherit;font-size:.83rem;font-weight:600;color:var(--tx);cursor:pointer;}
+.tagopt:hover{background:var(--sur2);}
+.tagopt .chk{flex:none;width:18px;height:18px;border-radius:5px;border:1.6px solid var(--line2);display:flex;align-items:center;justify-content:center;}
+.tagopt.on .chk{background:var(--acc);border-color:var(--acc);}
+.tagopt.on .chk svg{width:12px;height:12px;color:#fff;}
+.tagopt.clr{color:var(--tx3);justify-content:center;border-top:1px solid var(--line);border-radius:0;margin-top:5px;padding-top:10px;font-size:.77rem;}
+.tagopt.clr:hover{color:var(--tx);}

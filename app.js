@@ -120,12 +120,12 @@ var history_=[];
 var sheetStack=[];
 var filters=defaultFilters();
 var peopleView={sort:'open',filt:'all'};
-var railTagsOpen=false;
+var tagDropOpen=false;
 var calState=null;
 var exportSel={projId:''};
 
 function defaultFilters(){
-  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tag:'',group:'none'};
+  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
 }
 
 function loadState(){
@@ -333,7 +333,7 @@ function filteredActs(){
     if(filters.project.length&&filters.project.indexOf(a.projectId)<0)return false;
     if(filters.spoc.length){var hit=false;for(var i=0;i<filters.spoc.length;i++){var sid=filters.spoc[i];if(sid==='__tbc'?a.spocIds.length===0:a.spocIds.indexOf(sid)>=0){hit=true;break;}}if(!hit)return false;}
     if(filters.status.length&&filters.status.indexOf(a.status)<0)return false;
-    if(filters.tag){var tl=filters.tag.toLowerCase(),ht=false,tg=a.tags||[];for(var ti=0;ti<tg.length;ti++)if(tg[ti].toLowerCase()===tl){ht=true;break;}if(!ht)return false;}
+    if(filters.tags&&filters.tags.length){var _at=(a.tags||[]).map(function(x){return x.toLowerCase();}),_hit=false;for(var _fi=0;_fi<filters.tags.length;_fi++){if(_at.indexOf(filters.tags[_fi].toLowerCase())>=0){_hit=true;break;}}if(!_hit)return false;}
     if(filters.fOd&&!isOver(a,t))return false;
     if(filters.fFu&&!remDue(a,t))return false;
     if(filters.fTk&&!a.ticket)return false;
@@ -347,7 +347,7 @@ function filteredActs(){
 }
 function advCount(){
   return filters.project.length+filters.spoc.length+filters.status.length+
-    (filters.from?1:0)+(filters.to?1:0)+(filters.fOd?1:0)+(filters.fFu?1:0)+(filters.fTk?1:0)+(filters.tag?1:0)+(filters.sort!=='smart'?1:0);
+    (filters.from?1:0)+(filters.to?1:0)+(filters.fOd?1:0)+(filters.fFu?1:0)+(filters.fTk?1:0)+((filters.tags&&filters.tags.length)?1:0)+(filters.sort!=='smart'?1:0);
 }
 
 /* ---- MUTATIONS ---- */
@@ -474,19 +474,12 @@ function tabbar(){
   var moreViews=['projects','projectDetail','reports','notifications','settings'];
   var onList=moreViews.indexOf(view.name)<0;
   function tab(k,ic,lbl){var on=k==='more'?!onList:onList;return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';}
-  var qf=[['mine','My open items','person',m.mine.length,''],['today','Due today','cal',m.today.length,''],['overdue','Overdue','alert',m.overdue.length,'r'],['week','This week','cal',m.week.length,''],['inprog','In progress','play',m.ip.length,''],['onhold','On hold','pause',m.sc.length,'']];
-  var qfHtml=qf.map(function(x){var on=view.name==='list'&&filters.quick===x[0];return '<button class="railrow'+(on?' on':'')+'" data-act="rail-quick" data-q="'+x[0]+'">'+I(x[2])+'<span class="rr-l">'+x[1]+'</span><span class="rr-n '+x[4]+'">'+x[3]+'</span></button>';}).join('');
   var gps=[['none','Flat','items'],['project','By project','proj'],['owner','By owner','person']];
   var gHtml=gps.map(function(g){var on=view.name==='list'&&filters.group===g[0];return '<button class="railrow'+(on?' on':'')+'" data-act="rail-group" data-k="'+g[0]+'">'+I(g[2])+'<span class="rr-l">'+g[1]+'</span></button>';}).join('');
-  var allT=(function(){var seen={},o=[];mainActs().forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();
-  var tg='<button class="railrow rail-tagstoggle'+(railTagsOpen?' open':'')+'" data-act="rail-tags">'+I('tag')+'<span class="rr-l">Tags</span>'+I('chevR')+'</button>';
-  if(railTagsOpen)tg+= allT.length ? '<div class="railtags">'+allT.map(function(t){var on=view.name==='list'&&filters.tag&&filters.tag.toLowerCase()===t.toLowerCase();return '<button class="railtag'+(on?' on':'')+'" data-act="rail-tag" data-tag="'+esc(t)+'">#'+esc(t)+'</button>';}).join('')+'</div>' : '<div class="railtags empty">No tags yet</div>';
   return '<nav class="tabbar tabbar-2">'+
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
     tab('list','items','Actionables')+tab('more','dots','More')+
-    '<div class="railsec">Quick filters</div>'+qfHtml+
     '<div class="railsec">Group by</div>'+gHtml+
-    tg+
     '<div class="railtip">'+railTipHtml()+'</div>'+
   '</nav>';
 }
@@ -584,7 +577,14 @@ function vList(){
   }).join('')+'</div>';
   h+='<div class="grouprow"><span class="gl">Group</span><div class="chips gchips">'+[['none','Flat'],['project','By project'],['owner','By owner']].map(function(g){return '<button class="chip'+(filters.group===g[0]?' on':'')+'" data-act="lst-group" data-k="'+g[0]+'">'+g[1]+'</button>';}).join('')+'</div></div>';
   var _tags=(function(){var seen={},o=[];mainActs().forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();
-  if(_tags.length)h+='<div class="chips tagchips">'+_tags.map(function(tg){var on=filters.tag&&filters.tag.toLowerCase()===tg.toLowerCase();return '<button class="chip tagf'+(on?' on':'')+'" data-act="tagfilter" data-tag="'+esc(tg)+'">#'+esc(tg)+'</button>';}).join('')+'</div>';
+  if(_tags.length){
+    var _sel=filters.tags||[];
+    var _lbl=_sel.length?(_sel.length===1?('#'+_sel[0]):(_sel.length+' tags selected')):'All tags';
+    h+='<div class="tagrow"><span class="gl">Tags</span><div class="tagdrop">'+
+      '<button class="tagdrop-btn'+(_sel.length?' has':'')+(tagDropOpen?' open':'')+'" data-act="tagdrop-toggle">'+I('tag')+'<span class="td-l">'+esc(_lbl)+'</span>'+(_sel.length?'<span class="td-n">'+_sel.length+'</span>':'')+I('chevR')+'</button>'+
+      (tagDropOpen?('<div class="tagdrop-scrim" data-act="tagdrop-toggle"></div><div class="tagdrop-panel">'+_tags.map(function(tg){var on=_sel.some(function(x){return x.toLowerCase()===tg.toLowerCase();});return '<button class="tagopt'+(on?' on':'')+'" data-act="tag-toggle" data-tag="'+esc(tg)+'"><span class="chk">'+(on?I('check'):'')+'</span>#'+esc(tg)+'</button>';}).join('')+(_sel.length?'<button class="tagopt clr" data-act="tags-clear">Clear selection</button>':'')+'</div>'):'')+
+      '</div></div>';
+  }
   var body;
   if(!list.length){body=emptyBox('No actionables found',filters.q||advCount()?'Try different search or filters.':'Add your first actionable.');}
   else if(filters.group==='project'){
@@ -1244,7 +1244,6 @@ document.addEventListener('click',function(e){
     case 'kpi':{filters=defaultFilters();filters.quick=el.getAttribute('data-q');nav('list',{});break;}
     case 'quick':filters.quick=el.getAttribute('data-q');render();break;
     case 'view-personal':filters=defaultFilters();nav('projectDetail',{id:'__personal',seg:'open'});break;
-    case 'tagfilter':{var tgf=el.getAttribute('data-tag')||'';filters.tag=(filters.tag&&filters.tag.toLowerCase()===tgf.toLowerCase())?'':tgf;render();break;}
     case 'f-tag-del':{var fr1=sheetFor('form');if(fr1){var td=(el.getAttribute('data-tag')||'').toLowerCase();fr1.data.f.tags=(fr1.data.f.tags||[]).filter(function(x){return x.toLowerCase()!==td;});renderForm(fr1);}break;}
     case 'f-tag-add':{var fr2=sheetFor('form');if(fr2){fr2.data.f.tags=fr2.data.f.tags||[];addTagTo(fr2.data.f.tags,el.getAttribute('data-tag'));renderForm(fr2);}break;}
     case 'f-tag-addbuf':{var fr3=sheetFor('form');if(fr3){fr3.data.f.tags=fr3.data.f.tags||[];var fi=$('#fTagIn',fr3.sheet);if(fi&&fi.value){parseTagList(fi.value).forEach(function(t){addTagTo(fr3.data.f.tags,t);});fi.value='';}renderForm(fr3);}break;}
@@ -1262,10 +1261,10 @@ document.addEventListener('click',function(e){
     case 'go-calendar':nav('calendar',{});break;
     case 'go-people':nav('people',{});break;
     case 'lst-group':filters.group=el.getAttribute('data-k');render();break;
-    case 'rail-quick':filters.quick=el.getAttribute('data-q');if(view.name!=='list')nav('list',{});else render();break;
     case 'rail-group':filters.group=el.getAttribute('data-k');if(view.name!=='list')nav('list',{});else render();break;
-    case 'rail-tag':{var _rt=el.getAttribute('data-tag')||'';filters.tag=(filters.tag&&filters.tag.toLowerCase()===_rt.toLowerCase())?'':_rt;if(view.name!=='list')nav('list',{});else render();break;}
-    case 'rail-tags':railTagsOpen=!railTagsOpen;render();break;
+    case 'tagdrop-toggle':tagDropOpen=!tagDropOpen;render();break;
+    case 'tag-toggle':{var _tt=el.getAttribute('data-tag')||'';var _ti2=-1;for(var _k=0;_k<filters.tags.length;_k++)if(filters.tags[_k].toLowerCase()===_tt.toLowerCase()){_ti2=_k;break;}if(_ti2>=0)filters.tags.splice(_ti2,1);else filters.tags.push(_tt);render();break;}
+    case 'tags-clear':filters.tags=[];render();break;
     case 'notif-read':S.settings.notifSeenDate=todayISO();saveState();render();toast('Marked as read');break;
     /* Theme toggle */
     case 'theme-toggle':{
