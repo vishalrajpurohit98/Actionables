@@ -7,11 +7,11 @@
   --bg: #07090D;
   --sur: #0F141B;
   --sur2: #131A23;
-  --line: #1C2530;
-  --line2: #2A3646;
+  --line: #2E3947;
+  --line2: #445468;
   --tx: #E8EDF4;
-  --tx2: #9AA7B8;
-  --tx3: #5D6B7E;
+  --tx2: #ABB8C8;
+  --tx3: #8694A6;
   --acc: #5B9CFF;
   --acc-dim: rgba(91, 156, 255, .13);
   --red: #FF5D55;
@@ -723,11 +723,11 @@ html.light-theme {
   --bg:      #F0F4F8;
   --sur:     #FFFFFF;
   --sur2:    #EAF0F7;
-  --line:    #D0DAEC;
-  --line2:   #B8C7DF;
+  --line:    #C1CEE0;
+  --line2:   #9FB0CB;
   --tx:      #1A1E2C;
-  --tx2:     #5A6880;
-  --tx3:     #95A3B8;
+  --tx2:     #4E5C74;
+  --tx3:     #71809A;
   --acc:     #2C6EED;
   --acc-dim: rgba(44,110,237,.1);
   --red:     #D93025;
@@ -1292,3 +1292,18 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .row-ic{flex:none;align-self:center;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid transparent;}
 .row-ic svg{width:19px;height:19px;}
 @media (max-width:560px){ .row-ic{width:36px;height:36px;} .row-ic svg{width:17px;height:17px;} }
+
+/* ---- Contrast: project code + owner text clearer ---- */
+.row-meta .own{color:var(--tx2);}
+.row-meta .who{color:var(--tx);}
+
+/* ---- Desktop sidebar: rotating tip fills the empty rail ---- */
+.railtip{display:none;}
+@media (min-width:1024px){
+  .railtip{display:flex;gap:10px;margin-top:auto;padding:13px;border:1px solid var(--line2);background:var(--sur2);border-radius:13px;animation:rtfade .5s ease both;}
+  .railtip .rt-ic{flex:none;width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--acc-dim);color:var(--acc);}
+  .railtip .rt-ic svg{width:16px;height:16px;}
+  .railtip .rt-tx{font-size:.73rem;line-height:1.5;color:var(--tx2);}
+  .railtip .rt-h{display:block;font-size:.58rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--tx3);margin-bottom:3px;}
+}
+@keyframes rtfade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

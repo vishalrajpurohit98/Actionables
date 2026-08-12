@@ -472,7 +472,7 @@ function tabbar(){
   return '<nav class="tabbar tabbar-2">'+tabs.map(function(t){
     var on = t[0]==='more' ? moreViews.indexOf(view.name)>=0 : moreViews.indexOf(view.name)<0;
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+t[0]+'">'+I(t[1])+'<span>'+t[2]+'</span>'+(t[0]==='more'&&badge?'<span class="dot"></span>':'')+' </button>';
-  }).join('')+'</nav>';
+  }).join('')+'<div class="railtip">'+railTipHtml()+'</div></nav>';
 }
 function notifBadgeOn(m){var n=m.overdue.length+m.today.length+m.remDueL.length;return n>0&&S.settings.notifSeenDate!==todayISO();}
 
@@ -1810,3 +1810,20 @@ window.__widgetView=function(proj,spoc){try{filters=defaultFilters();filters.pro
 /* ===== Row leading icon accent (project-coloured; red overdue / green done) ===== */
 function projColor(pid){var P=['#4F7DEA','#8B5CF6','#0EA5A4','#E0863B','#D6598B','#3B9AE0','#6366F1','#14B8A6'];pid=String(pid||'');var h=0;for(var i=0;i<pid.length;i++)h=(h*31+pid.charCodeAt(i))>>>0;return P[h%P.length];}
 function rowAccent(a){var st=etaState(a);if(st==='over'||st==='severe')return '#F0787C';if(st==='done')return '#63CC8D';return projColor(a.projectId);}
+
+/* ===== Sidebar rail tip (desktop) ===== */
+function railTipHtml(){
+  var tips=[
+    'Group by Owner to spot who\u2019s overloaded.',
+    'Tap the calendar icon to review everything by ETA.',
+    'Clear red (overdue) items before they pile up.',
+    'Every line item deserves a clear owner and ETA.',
+    'Use tags to slice work across projects.',
+    'Set a follow-up reminder so nothing waits on you silently.',
+    'Plan the week from \u201cThis week\u201d every Monday.',
+    'One SPOC per line item keeps accountability clear.',
+    'Switch to \u201cBy project\u201d to review delivery per client.'
+  ];
+  var d=new Date(),idx=(d.getFullYear()*372+d.getMonth()*31+d.getDate())%tips.length;
+  return '<div class="rt-ic">'+I('star')+'</div><div class="rt-tx"><span class="rt-h">Tip</span>'+esc(tips[idx])+'</div>';
+}
