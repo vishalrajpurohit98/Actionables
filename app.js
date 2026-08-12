@@ -549,11 +549,11 @@ function vList(){
   var list=filteredActs(),t=todayISO(),mine=myIds();
   var h=topbar('Actionables',list.length+' shown',false,
     cloudSyncBtnHtml()+cloudBadgeHtml()+
-    '<button class="iconbtn" data-act="view-personal" title="My tasks">'+I('check')+'</button>'+
     '<button class="iconbtn" data-act="go-calendar" title="Calendar">'+I('cal')+'</button>'+
     '<button class="iconbtn" data-act="go-people" title="Owners / SPOCs">'+I('people')+'</button>'+
     '<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(metrics())?'<span class="dot"></span>':'')+'</button>'+
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
+  h+='<div class="selfrow"><button class="quickadd" data-act="quick-new">'+I('plus')+'Add my task</button><button class="quickadd viewself" data-act="view-personal">'+I('person')+'View my tasks</button></div>';
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
   var _cp=filters.project.length===1?filters.project[0]:'__all';
@@ -936,8 +936,8 @@ function renderDetail(rec){
     '<div class="fld"><label>ETA type</label><select data-chg="d-etakind">'+
     ETA_KINDS.map(function(k){return '<option value="'+k[0]+'"'+(a.etaKind===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+
     '</select></div>'+
-    (a.etaKind==='date'?'<div class="fld wide"><label>ETA date</label><input type="date" data-chg="d-eta" value="'+esc(a.eta)+'"></div>':'')+
-    (a.etaKind==='range'?'<div class="fld"><label>From</label><input type="date" data-chg="d-eta" value="'+esc(a.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="d-etaend" value="'+esc(a.etaEnd)+'"></div>':'')+
+    (a.etaKind==='date'?'<div class="fld wide"><label>ETA date</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="d-eta" value="'+esc(a.eta)+'"></div>':'')+
+    (a.etaKind==='range'?'<div class="fld"><label>From</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="d-eta" value="'+esc(a.eta)+'"></div><div class="fld"><label>To</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="d-etaend" value="'+esc(a.etaEnd)+'"></div>':'')+
     '</div>';
   var r=a.rem||{on:false};
   if(r.on){
@@ -948,7 +948,7 @@ function renderDetail(rec){
       b+='<div style="font-size:.8rem;color:var(--tx2);margin-top:8px">'+esc(r.note||'Follow-up')+'</div>'+
         '<div class="btnrow" style="margin-top:10px"><button class="btn ghost mini" data-act="rem-react">Reactivate</button><button class="btn ghost mini" data-act="rem-remove">Remove</button></div>';
     }else{
-      b+='<div class="remgrid"><div class="fld"><label>Date</label><input type="date" data-chg="rem-date" value="'+esc(r.date)+'"></div>'+
+      b+='<div class="remgrid"><div class="fld"><label>Date</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="rem-date" value="'+esc(r.date)+'"></div>'+
         '<div class="fld"><label>Time</label><input type="time" data-chg="rem-time" value="'+esc(r.time)+'"></div>'+
         '<div class="fld wide"><label>Follow-up note</label><input data-chg="rem-note" value="'+esc(r.note)+'" placeholder="What to chase\u2026"></div></div>'+
         '<div class="btnrow" style="margin-top:10px"><button class="btn ok mini" data-act="rem-done">'+I('check')+'Done</button>'+
@@ -1001,7 +1001,7 @@ function openForm(id,prefill){
 function renderForm(rec){
   var f=rec.data.f;
   f.spocIds=f.spocIds.filter(function(id){return !!personById(id);});
-  var impToggle='<div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('star')+'Mark as important</span><button class="switch'+(f.important?' on':'')+'" data-act="f-important"><i></i></button></div>';
+  var impToggle='<div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('star')+'Mark as important</span><button class="switch imp'+(f.important?' on':'')+'" data-act="f-important"><i></i></button></div>';
   if(f.quick){
     var bq='<div class="meta">'+
       '<div class="fld wide"><label>Task <span class="req">*</span></label><input data-chg="f-line" placeholder="e.g. Prepare weekly status deck" value="'+esc(f.lineItem)+'"></div>'+
@@ -1032,7 +1032,7 @@ function renderForm(rec){
       '<div class="fld wide"><label>8 \u00b7 Status <span class="req">*</span></label>'+statusPickHtml(f,!!rec.data.id)+'</div>'+
       '<div class="fld wide"><label>9 \u00b7 ETA</label>'+etaPickHtml(f)+'</div>'+
       '<div class="fld wide"><label>10 \u00b7 Follow-up reminder</label><select data-chg="f-remon"><option value=""'+(f.remOn?'':' selected')+'>No reminder</option><option value="1"'+(f.remOn?' selected':'')+'>Set follow-up reminder</option></select></div>'+
-      (f.remOn?'<div class="fld"><label>Date</label><input type="date" data-chg="f-remdate" value="'+esc(f.remDate)+'"></div><div class="fld"><label>Time \u00b7 optional</label><input type="time" data-chg="f-remtime" value="'+esc(f.remTime)+'"></div><div class="fld wide"><label>Note</label><input data-chg="f-remnote" placeholder="What to chase\u2026" value="'+esc(f.remNote)+'"></div>':'')+
+      (f.remOn?'<div class="fld"><label>Date</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="f-remdate" value="'+esc(f.remDate)+'"></div><div class="fld"><label>Time \u00b7 optional</label><input type="time" data-chg="f-remtime" value="'+esc(f.remTime)+'"></div><div class="fld wide"><label>Note</label><input data-chg="f-remnote" placeholder="What to chase\u2026" value="'+esc(f.remNote)+'"></div>':'')+
       '<div class="fld wide"><label>11 \u00b7 Remarks</label><textarea data-chg="f-notes" placeholder="Background, context, remarks\u2026">'+esc(f.notes)+'</textarea></div>'+
     '</div>';
   $('.sbody',rec.sheet).innerHTML=b;updateSaveBtn(rec,f);wireOwnerSearch(rec);
@@ -1103,8 +1103,8 @@ function renderFilters(rec){
     '<button class="chip'+(filters.fFu?' on':'')+'" data-act="flt-flag" data-f="fFu">Follow-up due</button>'+
     '<button class="chip'+(filters.fTk?' on':'')+'" data-act="flt-flag" data-f="fTk">Has ticket ID</button>'+
     '</div></div>'+
-    '<div class="meta"><div class="fld"><label>ETA from</label><input type="date" data-chg="flt-from" value="'+esc(filters.from)+'"></div>'+
-    '<div class="fld"><label>ETA to</label><input type="date" data-chg="flt-to" value="'+esc(filters.to)+'"></div></div>';
+    '<div class="meta"><div class="fld"><label>ETA from</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-from" value="'+esc(filters.from)+'"></div>'+
+    '<div class="fld"><label>ETA to</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-to" value="'+esc(filters.to)+'"></div></div>';
   $('.sbody',rec.sheet).innerHTML=b;
 }
 
@@ -1789,8 +1789,8 @@ function etaPickHtml(f){
   function c(k,lab,on){return '<button class="etachip'+(on?' on':'')+'" data-act="f-eta-quick" data-k="'+k+'">'+lab+'</button>';}
   var chips='<div class="etapick">'+c('today','Today',today)+c('tomorrow','Tomorrow',tmr)+c('week','This week',wk)+c('custom','Custom date',custom)+c('none','No ETA',none)+'</div>';
   var inp='';
-  if(isRange)inp='<div class="etadates"><div class="fld"><label>From</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div></div>';
-  else if(isDate)inp='<div class="etadates"><div class="fld wide"><label>Pick a date</label><input type="date" data-chg="f-eta" value="'+esc(f.eta)+'"></div></div>';
+  if(isRange)inp='<div class="etadates"><div class="fld"><label>From</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="f-eta" value="'+esc(f.eta)+'"></div><div class="fld"><label>To</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="f-etaend" value="'+esc(f.etaEnd)+'"></div></div>';
+  else if(isDate)inp='<div class="etadates"><div class="fld wide"><label>Pick a date</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="f-eta" value="'+esc(f.eta)+'"></div></div>';
   return chips+inp;
 }
 function statusPickHtml(f,allowCompleted){

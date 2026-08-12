@@ -1392,3 +1392,9 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 
 /* keep the (now 6) header icons comfortable on small phones */
 @media (max-width:480px){ .topbar .iconbtn{ width:33px; } }
+
+/* ---- Mark as Important -> red control everywhere ---- */
+.impbtn.on{background:var(--red);border-color:var(--red);color:#fff;}
+.impbtn.on svg{color:#fff;}
+.switch.imp.on{background:var(--red);border-color:var(--red);}
+.switch.imp.on i{background:#fff;}
