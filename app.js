@@ -79,6 +79,8 @@ function toast(msg,action){
 
 /* ---- ICONS ---- */
 var IC={
+  copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/>',
+  spark:'<path d="M12 3l1.7 4.8L18.5 9.5l-4.8 1.7L12 16l-1.7-4.8L5.5 9.5l4.8-1.7z"/><path d="M18.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
   play:'<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>',
   pause:'<path d="M8 5.5h3v13H8zM13 5.5h3v13h-3z" fill="currentColor" stroke="none"/>',
   tag:'<path d="M4 12.6V4h8.6L20 11.4 12.6 19z"/><circle cx="15.4" cy="8.6" r="1.3"/>',
@@ -456,6 +458,7 @@ function render(){
     case 'reports':html=vReports();break;
     case 'notifications':html=vNotifications();break;
     case 'settings':html=vSettings();break;
+    case 'ai':html=vAI();break;
   }
   var fabViews=['home','list','calendar','projects','projectDetail','people','personDetail'];
   app.innerHTML='<div class="screen">'+html+'</div>'+tabbar()+
@@ -470,11 +473,13 @@ function nav(name,params,noHist){
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
   var moreViews=['projects','projectDetail','reports','notifications','settings'];
-  var onList=moreViews.indexOf(view.name)<0;
-  function tab(k,ic,lbl){var on=k==='more'?!onList:onList;return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';}
-  return '<nav class="tabbar tabbar-2">'+
+  function tab(k,ic,lbl){
+    var on=(k==='more')?(moreViews.indexOf(view.name)>=0):(k==='ai')?(view.name==='ai'):(view.name!=='ai'&&moreViews.indexOf(view.name)<0);
+    return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';
+  }
+  return '<nav class="tabbar tabbar-3">'+
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
-    tab('list','items','Actionables')+tab('more','dots','More')+
+    tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
     '<div class="railtip">'+railTipHtml()+'</div>'+
   '</nav>';
 }
@@ -983,11 +988,12 @@ function openForm(id,prefill){
       remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',
       status:a.status,notes:a.notes,important:!!a.important,tags:(a.tags||[]).slice(),quick:false};
   }else{
-    var proj=quick?'__personal':((prefill&&prefill.projectId)||(S.projects[0]?S.projects[0].id:''));
-    f={projectId:proj,ticket:'',ticketUrl:'',lineItem:'',task:'',spocIds:(prefill&&prefill.spocIds)?prefill.spocIds.slice():[],
-      etaKind:prefill&&prefill.eta?'date':'none',eta:(prefill&&prefill.eta)||'',etaEnd:'',
-      remOn:false,remDate:'',remTime:'',remNote:'',status:'In Progress',notes:'',
-      important:!!(prefill&&prefill.important),tags:[],quick:quick};
+    var P=prefill||{};
+    var proj=quick?'__personal':(P.projectId||(S.projects[0]?S.projects[0].id:''));
+    f={projectId:proj,ticket:P.ticket||'',ticketUrl:'',lineItem:P.lineItem||'',task:P.task||'',spocIds:P.spocIds?P.spocIds.slice():[],
+      etaKind:P.etaKind||(P.eta?'date':'none'),eta:P.eta||'',etaEnd:P.etaEnd||'',
+      remOn:false,remDate:'',remTime:'',remNote:'',status:P.status||'In Progress',notes:P.notes||'',
+      important:!!P.important,tags:(P.tags||[]).slice(),quick:quick};
   }
   var title=id?'Edit actionable':(quick?'Quick task':'Add actionable');
   var rec=openSheet('<div class="shead"><h2>'+title+'</h2>'+
@@ -1280,6 +1286,18 @@ document.addEventListener('click',function(e){
     case 'open':openDetail(id);break;
     case 'add':openForm(null,view.name==='projectDetail'?{projectId:view.params.id}:null);break;
     case 'quick-new':openForm(null,{quick:true});break;
+    case 'ai-tab':aiState.tab=el.getAttribute('data-k');aiState.out='';aiState.outKind='';aiState.items=null;aiState.err='';aiState.input='';render();break;
+    case 'ai-key-save':{var _k=$('#aiKeyInput');if(_k)aiSetKey(_k.value.trim());var _b=$('#aiBase');if(_b)S.settings.aiCustomBase=_b.value.trim();var _m=$('#aiModelId')||$('#aiModelPick');if(_m&&_m.value.trim())aiSetModel(_m.value.trim());if(!aiModel()){aiState.err='Enter or choose a model.';render();break;}aiState.editKey=false;aiState.err='';aiState.kModel='';saveState();render();break;}
+    case 'ai-connect':case 'ai-reload-models':{var _k2=$('#aiKeyInput');if(_k2)aiSetKey(_k2.value.trim());var _b2=$('#aiBase');if(_b2)S.settings.aiCustomBase=_b2.value.trim();aiConnect();break;}
+    case 'ai-key-edit':{aiState.editKey=true;aiState.err='';aiState.kModel=aiModel();if(aiKey()&&!aiModelsCache())aiConnect();else render();break;}
+    case 'ai-parse':{var _e=$('#aiInput');if(_e)aiState.input=_e.value;aiParse();break;}
+    case 'ai-extract':{var _e=$('#aiInput');if(_e)aiState.input=_e.value;aiExtract();break;}
+    case 'ai-ask':{var _e=$('#aiInput');if(_e)aiState.input=_e.value;aiAsk();break;}
+    case 'ai-brief':{var _e=$('#aiProject');if(_e)aiState.project=_e.value;aiBrief();break;}
+    case 'ai-open-parsed':{var _p=aiState.parsed;if(_p)openForm(null,{projectId:_p.projectId,spocIds:_p.spocIds,lineItem:_p.lineItem,task:_p.task,status:_p.status,etaKind:_p.etaKind,eta:_p.eta,etaEnd:_p.etaEnd,tags:_p.tags});break;}
+    case 'ai-add-selected':aiAddSelected();break;
+    case 'ai-copy':aiCopy();break;
+    case 'ai-pdf':aiExportPDF(aiState.outTitle||'AI response',aiState.out||'');break;
     case 'f-important':{var fri=sheetFor('form');if(fri){fri.data.f.important=!fri.data.f.important;renderForm(fri);}break;}
     case 'f-eta-quick':{var frq=sheetFor('form');if(frq){var fk=el.getAttribute('data-k'),ff=frq.data.f,tt=todayISO();if(fk==='today'){ff.etaKind='date';ff.eta=tt;ff.etaEnd='';}else if(fk==='tomorrow'){ff.etaKind='date';ff.eta=addDaysISO(tt,1);ff.etaEnd='';}else if(fk==='week'){ff.etaKind='date';ff.eta=endOfWeekISO(tt);ff.etaEnd='';}else if(fk==='custom'){ff.etaKind='date';ff.etaEnd='';}else{ff.etaKind='none';ff.eta='';ff.etaEnd='';}renderForm(frq);}break;}
     case 'f-status-set':{var frs=sheetFor('form');if(frs){frs.data.f.status=el.getAttribute('data-k');renderForm(frs);}break;}
@@ -1445,6 +1463,13 @@ document.addEventListener('change',function(e){
   }
   if(chg==='lst-proj'){filters.project=(v==='__all')?[]:[v];filters.spoc=[];render();return;}
   if(chg==='lst-spoc'){filters.spoc=(v==='__all')?[]:(v==='__none'?['__tbc']:[v]);render();return;}
+  if(chg==='ai-input'){aiState.input=v;return;}
+  if(chg==='ai-project'){aiState.project=v;return;}
+  if(chg==='ai-provider'){S.settings.aiProvider=v;aiState.kModel=aiModel();aiState.err='';saveState();render();return;}
+  if(chg==='ai-base'){aiMigrate();S.settings.aiCustomBase=v;return;}
+  if(chg==='ai-kmodel'){aiState.kModel=v;return;}
+  if(chg==='ai-kmodel-pick'){if(v){aiState.kModel=v;render();}return;}
+  if(chg==='ai-item'){var _ii=+el.getAttribute('data-i');if(aiState.items&&aiState.items[_ii])aiState.items[_ii]._sel=el.checked;return;}
   if(chg==='psort'){peopleView.sort=v;render();return;}
   if(chg==='flt-sort'){filters.sort=v;render();return;}
   if(chg==='flt-from'){filters.from=v;render();return;}
@@ -1834,4 +1859,360 @@ function railTipHtml(){
   ];
   var d=new Date(),idx=(d.getFullYear()*372+d.getMonth()*31+d.getDate())%tips.length;
   return '<div class="rt-ic">'+I('star')+'</div><div class="rt-tx"><span class="rt-h">Tip</span>'+esc(tips[idx])+'</div>';
+}
+
+/* ================= AI features (Gemini) ================= */
+var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,project:'__all',editKey:false};
+
+var AI_PROV={
+  gemini:{name:'Google Gemini',hint:'AIza\u2026 key',url:'aistudio.google.com/apikey'},
+  openai:{name:'OpenAI',hint:'sk-\u2026 key',url:'platform.openai.com/api-keys'},
+  anthropic:{name:'Anthropic (Claude)',hint:'sk-ant-\u2026 key',url:'console.anthropic.com'},
+  custom:{name:'Custom (OpenAI-compatible)',hint:'API key',url:'OpenRouter / Groq / local, etc.',base:true}
+};
+function aiMigrate(){
+  if(S.settings.aiKeys)return;
+  S.settings.aiKeys={};S.settings.aiModelByProv={};S.settings.aiModelsByProv={};
+  if(S.settings.aiKey)S.settings.aiKeys.gemini=S.settings.aiKey;
+  if(S.settings.aiModel)S.settings.aiModelByProv.gemini=S.settings.aiModel;
+  if(S.settings.aiModels)S.settings.aiModelsByProv.gemini=S.settings.aiModels;
+  S.settings.aiProvider=S.settings.aiProvider||'gemini';
+}
+function aiProv(){aiMigrate();return S.settings.aiProvider||'gemini';}
+function aiKey(){aiMigrate();return ((S.settings.aiKeys||{})[aiProv()]||'').trim();}
+function aiCustomBase(){aiMigrate();return (S.settings.aiCustomBase||'').trim();}
+function aiDefaultModel(prov){return ({gemini:'gemini-2.5-flash',openai:'gpt-4o-mini',anthropic:'claude-3-5-haiku-latest',custom:''})[prov]||'';}
+function aiModel(){aiMigrate();return (S.settings.aiModelByProv||{})[aiProv()]||aiDefaultModel(aiProv());}
+function aiModelsCache(){aiMigrate();return (S.settings.aiModelsByProv||{})[aiProv()]||null;}
+function aiSetKey(v){aiMigrate();S.settings.aiKeys[aiProv()]=v;}
+function aiSetModel(v){aiMigrate();S.settings.aiModelByProv[aiProv()]=v;}
+function aiSetModels(list){aiMigrate();S.settings.aiModelsByProv[aiProv()]=list;}
+function aiConfigured(){var k=aiKey();if(aiProv()==='custom')return !!(k&&aiCustomBase());return !!k;}
+
+function aiMd(t){
+  t=esc(t||'');
+  t=t.replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  t=t.replace(/^\s*#{1,4}\s*(.+)$/gm,'<div class="ai-h2">$1</div>');
+  t=t.replace(/^\s*[\-\u2022*]\s+(.+)$/gm,'<div class="ai-li">$1</div>');
+  t=t.replace(/\n{2,}/g,'<br><br>').replace(/\n/g,'<br>');
+  return t;
+}
+
+async function aiCall(prompt,sys){
+  var prov=aiProv(),key=aiKey(),model=aiModel();
+  if(!key)throw new Error('Add your '+AI_PROV[prov].name+' API key first.');
+  if(!model)throw new Error('Choose a model in AI settings first.');
+  var res,url,headers,body;
+  try{
+    if(prov==='gemini'){
+      url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key);
+      headers={'Content-Type':'application/json'};
+      body={contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.2}};
+      if(sys)body.systemInstruction={parts:[{text:sys}]};
+    }else if(prov==='anthropic'){
+      url='https://api.anthropic.com/v1/messages';
+      headers={'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+      body={model:model,max_tokens:2048,temperature:0.2,messages:[{role:'user',content:prompt}]};
+      if(sys)body.system=sys;
+    }else{
+      var base=(prov==='custom')?aiCustomBase():'https://api.openai.com/v1';
+      if(!base)throw new Error('Set the base URL for your custom provider.');
+      url=base.replace(/\/+$/,'')+'/chat/completions';
+      headers={'Content-Type':'application/json','Authorization':'Bearer '+key};
+      var msgs=[];if(sys)msgs.push({role:'system',content:sys});msgs.push({role:'user',content:prompt});
+      body={model:model,messages:msgs,temperature:0.2};
+    }
+    res=await fetch(url,{method:'POST',headers:headers,body:JSON.stringify(body)});
+  }catch(e){throw new Error('Network/CORS error \u2014 the request may be blocked on this network or by the provider.');}
+  if(!res.ok){
+    var msg='Request failed ('+res.status+')';
+    try{var j=await res.json();if(j&&j.error&&j.error.message)msg=j.error.message;else if(j&&j.message)msg=j.message;}catch(_){}
+    if(res.status===401||/api key/i.test(msg))msg='API key not valid for '+AI_PROV[prov].name+' \u2014 check the key.';
+    if(res.status===404)msg='Model "'+model+'" not available. Open AI settings \u2192 Load my models, then pick one.';
+    throw new Error(msg);
+  }
+  var data=await res.json();
+  if(prov==='gemini'){
+    var cand=(data.candidates||[])[0];
+    if(!cand){if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error('Blocked by safety: '+data.promptFeedback.blockReason);throw new Error('Empty response from the model.');}
+    return (((cand.content||{}).parts)||[]).map(function(pt){return pt.text||'';}).join('').trim();
+  }else if(prov==='anthropic'){
+    return ((data.content||[]).map(function(b){return b.text||'';}).join('')).trim();
+  }else{
+    var ch=(data.choices||[])[0];
+    return ((ch&&ch.message&&ch.message.content)||'').trim();
+  }
+}
+function aiJSON(text){
+  var t=(text||'').replace(/```json/gi,'').replace(/```/g,'').trim();
+  var oi=t.indexOf('{'),ai=t.indexOf('[');
+  var start=(ai>=0&&(ai<oi||oi<0))?ai:oi;
+  if(start>0)t=t.slice(start);
+  var end=Math.max(t.lastIndexOf('}'),t.lastIndexOf(']'));
+  if(end>=0)t=t.slice(0,end+1);
+  return JSON.parse(t);
+}
+
+function aiProjList(){return S.projects.filter(function(p){return p.id!=='__personal';}).map(function(p){return {id:p.id,name:p.name,code:p.code||''};});}
+function aiPeopleList(){return peopleSorted().map(function(u){return {id:u.id,name:u.name};});}
+function aiMapProject(q){
+  if(!q)return '';q=(''+q).toLowerCase().trim();
+  var ps=S.projects.filter(function(p){return p.id!=='__personal';});
+  var i;for(i=0;i<ps.length;i++)if(ps[i].name.toLowerCase()===q||(ps[i].code||'').toLowerCase()===q)return ps[i].id;
+  for(i=0;i<ps.length;i++){var n=ps[i].name.toLowerCase(),c=(ps[i].code||'').toLowerCase();if(n.indexOf(q)>=0||q.indexOf(n)>=0||(c&&q.indexOf(c)>=0))return ps[i].id;}
+  return '';
+}
+function aiMapOwners(names){
+  if(typeof names==='string')names=[names];
+  var out=[],ppl=peopleSorted();
+  (names||[]).forEach(function(nm){if(!nm)return;var q=(''+nm).toLowerCase().trim();for(var i=0;i<ppl.length;i++){var n=ppl[i].name.toLowerCase();if(n===q||n.indexOf(q)>=0||q.indexOf(n)>=0){if(out.indexOf(ppl[i].id)<0)out.push(ppl[i].id);return;}}});
+  return out;
+}
+function aiNormalize(o){
+  o=o||{};
+  var pid=aiMapProject(o.project||o.projectName||o.projectCode||'');
+  var owners=aiMapOwners(o.owners||o.owner||[]);
+  var status=(STATUSES.indexOf(o.status)>=0)?o.status:'In Progress';
+  var etaKind=o.etaKind,eta=o.eta||'',etaEnd=o.etaEnd||'';
+  if(!etaKind)etaKind=eta?'date':'none';
+  if(etaKind==='date'&&!/^\d{4}-\d{2}-\d{2}$/.test(eta)){etaKind=eta?'tbd':'none';eta='';}
+  var etaLabel=etaKind==='date'?fmtDY(eta):(etaKind==='range'?(fmtD(eta)+'\u2013'+fmtDY(etaEnd||eta)):(etaKind==='tbd'?'TBD':'No ETA'));
+  var rawProj=o.project||o.projectName||o.projectCode;
+  var rawOwn=o.owners||o.owner;
+  return {lineItem:(o.lineItem||o.title||'').toString().slice(0,200),task:(o.task||o.description||o.notes||'').toString().slice(0,4000),
+    projectId:pid,spocIds:owners,status:status,etaKind:etaKind,eta:eta,etaEnd:etaEnd,tags:(o.tags||[]).slice(0,8),
+    _projLabel:pid?projName(pid):(rawProj?('\u26A0 '+rawProj):'Pick project'),
+    _ownerLabel:owners.length?owners.map(personName).join(' & '):(rawOwn?('\u26A0 '+[].concat(rawOwn).join(', ')):'Unassigned'),
+    etaLabel:etaLabel};
+}
+function aiContext(projectId){
+  var t=todayISO();
+  var acts=mainActs().filter(function(a){return (projectId&&projectId!=='__all')?a.projectId===projectId:true;});
+  return acts.map(function(a){
+    var e=endEta(a);
+    var o={project:projName(a.projectId),item:a.lineItem,owner:spocLabel(a),status:a.status,eta:plainEta(a)||'none'};
+    if(isOver(a,t))o.overdue=true;
+    if(e)o.due_in_days=diffDays(e,t);
+    if(a.tags&&a.tags.length)o.tags=a.tags;
+    if(a.rem&&a.rem.on&&!a.rem.done)o.followup_on=a.rem.date||'set';
+    if(a.task)o.note=a.task.slice(0,180);
+    return o;
+  });
+}
+
+/* ---- view ---- */
+function aiResultBlock(){
+  if(aiState.busy)return '<div class="ai-busy"><span class="spin"></span>Working with '+esc(AI_PROV[aiProv()].name)+'\u2026</div>';
+  if(aiState.err)return '<div class="ai-err">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
+  if(aiState.items){
+    if(!aiState.items.length)return '<div class="ai-note">No action items found in that text.</div>';
+    var n=aiState.items.filter(function(x){return x._sel;}).length;
+    return '<div class="ai-items">'+aiState.items.map(function(it,i){return '<label class="ai-item"><input type="checkbox" data-chg="ai-item" data-i="'+i+'"'+(it._sel?' checked':'')+'><span class="ai-it-b"><span class="ai-it-t">'+esc(it.lineItem||'(untitled)')+'</span><span class="ai-it-m">'+esc([it._projLabel,it._ownerLabel,it.etaLabel,it.status].filter(Boolean).join('  \u00b7  '))+'</span>'+(it.task?'<span class="ai-it-d">'+esc(it.task)+'</span>':'')+'</span></label>';}).join('')+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-add-selected">Add '+n+' actionable'+(n===1?'':'s')+'</button></div></div>';
+  }
+  if(aiState.outKind==='parsed'&&aiState.parsed){
+    var pv=aiState.parsed;
+    return '<div class="ai-preview"><span class="ai-pv-l">Parsed</span><div class="ai-pv-t">'+esc(pv.lineItem||'(untitled)')+'</div><div class="ai-pv-m">'+esc([pv._projLabel,pv._ownerLabel,pv.etaLabel,pv.status].filter(Boolean).join('  \u00b7  '))+'</div>'+(pv.task?'<div class="ai-pv-d">'+esc(pv.task)+'</div>':'')+(pv.tags&&pv.tags.length?'<div class="ai-pv-tags">'+pv.tags.map(function(t){return '<span class="tagpill">#'+esc(t)+'</span>';}).join('')+'</div>':'')+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-open-parsed">Review &amp; add</button></div></div>';
+  }
+  if(aiState.out)return '<div class="ai-out ai-md">'+aiMd(aiState.out)+'</div><div class="ai-actions ai-outacts"><button class="btn ghost" data-act="ai-copy">'+I('copy')+'Copy</button><button class="btn ghost" data-act="ai-pdf">'+I('dl')+'Export PDF</button></div>';
+  return '';
+}
+function vAI(){
+  var h=topbar('AI features',esc(aiConfigured()?('via '+AI_PROV[aiProv()].name):'Gemini, OpenAI, Claude & more'),true,'<button class="iconbtn" data-act="ai-key-edit" title="AI settings">'+I('sliders')+'</button>');
+  var tabs=[['add','Quick add'],['notes','From notes'],['ask','Ask'],['brief','Daily brief']];
+  h+='<div class="chips aitabs">'+tabs.map(function(t){return '<button class="chip'+(aiState.tab===t[0]?' on':'')+'" data-act="ai-tab" data-k="'+t[0]+'">'+t[1]+'</button>';}).join('')+'</div>';
+  if(!aiConfigured()||aiState.editKey){
+    var prov=aiProv();
+    var models=aiModelsCache();
+    var curM=(aiState.kModel!==undefined&&aiState.kModel!=='')?aiState.kModel:aiModel();
+    h+='<div class="aicard aikey"><div class="ai-h">'+I('sliders')+'AI settings</div>'+
+      '<p class="ai-sub">Choose a provider, enter its API key and pick a model. Stored only on this device.</p>'+
+      '<label class="ai-lbl">Provider</label>'+
+      '<select id="aiProvSel" class="ai-in" data-chg="ai-provider">'+Object.keys(AI_PROV).map(function(k){return '<option value="'+k+'"'+(prov===k?' selected':'')+'>'+esc(AI_PROV[k].name)+'</option>';}).join('')+'</select>';
+    if(AI_PROV[prov].base)h+='<label class="ai-lbl">Base URL</label><input id="aiBase" class="ai-in" placeholder="https://openrouter.ai/api/v1" value="'+esc(aiCustomBase())+'" data-chg="ai-base">';
+    h+='<label class="ai-lbl">API key</label>'+
+      '<input id="aiKeyInput" type="password" class="ai-in" placeholder="'+esc(AI_PROV[prov].hint)+'" value="'+esc(aiKey())+'">'+
+      '<label class="ai-lbl">Model</label>';
+    if(aiState.busy){h+='<div class="ai-busy"><span class="spin"></span>Loading your models\u2026</div>';}
+    else{
+      if(models)h+='<select id="aiModelPick" class="ai-in" data-chg="ai-kmodel-pick"><option value="">\u2014 choose from your available models \u2014</option>'+models.map(function(m){return '<option value="'+esc(m)+'"'+(curM===m?' selected':'')+'>'+esc(m)+'</option>';}).join('')+'</select>';
+      h+='<input id="aiModelId" class="ai-in" style="margin-top:8px" placeholder="'+esc(aiDefaultModel(prov)||'model id')+'" value="'+esc(curM)+'" data-chg="ai-kmodel">';
+      h+='<div class="ai-row" style="margin-top:10px"><button class="btn ghost" data-act="ai-connect">'+(models?'Reload models':'Load my models')+'</button><button class="btn pri" data-act="ai-key-save">Save</button></div>';
+    }
+    if(aiState.err)h+='<div class="ai-err">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
+    h+='<p class="ai-mini">Key: '+esc(AI_PROV[prov].url)+' \u00b7 Data is sent to the provider only when you run a tool.</p></div>';
+    return h;
+  }
+  h+='<div class="ai-conn"><span class="dot ok"></span>'+esc(AI_PROV[aiProv()].name)+' \u00b7 '+esc(aiModel())+'<button class="lnk" data-act="ai-key-edit">Change</button></div>';
+  if(aiState.tab==='add'){
+    h+='<div class="aicard"><div class="ai-h">Natural-language quick add</div><p class="ai-sub">Type a note; AI fills project, owner, ETA, status and tags.</p>'+
+      '<textarea id="aiInput" class="ai-ta" rows="3" placeholder="e.g. BCP to confirm FSD sign-off by next Fri, waiting on Loubna" data-chg="ai-input">'+esc(aiState.input)+'</textarea>'+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-parse"'+(aiState.busy?' disabled':'')+'>'+(aiState.busy?'Parsing\u2026':'Parse')+'</button></div>'+aiResultBlock()+'</div>';
+  }else if(aiState.tab==='notes'){
+    h+='<div class="aicard"><div class="ai-h">Email / notes \u2192 actionables</div><p class="ai-sub">Paste an email trail or meeting notes; extract multiple action items with owners, dates and dependencies.</p>'+
+      '<textarea id="aiInput" class="ai-ta" rows="7" placeholder="Paste the email or notes here\u2026" data-chg="ai-input">'+esc(aiState.input)+'</textarea>'+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-extract"'+(aiState.busy?' disabled':'')+'>'+(aiState.busy?'Extracting\u2026':'Extract action items')+'</button></div>'+aiResultBlock()+'</div>';
+  }else if(aiState.tab==='ask'){
+    h+='<div class="aicard"><div class="ai-h">Ask your data</div><p class="ai-sub">Ask in plain language across your actionables.</p>'+
+      '<textarea id="aiInput" class="ai-ta" rows="2" placeholder="e.g. What\u2019s blocking ICICI go-live?   /   Everything waiting on Mastercard" data-chg="ai-input">'+esc(aiState.input)+'</textarea>'+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-ask"'+(aiState.busy?' disabled':'')+'>'+(aiState.busy?'Thinking\u2026':'Ask')+'</button></div>'+aiResultBlock()+'</div>';
+  }else{
+    var projs=S.projects.filter(function(p){return p.id!=='__personal';});
+    h+='<div class="aicard"><div class="ai-h">Daily brief</div><p class="ai-sub">A short, prioritized focus summary \u2014 grouped by project.</p>'+
+      '<div class="ai-row"><select id="aiProject" class="ai-in" data-chg="ai-project"><option value="__all"'+(aiState.project==='__all'?' selected':'')+'>All projects</option>'+projs.map(function(p){return '<option value="'+p.id+'"'+(aiState.project===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('')+'</select>'+
+      '<button class="btn pri" data-act="ai-brief"'+(aiState.busy?' disabled':'')+'>'+(aiState.busy?'Generating\u2026':'Generate')+'</button></div>'+aiResultBlock()+'</div>';
+  }
+  return h;
+}
+
+/* ---- runners ---- */
+function aiStart(){aiState.busy=true;aiState.err='';aiState.out='';aiState.outKind='';aiState.items=null;render();}
+function aiDone(){aiState.busy=false;render();}
+function aiFail(e){aiState.busy=false;aiState.err=(e&&e.message)?e.message:'Something went wrong.';render();}
+
+async function aiParse(){
+  var text=(aiState.input||'').trim();
+  if(!text){aiState.err='Type a note to parse.';render();return;}
+  aiStart();
+  try{
+    var sys='You convert a short note into ONE task. Output ONLY JSON, no prose. Schema: {"lineItem":string short title,"task":string details or "","project":string matching one of the given project names/codes if possible,"owners":string[] person names,"etaKind":"none"|"tbd"|"date"|"range","eta":"YYYY-MM-DD" when a deadline is implied (resolve relative dates like "next Fri" using today),"etaEnd":"YYYY-MM-DD" for range only,"status":"In Progress"|"On Hold"|"Dependency"|"Completed","tags":string[]}. If it is waiting on someone/something, use status "Dependency". Today is '+todayISO()+'.';
+    var prompt='Known projects: '+JSON.stringify(aiProjList())+'\nKnown people: '+JSON.stringify(aiPeopleList())+'\nNote: """'+text+'"""';
+    var obj=aiJSON(await aiCall(prompt,sys));
+    aiState.parsed=aiNormalize(obj);aiState.outKind='parsed';aiState.out='ok';aiState.items=null;
+    aiDone();
+  }catch(e){aiFail(e);}
+}
+async function aiExtract(){
+  var text=(aiState.input||'').trim();
+  if(!text){aiState.err='Paste some notes or an email first.';render();return;}
+  aiStart();
+  try{
+    var sys='Extract action items from the text. Output ONLY a JSON array (no prose). Each element: {"lineItem":string,"task":string context/details,"project":string matching a given project name/code if possible,"owners":string[] person names,"etaKind":"none"|"tbd"|"date"|"range","eta":"YYYY-MM-DD","status":"In Progress"|"On Hold"|"Dependency"|"Completed","tags":string[]}. Use "Dependency" when waiting on someone/something. Resolve relative dates using today='+todayISO()+'. Only include genuine action items. Return [] if none.';
+    var prompt='Known projects: '+JSON.stringify(aiProjList())+'\nKnown people: '+JSON.stringify(aiPeopleList())+'\nText: """'+text+'"""';
+    var arr=aiJSON(await aiCall(prompt,sys));
+    if(!Array.isArray(arr))arr=[];
+    aiState.items=arr.map(function(o){var n=aiNormalize(o);n._sel=true;return n;});
+    aiDone();
+  }catch(e){aiFail(e);}
+}
+async function aiAsk(){
+  var q=(aiState.input||'').trim();
+  if(!q){aiState.err='Type a question.';render();return;}
+  aiStart();
+  try{
+    var sys='You answer questions about the user\u2019s delivery actionables using ONLY the provided data. Be concise and specific; refer to items by line item and project; name owners and dates. If the answer is not in the data, say so plainly. Use short paragraphs or "- " bullets.';
+    var prompt='Actionables (JSON): '+JSON.stringify(aiContext('__all'))+'\n\nToday: '+todayISO()+'\nQuestion: '+q;
+    aiState.out=await aiCall(prompt,sys);aiState.outKind='text';aiState.outTitle='AI answer';aiState.items=null;
+    aiDone();
+  }catch(e){aiFail(e);}
+}
+async function aiBrief(){
+  aiStart();
+  try{
+    var pid=aiState.project||'__all';
+    var ctx=aiContext(pid);
+    if(!ctx.length){aiState.out='No open actionables'+(pid!=='__all'?' for this project':'')+' right now.';aiState.outKind='text';aiState.outTitle='Daily brief';aiDone();return;}
+    var sys='You write a crisp daily focus brief for a delivery project manager. Group by project using "## Project" headers. For each project: one short status line, then 2\u20134 "- " bullets of what to focus on today, prioritizing overdue first, then due today/this week, then blockers/dependencies. Name owners. Keep it scannable; no filler. Add a one-line risk note per project only if warranted.';
+    var prompt='Today: '+todayISO()+'\nActionables (JSON): '+JSON.stringify(ctx);
+    aiState.out=await aiCall(prompt,sys);aiState.outKind='text';aiState.outTitle='Daily brief'+(pid!=='__all'?(' \u2014 '+projName(pid)):' \u2014 all projects');aiState.items=null;
+    aiDone();
+  }catch(e){aiFail(e);}
+}
+
+/* ---- create from extracted items ---- */
+function aiCreate(it){
+  var now=Date.now();
+  var real=S.projects.filter(function(p){return p.id!=='__personal';});
+  var pid=it.projectId||((real[0]||S.projects[0]||{}).id)||'';
+  var a={id:uid('a'),projectId:pid,ticket:'',ticketUrl:'',lineItem:it.lineItem||'(untitled)',task:it.task||'',
+    spocIds:(it.spocIds||[]).slice(),etaKind:it.etaKind||'none',eta:it.eta||'',etaEnd:it.etaEnd||'',
+    status:it.status||'In Progress',important:false,tags:(it.tags||[]).slice(),
+    rem:{on:false,date:'',time:'',note:'',done:false},notes:'',comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null};
+  logAct(a,'Created (AI)');
+  if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
+  S.actionables.unshift(a);
+}
+function aiAddSelected(){
+  var sel=(aiState.items||[]).filter(function(x){return x._sel;});
+  if(!sel.length){toast('Select at least one item');return;}
+  sel.forEach(aiCreate);
+  saveState();
+  var n=sel.length;
+  aiState.items=null;aiState.input='';render();
+  toast(n+' actionable'+(n===1?'':'s')+' added',{label:'View',fn:function(){nav('list',{});}});
+}
+
+/* ---- model discovery (ListModels) ---- */
+async function aiListModels(){
+  var prov=aiProv(),key=aiKey();
+  if(!key)throw new Error('Enter your API key first.');
+  var res,url;
+  try{
+    if(prov==='gemini'){url='https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key)+'&pageSize=1000';res=await fetch(url);}
+    else if(prov==='anthropic'){url='https://api.anthropic.com/v1/models?limit=1000';res=await fetch(url,{headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}});}
+    else{var base=(prov==='custom')?aiCustomBase():'https://api.openai.com/v1';if(!base)throw new Error('Set the base URL first.');url=base.replace(/\/+$/,'')+'/models';res=await fetch(url,{headers:{'Authorization':'Bearer '+key}});}
+  }catch(e){throw new Error('Network/CORS error \u2014 could not reach the provider.');}
+  if(!res.ok){var m='Could not load models ('+res.status+')';try{var j=await res.json();if(j&&j.error&&j.error.message)m=j.error.message;}catch(_){}throw new Error(m);}
+  var data=await res.json(),out=[];
+  if(prov==='gemini'){(data.models||[]).forEach(function(mo){var methods=mo.supportedGenerationMethods||mo.supportedActions||[];if(methods.indexOf('generateContent')<0)return;var id=(mo.name||'').replace(/^models\//,'');if(!id||/embedding|aqa/i.test(id))return;out.push(id);});}
+  else{var arr=data.data||data.models||[];arr.forEach(function(mo){var id=mo.id||mo.name||mo;if(!id)return;id=(''+id).replace(/^models\//,'');if(/embed|whisper|tts|dall|image|moderation|audio|realtime|transcribe/i.test(id))return;if(prov==='openai'&&!/^(gpt|o[0-9]|chatgpt)/i.test(id))return;out.push(id);});}
+  out.sort();return out;
+}
+function aiPickDefault(prov,models){
+  if(!models.length)return '';
+  if(prov==='gemini'){var c=models.filter(function(x){return /^gemini-[0-9.]+-flash$/.test(x);}).sort();if(c.length)return c[c.length-1];var f=models.filter(function(x){return /flash/.test(x);});if(f.length)return f[f.length-1];return models[0];}
+  if(prov==='openai'){var mi=models.filter(function(x){return /mini/i.test(x);});if(mi.length)return mi[0];var g=models.filter(function(x){return /^gpt/i.test(x);});return g[0]||models[0];}
+  if(prov==='anthropic'){var hk=models.filter(function(x){return /haiku/i.test(x);}).sort();if(hk.length)return hk[hk.length-1];return models[0];}
+  return models[0];
+}
+async function aiConnect(){
+  aiState.editKey=true;
+  if(!aiKey()){aiState.err='Enter your API key first.';render();return;}
+  aiState.busy=true;aiState.err='';render();
+  try{
+    var models=await aiListModels();
+    if(!models.length)throw new Error('No compatible models for this key.');
+    aiSetModels(models);
+    if(models.indexOf(aiModel())<0)aiSetModel(aiPickDefault(aiProv(),models));
+    if(models.indexOf(aiState.kModel)<0)aiState.kModel=aiModel();
+    saveState();aiState.busy=false;render();
+  }catch(e){aiState.busy=false;aiState.err=(e&&e.message)||'Could not load models.';render();}
+}
+
+/* ---- AI answer / brief: copy + export PDF ---- */
+function aiCopy(){
+  var t=aiState.out||'';if(!t){toast('Nothing to copy');return;}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){toast('Copied to clipboard');},function(){aiCopyFallback(t);});
+  }else aiCopyFallback(t);
+}
+function aiCopyFallback(t){
+  try{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.top='-1000px';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();var ok=document.execCommand('copy');document.body.removeChild(ta);toast(ok?'Copied to clipboard':'Copy not supported here');}catch(e){toast('Copy not supported here');}
+}
+function aiExportPDF(title,text){
+  if(!pdfReady()){toast('PDF engine loading \u2014 try again');return;}
+  if(!text){toast('Nothing to export');return;}
+  var jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:'pt',format:'a4'});
+  var W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=48,y=54;
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(20,26,36);
+  doc.splitTextToSize(title||'AI response',W-2*M).forEach(function(l){doc.text(l,M,y);y+=19;});
+  y+=3;doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(120,130,145);
+  doc.text('Actionables \u00b7 '+fmtDY(todayISO()),M,y);y+=15;
+  doc.setDrawColor(220,226,234);doc.setLineWidth(.8);doc.line(M,y,W-M,y);y+=20;
+  String(text).split(/\n/).forEach(function(ln){
+    var m1=ln.match(/^\s*#{1,4}\s*(.+)/),m2=ln.match(/^\s*[-\u2022*]\s+(.+)/);
+    var bold=false,size=10.5,txt=ln,indent=0;
+    if(m1){bold=true;size=12;txt=m1[1];}
+    else if(m2){txt='\u2022  '+m2[1];indent=8;}
+    txt=txt.replace(/\*\*(.+?)\*\*/g,'$1').replace(/\s+$/,'');
+    if(!txt){y+=7;return;}
+    doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);
+    doc.setTextColor(bold?20:45,bold?26:55,bold?36:70);
+    if(bold&&y>60)y+=5;
+    doc.splitTextToSize(txt,W-2*M-indent).forEach(function(w){if(y>H-M){doc.addPage();y=54;}doc.text(w,M+indent,y);y+=size*1.5;});
+  });
+  var fn=(title||'AI').replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,50)+'_'+stamp()+'.pdf';
+  var b64=doc.output('datauristring').split(',')[1];
+  deliverFile(b64,fn,'application/pdf');
 }

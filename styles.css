@@ -1398,3 +1398,54 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .impbtn.on svg{color:#fff;}
 .switch.imp.on{background:var(--red);border-color:var(--red);}
 .switch.imp.on i{background:#fff;}
+
+/* ================= AI features ================= */
+.aitabs{margin:12px 16px 4px;}
+.aicard{margin:10px 16px 16px;background:var(--sur);border:1px solid var(--line2);border-radius:16px;padding:16px;}
+.ai-h{display:flex;align-items:center;gap:8px;font-size:1rem;font-weight:700;letter-spacing:-.01em;}
+.ai-h svg{width:18px;height:18px;color:var(--acc);}
+.ai-sub{margin:6px 0 12px;font-size:.82rem;color:var(--tx2);line-height:1.45;}
+.ai-in,.ai-ta{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:12px;padding:12px 13px;font:inherit;font-size:.92rem;color:var(--tx);}
+.ai-ta{resize:vertical;min-height:52px;line-height:1.5;}
+.ai-in:focus,.ai-ta:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-dim);}
+select.ai-in{-webkit-appearance:none;appearance:none;cursor:pointer;}
+.ai-row{display:flex;gap:9px;align-items:center;margin-top:10px;}
+.ai-row .ai-in{flex:1;margin:0;}
+.ai-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+.ai-conn{display:flex;align-items:center;gap:8px;margin:2px 18px 0;font-size:.76rem;color:var(--tx2);}
+.ai-conn .dot.ok{width:7px;height:7px;border-radius:50%;background:var(--grn,#2fae66);}
+.ai-conn .lnk{margin-left:auto;}
+.aikey .ai-in{margin-top:2px;}
+.ai-mini{margin:11px 0 0;font-size:.7rem;color:var(--tx3);line-height:1.5;}
+.ai-busy{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:.86rem;color:var(--tx2);}
+.spin{width:16px;height:16px;border:2px solid var(--line2);border-top-color:var(--acc);border-radius:50%;animation:aispin .7s linear infinite;flex:none;}
+@keyframes aispin{to{transform:rotate(360deg);}}
+.ai-err{display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:11px 12px;background:rgba(206,42,42,.08);border:1px solid var(--red);border-radius:11px;color:var(--red);font-size:.83rem;line-height:1.45;}
+.ai-err svg{width:16px;height:16px;flex:none;margin-top:1px;}
+.ai-note{margin-top:14px;font-size:.85rem;color:var(--tx2);}
+.ai-out{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:.9rem;color:var(--tx);line-height:1.6;}
+.ai-md .ai-h2{font-weight:800;font-size:.86rem;letter-spacing:.01em;color:var(--acc);margin:14px 0 5px;}
+.ai-md .ai-h2:first-child{margin-top:0;}
+.ai-md .ai-li{position:relative;padding-left:16px;margin:3px 0;}
+.ai-md .ai-li:before{content:'\2022';position:absolute;left:2px;color:var(--acc);}
+.ai-preview{margin-top:14px;padding:13px;background:var(--sur2);border:1px solid var(--line2);border-radius:12px;}
+.ai-pv-l,.ai-it-t{display:block;}
+.ai-pv-l{font-size:.6rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--tx3);margin-bottom:5px;}
+.ai-pv-t{font-size:1rem;font-weight:700;line-height:1.35;}
+.ai-pv-m{font-size:.8rem;color:var(--tx2);margin-top:4px;}
+.ai-pv-d{font-size:.83rem;color:var(--tx2);margin-top:7px;line-height:1.5;}
+.ai-pv-tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;}
+.tagpill{font-size:.68rem;font-weight:600;color:var(--acc);background:var(--acc-dim);border-radius:999px;padding:2px 8px;}
+.ai-items{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+.ai-item{display:flex;align-items:flex-start;gap:11px;padding:11px 12px;background:var(--sur2);border:1px solid var(--line);border-radius:12px;cursor:pointer;}
+.ai-item input{margin-top:2px;width:18px;height:18px;accent-color:var(--acc);flex:none;}
+.ai-it-b{display:flex;flex-direction:column;min-width:0;}
+.ai-it-t{font-size:.92rem;font-weight:700;line-height:1.35;}
+.ai-it-m{font-size:.76rem;color:var(--tx2);margin-top:3px;}
+.ai-it-d{font-size:.8rem;color:var(--tx3);margin-top:5px;line-height:1.45;}
+.ai-lbl{display:block;font-size:.64rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);margin:13px 0 6px 2px;}
+
+/* AI as 3rd tab + answer actions */
+.tabbar-3 .tab{max-width:220px;}
+.ai-outacts{margin-top:12px;border-top:1px solid var(--line);padding-top:12px;}
+.ai-outacts .btn{gap:6px;}
