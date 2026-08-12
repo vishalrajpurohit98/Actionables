@@ -1278,3 +1278,12 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .vs-sel select{appearance:none;-webkit-appearance:none;width:100%;background:var(--sur);border:1px solid var(--line2);border-radius:12px;padding:12px 38px 12px 13px;font:inherit;font-size:.9rem;font-weight:500;color:var(--tx);cursor:pointer;transition:border-color .15s,box-shadow .15s;}
 .vs-sel select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-dim);}
 .vs-sel svg{position:absolute;right:11px;top:50%;transform:translateY(-50%) rotate(90deg);width:16px;height:16px;color:var(--tx3);pointer-events:none;}
+
+/* ---- Actionables: group toggle + project/owner sections (board incorporated) ---- */
+.grouprow{display:flex;align-items:center;gap:9px;padding:11px 16px 2px;}
+.gl{font-size:.64rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);flex:none;}
+.gchips{margin:0;flex-wrap:wrap;}
+.grp .gt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx);}
+.grp .n{flex:none;font-family:var(--mono);font-size:.62rem;color:var(--tx2);background:var(--sur2);border:1px solid var(--line);padding:1px 7px;border-radius:999px;font-weight:700;letter-spacing:0;}
+/* two-item bottom nav: keep items centered rather than stretched edge-to-edge */
+.tabbar-2 .tab{max-width:220px;}

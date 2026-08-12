@@ -112,7 +112,7 @@ function I(name,cls){return '<svg class="'+(cls||'')+'" viewBox="0 0 24 24" fill
 
 /* ---- STATE ---- */
 var S=null;
-var view={name:'home',params:{}};
+var view={name:'list',params:{}};
 var history_=[];
 var sheetStack=[];
 var filters=defaultFilters();
@@ -121,7 +121,7 @@ var calState=null;
 var exportSel={projId:''};
 
 function defaultFilters(){
-  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tag:''};
+  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tag:'',group:'none'};
 }
 
 function loadState(){
@@ -458,10 +458,10 @@ function nav(name,params,noHist){
 }
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
-  var tabs=[['home','board','Board'],['list','items','Actionables'],['calendar','cal','Calendar'],['people','people','SPOCs'],['more','dots','More']];
+  var tabs=[['list','items','Actionables'],['more','dots','More']];
   var moreViews=['projects','projectDetail','reports','notifications','settings'];
-  return '<nav class="tabbar">'+tabs.map(function(t){
-    var on=view.name===t[0]||(t[0]==='people'&&view.name==='personDetail')||(t[0]==='more'&&moreViews.indexOf(view.name)>=0);
+  return '<nav class="tabbar tabbar-2">'+tabs.map(function(t){
+    var on = t[0]==='more' ? moreViews.indexOf(view.name)>=0 : moreViews.indexOf(view.name)<0;
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+t[0]+'">'+I(t[1])+'<span>'+t[2]+'</span>'+(t[0]==='more'&&badge?'<span class="dot"></span>':'')+' </button>';
   }).join('')+'</nav>';
 }
@@ -535,6 +535,10 @@ var QUICKS=[
 function vList(){
   var list=filteredActs(),t=todayISO(),mine=myIds();
   var h=topbar('Actionables',list.length+' shown',false,
+    cloudSyncBtnHtml()+cloudBadgeHtml()+
+    '<button class="iconbtn" data-act="go-calendar" title="Calendar">'+I('cal')+'</button>'+
+    '<button class="iconbtn" data-act="go-people" title="Owners / SPOCs">'+I('people')+'</button>'+
+    '<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(metrics())?'<span class="dot"></span>':'')+'</button>'+
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
@@ -553,10 +557,21 @@ function vList(){
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
       '" data-act="quick" data-q="'+q[0]+'">'+q[1]+'<span class="n">'+n+'</span></button>';
   }).join('')+'</div>';
+  h+='<div class="grouprow"><span class="gl">Group</span><div class="chips gchips">'+[['none','Flat'],['project','By project'],['owner','By owner']].map(function(g){return '<button class="chip'+(filters.group===g[0]?' on':'')+'" data-act="lst-group" data-k="'+g[0]+'">'+g[1]+'</button>';}).join('')+'</div></div>';
   var _tags=(function(){var seen={},o=[];mainActs().forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();
   if(_tags.length)h+='<div class="chips tagchips">'+_tags.map(function(tg){var on=filters.tag&&filters.tag.toLowerCase()===tg.toLowerCase();return '<button class="chip tagf'+(on?' on':'')+'" data-act="tagfilter" data-tag="'+esc(tg)+'">#'+esc(tg)+'</button>';}).join('')+'</div>';
-  h+=list.length?'<div class="list">'+list.map(function(a){return actRow(a);}).join('')+'</div>':
-    emptyBox('No actionables found',filters.q||advCount()?'Try different search or filters.':'Add your first actionable.');
+  var body;
+  if(!list.length){body=emptyBox('No actionables found',filters.q||advCount()?'Try different search or filters.':'Add your first actionable.');}
+  else if(filters.group==='project'){
+    var byP={},ord=[];list.forEach(function(a){if(!byP[a.projectId]){byP[a.projectId]=[];ord.push(a.projectId);}byP[a.projectId].push(a);});
+    ord.sort(function(x,y){return projName(x).toLowerCase()<projName(y).toLowerCase()?-1:1;});
+    body=ord.map(function(pid){var its=byP[pid];return '<div class="grp">'+I('proj')+'<span class="gt">'+esc(projName(pid))+'</span><span class="n">'+its.length+'</span></div><div class="list">'+its.map(function(a){return actRow(a);}).join('')+'</div>';}).join('');
+  } else if(filters.group==='owner'){
+    body=grouped(list).map(function(g){return '<div class="grp">'+I('person')+'<span class="gt">'+esc(g.label)+'</span><span class="n">'+g.items.length+'</span></div><div class="list">'+g.items.map(function(a){return actRow(a);}).join('')+'</div>';}).join('');
+  } else {
+    body='<div class="list">'+list.map(function(a){return actRow(a);}).join('')+'</div>';
+  }
+  h+=body;
   return h;
 }
 
@@ -583,7 +598,7 @@ function vCalendar(){
     if(items.length){var col=!openItems.length?'var(--grn)':iso<=t?'var(--red)':diffDays(iso,t)<=3?'var(--amb)':'var(--acc)';var nd=Math.min(3,items.length);dots='<span class="dots">';for(var d2=0;d2<nd;d2++)dots+='<i style="background:'+col+'"></i>';dots+='</span>';}
     cells+='<button class="cell'+(dim?' dim':'')+(iso===t?' today':'')+'" data-act="day" data-d="'+iso+'"><span class="d">'+dnum+'</span>'+dots+(items.length>3?'<span class="cnt">'+items.length+'</span>':'')+' </button>';
   }
-  var h=topbar('Calendar','Actionables by ETA',false,'<button class="caltoday" data-act="cal-today">Today</button>');
+  var h=topbar('Calendar','Actionables by ETA',true,'<button class="caltoday" data-act="cal-today">Today</button>');
   h+='<div class="calhead"><button class="calnav" data-act="cal-prev">'+I('back')+'</button><div class="m" style="text-align:center">'+MON[mth]+' '+y+'</div><button class="calnav" data-act="cal-next">'+I('chevR')+'</button></div>';
   h+='<div class="dow">'+DOW.map(function(dd){return '<span>'+dd[0]+dd[1]+'</span>';}).join('')+'</div>';
   h+='<div class="calgrid">'+cells+'</div>';
@@ -669,7 +684,7 @@ function vPeople(){
   else rows.sort(function(a,b){return (b.st[key]-a.st[key])||(b.st.open-a.st.open)||(a.name.toLowerCase()<b.name.toLowerCase()?-1:1);});
   var filts=[['all','All'],['open','Open'],['overdue','Overdue'],['followup','Follow-up']];
   var sorts=[['open','Highest Open'],['overdue','Highest Overdue'],['followup','Highest Follow-up'],['az','A\u2013Z']];
-  var h=topbar('Owners / SPOCs',ppl.length+' people',false,'<button class="iconbtn" data-act="add-person">'+I('plus')+'</button>');
+  var h=topbar('Owners / SPOCs',ppl.length+' people',true,'<button class="iconbtn" data-act="add-person">'+I('plus')+'</button>');
   h+='<div class="chips" style="margin-top:6px">'+filts.map(function(x){return '<button class="chip'+(pv.filt===x[0]?' on':'')+'" data-act="pfilt" data-k="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div>';
   h+='<div class="sortrow"><span>Sort by</span><select data-chg="psort">'+sorts.map(function(x){return '<option value="'+x[0]+'"'+(pv.sort===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div>';
   h+=rows.length?('<div class="list plist">'+rows.map(function(r){
@@ -1198,7 +1213,7 @@ document.addEventListener('click',function(e){
   var act=el.getAttribute('data-act'),id=el.getAttribute('data-id');
   switch(act){
     /* Navigation */
-    case 'tab':{var tb=el.getAttribute('data-tab');if(tb==='more'){openMore();break;}if(tb==='home')history_=[];nav(tb,{});break;}
+    case 'tab':{var tb=el.getAttribute('data-tab');if(tb==='more'){openMore();break;}if(tb==='list')history_=[];nav(tb,{});break;}
     case 'go':closeTop();nav(el.getAttribute('data-v'),{});break;
     case 'back':goBack();break;
     case 'kpi':{filters=defaultFilters();filters.quick=el.getAttribute('data-q');nav('list',{});break;}
@@ -1219,6 +1234,9 @@ document.addEventListener('click',function(e){
     case 'd-tag-addbuf':{var dr3=sheetFor('detail');if(dr3){var a3=actById(dr3.data.id);if(a3){var nt3=(a3.tags||[]).slice(),di=$('#dTagIn',dr3.sheet);if(di&&di.value){parseTagList(di.value).forEach(function(t){addTagTo(nt3,t);});di.value='';}updateAct(dr3.data.id,{tags:nt3});renderDetail(dr3);render();}}break;}
     case 'go-search':filters=defaultFilters();nav('list',{});setTimeout(function(){var i=$('#srch');if(i)i.focus();},60);break;
     case 'go-notif':nav('notifications',{});break;
+    case 'go-calendar':nav('calendar',{});break;
+    case 'go-people':nav('people',{});break;
+    case 'lst-group':filters.group=el.getAttribute('data-k');render();break;
     case 'notif-read':S.settings.notifSeenDate=todayISO();saveState();render();toast('Marked as read');break;
     /* Theme toggle */
     case 'theme-toggle':{
@@ -1440,7 +1458,7 @@ function bindViewInputs(){
 function goBack(){
   if(sheetStack.length){closeTop();return true;}
   if(history_.length){var prev=history_.pop();view=prev;render();window.scrollTo(0,0);return true;}
-  if(view.name!=='home'){view={name:'home',params:{}};render();return true;}
+  if(view.name!=='list'){view={name:'list',params:{}};render();return true;}
   return false;
 }
 window.__handleBack=function(){return goBack()?'handled':'exit';};
@@ -1776,3 +1794,6 @@ function formValid(f){return !!(f.lineItem&&f.lineItem.trim())&&(f.quick||!!(f.t
 function updateSaveBtn(rec,f){var sv=$('.sfoot .btn.pri',rec.sheet);if(sv){var ok=formValid(f);sv.disabled=!ok;if(ok)sv.classList.add('ready');else sv.classList.remove('ready');}}
 function wireOwnerSearch(rec){var os=$('#fOwnerSearch',rec.sheet);if(!os)return;os.addEventListener('input',function(){var q=this.value.toLowerCase(),opts=rec.sheet.querySelectorAll('.own-opt');for(var i=0;i<opts.length;i++){if(opts[i].classList.contains('add'))continue;var nm=opts[i].getAttribute('data-name')||'';opts[i].style.display=(!q||nm.indexOf(q)>=0)?'':'none';}});}
 
+/* ===== Home-screen widget hooks (Add / View all) ===== */
+window.__widgetAdd=function(proj,spoc){try{var pf={};if(proj&&proj!=='__all')pf.projectId=proj;if(spoc&&spoc!=='__all'&&spoc!=='__none')pf.spocIds=[spoc];openForm(null,pf);}catch(e){}};
+window.__widgetView=function(proj,spoc){try{filters=defaultFilters();filters.project=(proj&&proj!=='__all')?[proj]:[];filters.spoc=(!spoc||spoc==='__all')?[]:(spoc==='__none'?['__tbc']:[spoc]);nav('list',{});}catch(e){}};
