@@ -1372,3 +1372,10 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .tagopt.on .chk svg{width:12px;height:12px;color:#fff;}
 .tagopt.clr{color:var(--tx3);justify-content:center;border-top:1px solid var(--line);border-radius:0;margin-top:5px;padding-top:10px;font-size:.77rem;}
 .tagopt.clr:hover{color:var(--tx);}
+
+/* ---- Nested "Project & owner" grouping ---- */
+.grp-proj{font-size:.82rem;color:var(--tx);padding-top:17px;}
+.grp-proj svg{color:var(--acc);}
+.grp-proj .n{background:var(--acc-dim);border-color:transparent;color:var(--acc);}
+.grp-sub{font-size:.66rem;padding-left:8px;padding-top:9px;color:var(--tx2);}
+.grp-sub svg{width:13px;height:13px;}
