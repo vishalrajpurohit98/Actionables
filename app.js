@@ -183,6 +183,13 @@ function applyTheme(){
   root.style.setProperty('--acc',acc.c);
   root.style.setProperty('--acc-dim',acc.d);
   root.style.setProperty('--font',FONT_STACK[s.font||'default']||FONT_STACK.default);
+  try{
+    if(A&&A.setStatusBar){
+      var _lt=(s.theme||'dark')==='light';
+      var _bg=(getComputedStyle(root).getPropertyValue('--bg')||'').trim()||(_lt?'#F0F4F8':'#07090D');
+      A.setStatusBar(_bg,_lt);
+    }
+  }catch(e){}
 }
 
 /* ---- LOOKUPS ---- */
@@ -388,7 +395,9 @@ function actRow(a,opts){
   opts=opts||{};var t=todayISO();
   var st=etaState(a),od=(st==='over'||st==='severe'),severe=(st==='severe'),done=a.status==='Completed';
   var desc=a.task?(a.task.length>110?a.task.slice(0,110)+'\u2026':a.task):'';
-  return '<button class="arow trow'+(od?' od':'')+(severe?' severe':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
+  var acc=rowAccent(a);
+  return '<button class="arow trow'+(od?' od':'')+(severe?' severe':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" style="box-shadow:inset 3px 0 0 '+acc+'" data-act="open" data-id="'+a.id+'">'+
+    '<span class="row-ic" style="color:'+acc+';background:'+acc+'1f;border-color:'+acc+'40">'+I('doc')+'</span>'+
     '<div class="row-main">'+
       '<div class="row-title">'+ttlHtml(a)+'</div>'+
       (desc?'<div class="row-desc">'+esc(desc)+'</div>':'')+
@@ -1797,3 +1806,7 @@ function wireOwnerSearch(rec){var os=$('#fOwnerSearch',rec.sheet);if(!os)return;
 /* ===== Home-screen widget hooks (Add / View all) ===== */
 window.__widgetAdd=function(proj,spoc){try{var pf={};if(proj&&proj!=='__all')pf.projectId=proj;if(spoc&&spoc!=='__all'&&spoc!=='__none')pf.spocIds=[spoc];openForm(null,pf);}catch(e){}};
 window.__widgetView=function(proj,spoc){try{filters=defaultFilters();filters.project=(proj&&proj!=='__all')?[proj]:[];filters.spoc=(!spoc||spoc==='__all')?[]:(spoc==='__none'?['__tbc']:[spoc]);nav('list',{});}catch(e){}};
+
+/* ===== Row leading icon accent (project-coloured; red overdue / green done) ===== */
+function projColor(pid){var P=['#4F7DEA','#8B5CF6','#0EA5A4','#E0863B','#D6598B','#3B9AE0','#6366F1','#14B8A6'];pid=String(pid||'');var h=0;for(var i=0;i<pid.length;i++)h=(h*31+pid.charCodeAt(i))>>>0;return P[h%P.length];}
+function rowAccent(a){var st=etaState(a);if(st==='over'||st==='severe')return '#F0787C';if(st==='done')return '#63CC8D';return projColor(a.projectId);}

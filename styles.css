@@ -1287,3 +1287,8 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .grp .n{flex:none;font-family:var(--mono);font-size:.62rem;color:var(--tx2);background:var(--sur2);border:1px solid var(--line);padding:1px 7px;border-radius:999px;font-weight:700;letter-spacing:0;}
 /* two-item bottom nav: keep items centered rather than stretched edge-to-edge */
 .tabbar-2 .tab{max-width:220px;}
+
+/* ---- Row leading circular icon (matches dashboard style) ---- */
+.row-ic{flex:none;align-self:center;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid transparent;}
+.row-ic svg{width:19px;height:19px;}
+@media (max-width:560px){ .row-ic{width:36px;height:36px;} .row-ic svg{width:17px;height:17px;} }
