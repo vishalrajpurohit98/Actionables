@@ -1389,3 +1389,6 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .trow.imp .row-prio{ color:var(--red); font-weight:700; }
 .trow.imp .row-prio svg{ color:var(--red); }
 @media (min-width:1024px){ .railrow.rail-standalone{margin-top:8px;} }
+
+/* keep the (now 6) header icons comfortable on small phones */
+@media (max-width:480px){ .topbar .iconbtn{ width:33px; } }
