@@ -399,15 +399,13 @@ function actRow(a,opts){
   opts=opts||{};var t=todayISO();
   var st=etaState(a),od=(st==='over'||st==='severe'),severe=(st==='severe'),done=a.status==='Completed';
   var desc=a.task?(a.task.length>110?a.task.slice(0,110)+'\u2026':a.task):'';
-  var acc=rowAccent(a);
-  return '<button class="arow trow'+(od?' od':'')+(severe?' severe':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" style="box-shadow:inset 3px 0 0 '+acc+'" data-act="open" data-id="'+a.id+'">'+
-    '<span class="row-ic" style="color:'+acc+';background:'+acc+'1f;border-color:'+acc+'40">'+I('doc')+'</span>'+
+  return '<button class="arow trow'+(od?' od':'')+(severe?' severe':'')+(done?' done':'')+(a.important?' imp':'')+(a.projectId==='__personal'?' personal':'')+'" data-act="open" data-id="'+a.id+'">'+
     '<div class="row-main">'+
       '<div class="row-title">'+ttlHtml(a)+'</div>'+
       (desc?'<div class="row-desc">'+esc(desc)+'</div>':'')+
       '<div class="row-meta"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+
         '<span class="who'+(a.spocIds.length?'':' un')+'">'+esc(spocLabel(a))+'</span>'+
-        fuChip(a,t)+tagsHtml(a)+'<span class="sp"></span><span class="own">'+esc(projCode(a.projectId))+'</span></div>'+
+        fuChip(a,t)+tagsHtml(a)+'</div>'+
     '</div>'+
     '<div class="row-side">'+etaView(a)+(a.important?'<div class="row-prio">'+I('star')+'Important</div>':'')+'</div>'+
   '</button>';
@@ -474,12 +472,9 @@ function tabbar(){
   var moreViews=['projects','projectDetail','reports','notifications','settings'];
   var onList=moreViews.indexOf(view.name)<0;
   function tab(k,ic,lbl){var on=k==='more'?!onList:onList;return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';}
-  var gps=[['none','Flat','items'],['project','By project','proj'],['owner','By owner','person'],['projowner','By project & owner','board']];
-  var gHtml=gps.map(function(g){var on=view.name==='list'&&filters.group===g[0];return '<button class="railrow'+(on?' on':'')+'" data-act="rail-group" data-k="'+g[0]+'">'+I(g[2])+'<span class="rr-l">'+g[1]+'</span></button>';}).join('');
   return '<nav class="tabbar tabbar-2">'+
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
     tab('list','items','Actionables')+tab('more','dots','More')+
-    '<div class="railsec">Group by</div>'+gHtml+
     '<div class="railtip">'+railTipHtml()+'</div>'+
   '</nav>';
 }
@@ -575,7 +570,6 @@ function vList(){
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
       '" data-act="quick" data-q="'+q[0]+'">'+q[1]+'<span class="n">'+n+'</span></button>';
   }).join('')+'</div>';
-  h+='<div class="grouprow"><span class="gl">Group</span><div class="chips gchips">'+[['none','Flat'],['project','By project'],['owner','By owner'],['projowner','Project & owner']].map(function(g){return '<button class="chip'+(filters.group===g[0]?' on':'')+'" data-act="lst-group" data-k="'+g[0]+'">'+g[1]+'</button>';}).join('')+'</div></div>';
   var _tags=(function(){var seen={},o=[];mainActs().forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();
   if(_tags.length){
     var _sel=filters.tags||[];
@@ -587,18 +581,10 @@ function vList(){
   }
   var body;
   if(!list.length){body=emptyBox('No actionables found',filters.q||advCount()?'Try different search or filters.':'Add your first actionable.');}
-  else if(filters.group==='project'){
-    var byP={},ord=[];list.forEach(function(a){if(!byP[a.projectId]){byP[a.projectId]=[];ord.push(a.projectId);}byP[a.projectId].push(a);});
-    ord.sort(function(x,y){return projName(x).toLowerCase()<projName(y).toLowerCase()?-1:1;});
-    body=ord.map(function(pid){var its=byP[pid];return '<div class="grp">'+I('proj')+'<span class="gt">'+esc(projName(pid))+'</span><span class="n">'+its.length+'</span></div><div class="list">'+its.map(function(a){return actRow(a);}).join('')+'</div>';}).join('');
-  } else if(filters.group==='owner'){
-    body=grouped(list).map(function(g){return '<div class="grp">'+I('person')+'<span class="gt">'+esc(g.label)+'</span><span class="n">'+g.items.length+'</span></div><div class="list">'+g.items.map(function(a){return actRow(a);}).join('')+'</div>';}).join('');
-  } else if(filters.group==='projowner'){
+  else {
     var byP2={},ord2=[];list.forEach(function(a){if(!byP2[a.projectId]){byP2[a.projectId]=[];ord2.push(a.projectId);}byP2[a.projectId].push(a);});
     ord2.sort(function(x,y){return projName(x).toLowerCase()<projName(y).toLowerCase()?-1:1;});
     body=ord2.map(function(pid){var its=byP2[pid];var inner=grouped(its).map(function(g){return '<div class="grp grp-sub">'+I('person')+'<span class="gt">'+esc(g.label)+'</span><span class="n">'+g.items.length+'</span></div><div class="list">'+g.items.map(function(a){return actRow(a);}).join('')+'</div>';}).join('');return '<div class="grp grp-proj">'+I('proj')+'<span class="gt">'+esc(projName(pid))+'</span><span class="n">'+its.length+'</span></div>'+inner;}).join('');
-  } else {
-    body='<div class="list">'+list.map(function(a){return actRow(a);}).join('')+'</div>';
   }
   h+=body;
   return h;
@@ -1264,8 +1250,6 @@ document.addEventListener('click',function(e){
     case 'go-notif':nav('notifications',{});break;
     case 'go-calendar':nav('calendar',{});break;
     case 'go-people':nav('people',{});break;
-    case 'lst-group':filters.group=el.getAttribute('data-k');render();break;
-    case 'rail-group':filters.group=el.getAttribute('data-k');if(view.name!=='list')nav('list',{});else render();break;
     case 'tagdrop-toggle':tagDropOpen=!tagDropOpen;render();break;
     case 'tag-toggle':{var _tt=el.getAttribute('data-tag')||'';var _ti2=-1;for(var _k=0;_k<filters.tags.length;_k++)if(filters.tags[_k].toLowerCase()===_tt.toLowerCase()){_ti2=_k;break;}if(_ti2>=0)filters.tags.splice(_ti2,1);else filters.tags.push(_tt);render();break;}
     case 'tags-clear':filters.tags=[];render();break;

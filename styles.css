@@ -1379,3 +1379,6 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 .grp-proj .n{background:var(--acc-dim);border-color:transparent;color:var(--acc);}
 .grp-sub{font-size:.66rem;padding-left:8px;padding-top:9px;color:var(--tx2);}
 .grp-sub svg{width:13px;height:13px;}
+
+/* ---- Remove row left spine entirely (kept overdue bg tint) ---- */
+.list .trow.od,.list .trow.severe,.brows .trow.od,.brows .trow.severe{box-shadow:none;}
