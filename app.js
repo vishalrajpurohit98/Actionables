@@ -79,6 +79,9 @@ function toast(msg,action){
 
 /* ---- ICONS ---- */
 var IC={
+  play:'<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>',
+  pause:'<path d="M8 5.5h3v13H8zM13 5.5h3v13h-3z" fill="currentColor" stroke="none"/>',
+  tag:'<path d="M4 12.6V4h8.6L20 11.4 12.6 19z"/><circle cx="15.4" cy="8.6" r="1.3"/>',
   board:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
   items:'<rect x="3.5" y="4" width="6.5" height="6.5" rx="1.7"/><path d="M5.6 7.2l1.3 1.3 2.3-2.6"/><path d="M13.5 7.2h7"/><rect x="3.5" y="13.5" width="6.5" height="6.5" rx="1.7"/><path d="M13.5 16.7h7"/>',
   cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.3"/><path d="M3.5 9.5h17M8 3.2v3.6M16 3.2v3.6"/>',
@@ -117,6 +120,7 @@ var history_=[];
 var sheetStack=[];
 var filters=defaultFilters();
 var peopleView={sort:'open',filt:'all'};
+var railTagsOpen=false;
 var calState=null;
 var exportSel={projId:''};
 
@@ -467,12 +471,24 @@ function nav(name,params,noHist){
 }
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
-  var tabs=[['list','items','Actionables'],['more','dots','More']];
   var moreViews=['projects','projectDetail','reports','notifications','settings'];
-  return '<nav class="tabbar tabbar-2">'+tabs.map(function(t){
-    var on = t[0]==='more' ? moreViews.indexOf(view.name)>=0 : moreViews.indexOf(view.name)<0;
-    return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+t[0]+'">'+I(t[1])+'<span>'+t[2]+'</span>'+(t[0]==='more'&&badge?'<span class="dot"></span>':'')+' </button>';
-  }).join('')+'<div class="railtip">'+railTipHtml()+'</div></nav>';
+  var onList=moreViews.indexOf(view.name)<0;
+  function tab(k,ic,lbl){var on=k==='more'?!onList:onList;return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';}
+  var qf=[['mine','My open items','person',m.mine.length,''],['today','Due today','cal',m.today.length,''],['overdue','Overdue','alert',m.overdue.length,'r'],['week','This week','cal',m.week.length,''],['inprog','In progress','play',m.ip.length,''],['onhold','On hold','pause',m.sc.length,'']];
+  var qfHtml=qf.map(function(x){var on=view.name==='list'&&filters.quick===x[0];return '<button class="railrow'+(on?' on':'')+'" data-act="rail-quick" data-q="'+x[0]+'">'+I(x[2])+'<span class="rr-l">'+x[1]+'</span><span class="rr-n '+x[4]+'">'+x[3]+'</span></button>';}).join('');
+  var gps=[['none','Flat','items'],['project','By project','proj'],['owner','By owner','person']];
+  var gHtml=gps.map(function(g){var on=view.name==='list'&&filters.group===g[0];return '<button class="railrow'+(on?' on':'')+'" data-act="rail-group" data-k="'+g[0]+'">'+I(g[2])+'<span class="rr-l">'+g[1]+'</span></button>';}).join('');
+  var allT=(function(){var seen={},o=[];mainActs().forEach(function(a){(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();
+  var tg='<button class="railrow rail-tagstoggle'+(railTagsOpen?' open':'')+'" data-act="rail-tags">'+I('tag')+'<span class="rr-l">Tags</span>'+I('chevR')+'</button>';
+  if(railTagsOpen)tg+= allT.length ? '<div class="railtags">'+allT.map(function(t){var on=view.name==='list'&&filters.tag&&filters.tag.toLowerCase()===t.toLowerCase();return '<button class="railtag'+(on?' on':'')+'" data-act="rail-tag" data-tag="'+esc(t)+'">#'+esc(t)+'</button>';}).join('')+'</div>' : '<div class="railtags empty">No tags yet</div>';
+  return '<nav class="tabbar tabbar-2">'+
+    '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
+    tab('list','items','Actionables')+tab('more','dots','More')+
+    '<div class="railsec">Quick filters</div>'+qfHtml+
+    '<div class="railsec">Group by</div>'+gHtml+
+    tg+
+    '<div class="railtip">'+railTipHtml()+'</div>'+
+  '</nav>';
 }
 function notifBadgeOn(m){var n=m.overdue.length+m.today.length+m.remDueL.length;return n>0&&S.settings.notifSeenDate!==todayISO();}
 
@@ -1246,6 +1262,10 @@ document.addEventListener('click',function(e){
     case 'go-calendar':nav('calendar',{});break;
     case 'go-people':nav('people',{});break;
     case 'lst-group':filters.group=el.getAttribute('data-k');render();break;
+    case 'rail-quick':filters.quick=el.getAttribute('data-q');if(view.name!=='list')nav('list',{});else render();break;
+    case 'rail-group':filters.group=el.getAttribute('data-k');if(view.name!=='list')nav('list',{});else render();break;
+    case 'rail-tag':{var _rt=el.getAttribute('data-tag')||'';filters.tag=(filters.tag&&filters.tag.toLowerCase()===_rt.toLowerCase())?'':_rt;if(view.name!=='list')nav('list',{});else render();break;}
+    case 'rail-tags':railTagsOpen=!railTagsOpen;render();break;
     case 'notif-read':S.settings.notifSeenDate=todayISO();saveState();render();toast('Marked as read');break;
     /* Theme toggle */
     case 'theme-toggle':{

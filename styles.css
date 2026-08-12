@@ -1307,3 +1307,41 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
   .railtip .rt-h{display:block;font-size:.58rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--tx3);margin-bottom:3px;}
 }
 @keyframes rtfade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ============================================================
+   V4.3 — Rich desktop sidebar (brand, quick filters, group by, tags)
+   ============================================================ */
+/* base (mobile): rail-only sections hidden; bottom bar shows just the tabs */
+.railbrand,.railsec,.railrow,.railtags{display:none;}
+
+@media (min-width:1024px){
+  :root{--sidebar:244px;}
+  .tabbar::before{display:none;}                 /* replaced by .railbrand */
+  .tabbar{overflow-y:auto;padding:20px 12px 18px;gap:1px;}
+
+  .railbrand{display:flex;align-items:center;gap:10px;padding:2px 8px 15px;margin-bottom:6px;border-bottom:1px solid var(--line);}
+  .rb-ic{flex:none;width:32px;height:32px;border-radius:9px;background:var(--acc-dim);color:var(--acc);display:flex;align-items:center;justify-content:center;}
+  .rb-ic svg{width:19px;height:19px;}
+  .rb-tx b{display:block;font-size:.8rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--acc);line-height:1.1;}
+  .rb-tx i{display:block;font-size:.62rem;font-style:normal;color:var(--tx3);margin-top:2px;}
+
+  .railsec{display:block;font-size:.57rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);padding:15px 12px 5px;}
+
+  .railrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 12px;border:0;background:transparent;border-radius:9px;color:var(--tx2);cursor:pointer;font:inherit;font-size:.8rem;font-weight:600;transition:background .12s,color .12s;}
+  .railrow svg{width:17px;height:17px;flex:none;color:var(--tx3);}
+  .railrow .rr-l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .railrow .rr-n{flex:none;font-size:.66rem;font-weight:700;font-family:var(--mono);color:var(--tx2);background:var(--sur2);border:1px solid var(--line2);border-radius:999px;padding:1px 7px;min-width:20px;text-align:center;}
+  .railrow .rr-n.r{color:var(--red);border-color:var(--red);}
+  .railrow:hover{background:var(--sur2);color:var(--tx);}
+  .railrow:hover svg{color:var(--tx2);}
+  .railrow.on{background:var(--acc-dim);color:var(--acc);}
+  .railrow.on svg{color:var(--acc);}
+  .railrow.on .rr-n{color:var(--acc);border-color:var(--acc);background:transparent;}
+  .rail-tagstoggle svg:last-child{margin-left:auto;width:15px;height:15px;transition:transform .2s;}
+  .rail-tagstoggle.open svg:last-child{transform:rotate(90deg);}
+
+  .railtags{display:flex;flex-wrap:wrap;gap:6px;padding:5px 12px 6px;}
+  .railtags.empty{display:block;color:var(--tx3);font-size:.7rem;padding:3px 14px 6px;}
+  .railtag{background:var(--sur2);border:1px solid var(--line2);color:var(--tx2);border-radius:999px;padding:3px 9px;font-size:.7rem;font-weight:600;cursor:pointer;}
+  .railtag.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc);}
+}
