@@ -1382,3 +1382,10 @@ html.light-theme{--st-blue:#2f63c8;--st-blue-bg:rgba(47,99,200,.10);--nav-bg:rgb
 
 /* ---- Remove row left spine entirely (kept overdue bg tint) ---- */
 .list .trow.od,.list .trow.severe,.brows .trow.od,.brows .trow.severe{box-shadow:none;}
+
+/* ---- Important -> red highlight everywhere (list + board rows) ---- */
+.list .trow.imp:not(.done), .brows .trow.imp:not(.done){ box-shadow: inset 3px 0 0 var(--red); background: rgba(206,42,42,.06); }
+.list .trow.imp:not(.done):hover, .brows .trow.imp:not(.done):hover{ background: rgba(206,42,42,.1); }
+.trow.imp .row-prio{ color:var(--red); font-weight:700; }
+.trow.imp .row-prio svg{ color:var(--red); }
+@media (min-width:1024px){ .railrow.rail-standalone{margin-top:8px;} }

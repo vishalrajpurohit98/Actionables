@@ -475,6 +475,7 @@ function tabbar(){
   return '<nav class="tabbar tabbar-2">'+
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
     tab('list','items','Actionables')+tab('more','dots','More')+
+    '<button class="railrow rail-standalone" data-act="view-personal">'+I('person')+'<span class="rr-l">My tasks</span></button>'+
     '<div class="railtip">'+railTipHtml()+'</div>'+
   '</nav>';
 }
@@ -1124,6 +1125,8 @@ function openMore(){
   var m=metrics(),badge=notifBadgeOn(m);
   openSheet('<div class="shead"><h2>More</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody" style="padding-top:6px">'+
+    '<button class="rowline" data-act="view-personal">'+I('person')+'<span class="t">My tasks<br><span class="s">Personal to-dos, not tied to a project</span></span>'+I('chevR')+'</button>'+
+    '<button class="rowline" data-act="add-personal">'+I('plus')+'<span class="t">Add a personal task<br><span class="s">A quick to-do just for you</span></span>'+I('chevR')+'</button>'+
     moreRow('projects','proj','Projects','Browse & manage projects, add new')+
     moreRow('reports','doc','Reports & exports','PDF / Excel with project selection')+
     moreRow('notifications','bell','Notifications',badge?'Actionables need attention today':'All clear')+
@@ -1233,7 +1236,8 @@ document.addEventListener('click',function(e){
     case 'back':goBack();break;
     case 'kpi':{filters=defaultFilters();filters.quick=el.getAttribute('data-q');nav('list',{});break;}
     case 'quick':filters.quick=el.getAttribute('data-q');render();break;
-    case 'view-personal':filters=defaultFilters();nav('projectDetail',{id:'__personal',seg:'open'});break;
+    case 'view-personal':closeTop();filters=defaultFilters();nav('projectDetail',{id:'__personal',seg:'open'});break;
+    case 'add-personal':closeTop();openForm(null,{quick:true});break;
     case 'f-tag-del':{var fr1=sheetFor('form');if(fr1){var td=(el.getAttribute('data-tag')||'').toLowerCase();fr1.data.f.tags=(fr1.data.f.tags||[]).filter(function(x){return x.toLowerCase()!==td;});renderForm(fr1);}break;}
     case 'f-tag-add':{var fr2=sheetFor('form');if(fr2){fr2.data.f.tags=fr2.data.f.tags||[];addTagTo(fr2.data.f.tags,el.getAttribute('data-tag'));renderForm(fr2);}break;}
     case 'f-tag-addbuf':{var fr3=sheetFor('form');if(fr3){fr3.data.f.tags=fr3.data.f.tags||[];var fi=$('#fTagIn',fr3.sheet);if(fi&&fi.value){parseTagList(fi.value).forEach(function(t){addTagTo(fr3.data.f.tags,t);});fi.value='';}renderForm(fr3);}break;}
