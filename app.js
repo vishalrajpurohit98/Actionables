@@ -1487,6 +1487,7 @@ document.addEventListener('change',function(e){
   if(chg==='ai-project'){aiState.project=v;return;}
   if(chg==='ai-provider'){S.settings.aiProvider=v;aiState.kModel=aiModel();aiState.err='';saveState();render();return;}
   if(chg==='ai-base'){aiMigrate();S.settings.aiCustomBase=v;return;}
+  if(chg==='ai-freeonly'){aiState.freeOnly=el.checked;render();return;}
   if(chg==='ai-kmodel'){aiState.kModel=v;return;}
   if(chg==='ai-kmodel-pick'){if(v){aiState.kModel=v;render();}return;}
   if(chg==='ai-item'){var _ii=+el.getAttribute('data-i');if(aiState.items&&aiState.items[_ii])aiState.items[_ii]._sel=el.checked;return;}
@@ -1882,13 +1883,16 @@ function railTipHtml(){
 }
 
 /* ================= AI features (Gemini) ================= */
-var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,project:'__all',editKey:false};
+var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,project:'__all',editKey:false,freeOnly:true,kModel:''};
 
 var AI_PROV={
-  gemini:{name:'Google Gemini',hint:'AIza\u2026 key',url:'aistudio.google.com/apikey'},
-  openai:{name:'OpenAI',hint:'sk-\u2026 key',url:'platform.openai.com/api-keys'},
-  anthropic:{name:'Anthropic (Claude)',hint:'sk-ant-\u2026 key',url:'console.anthropic.com'},
-  custom:{name:'Custom (OpenAI-compatible)',hint:'API key',url:'OpenRouter / Groq / local, etc.',base:true}
+  gemini:{name:'Google Gemini',kind:'gemini',free:true,hint:'AIza\u2026 key',url:'aistudio.google.com/apikey'},
+  groq:{name:'Groq',kind:'openai',base:'https://api.groq.com/openai/v1',free:true,hint:'gsk_\u2026 key',url:'console.groq.com/keys'},
+  openrouter:{name:'OpenRouter',kind:'openai',base:'https://openrouter.ai/api/v1',free:true,hint:'sk-or-\u2026 key',url:'openrouter.ai/keys'},
+  xai:{name:'Grok (xAI)',kind:'openai',base:'https://api.x.ai/v1',hint:'xai-\u2026 key',url:'console.x.ai'},
+  openai:{name:'OpenAI',kind:'openai',base:'https://api.openai.com/v1',hint:'sk-\u2026 key',url:'platform.openai.com/api-keys'},
+  anthropic:{name:'Anthropic (Claude)',kind:'anthropic',hint:'sk-ant-\u2026 key',url:'console.anthropic.com'},
+  custom:{name:'Custom (OpenAI-compatible)',kind:'openai',custom:true,hint:'API key',url:'any OpenAI-style base URL'}
 };
 function aiMigrate(){
   if(S.settings.aiKeys)return;
@@ -1901,7 +1905,7 @@ function aiMigrate(){
 function aiProv(){aiMigrate();return S.settings.aiProvider||'gemini';}
 function aiKey(){aiMigrate();return ((S.settings.aiKeys||{})[aiProv()]||'').trim();}
 function aiCustomBase(){aiMigrate();return (S.settings.aiCustomBase||'').trim();}
-function aiDefaultModel(prov){return ({gemini:'gemini-2.5-flash',openai:'gpt-4o-mini',anthropic:'claude-3-5-haiku-latest',custom:''})[prov]||'';}
+function aiDefaultModel(prov){return ({gemini:'gemini-2.5-flash',groq:'llama-3.1-8b-instant',openrouter:'meta-llama/llama-3.1-8b-instruct:free',xai:'grok-2-latest',openai:'gpt-4o-mini',anthropic:'claude-3-5-haiku-latest',custom:''})[prov]||'';}
 function aiModel(){aiMigrate();return (S.settings.aiModelByProv||{})[aiProv()]||aiDefaultModel(aiProv());}
 function aiModelsCache(){aiMigrate();return (S.settings.aiModelsByProv||{})[aiProv()]||null;}
 function aiSetKey(v){aiMigrate();S.settings.aiKeys[aiProv()]=v;}
@@ -1935,10 +1939,11 @@ async function aiCall(prompt,sys){
       body={model:model,max_tokens:2048,temperature:0.2,messages:[{role:'user',content:prompt}]};
       if(sys)body.system=sys;
     }else{
-      var base=(prov==='custom')?aiCustomBase():'https://api.openai.com/v1';
-      if(!base)throw new Error('Set the base URL for your custom provider.');
+      var P=AI_PROV[prov]||{};var base=P.custom?aiCustomBase():P.base;
+      if(!base)throw new Error('Set the base URL for this provider.');
       url=base.replace(/\/+$/,'')+'/chat/completions';
       headers={'Content-Type':'application/json','Authorization':'Bearer '+key};
+      if(prov==='openrouter'){headers['HTTP-Referer']='https://actionables.local';headers['X-Title']='Actionables';}
       var msgs=[];if(sys)msgs.push({role:'system',content:sys});msgs.push({role:'user',content:prompt});
       body={model:model,messages:msgs,temperature:0.2};
     }
@@ -2049,16 +2054,20 @@ function vAI(){
     h+='<div class="aicard aikey"><div class="ai-h">'+I('sliders')+'AI settings</div>'+
       '<p class="ai-sub">Choose a provider, enter its API key and pick a model. Stored only on this device.</p>'+
       '<label class="ai-lbl">Provider</label>'+
-      '<select id="aiProvSel" class="ai-in" data-chg="ai-provider">'+Object.keys(AI_PROV).map(function(k){return '<option value="'+k+'"'+(prov===k?' selected':'')+'>'+esc(AI_PROV[k].name)+'</option>';}).join('')+'</select>';
-    if(AI_PROV[prov].base)h+='<label class="ai-lbl">Base URL</label><input id="aiBase" class="ai-in" placeholder="https://openrouter.ai/api/v1" value="'+esc(aiCustomBase())+'" data-chg="ai-base">';
+      '<select id="aiProvSel" class="ai-in" data-chg="ai-provider">'+Object.keys(AI_PROV).map(function(k){return '<option value="'+k+'"'+(prov===k?' selected':'')+'>'+esc(AI_PROV[k].name)+(AI_PROV[k].free?' \u00b7 Free':'')+'</option>';}).join('')+'</select>';
+    if(AI_PROV[prov].custom)h+='<label class="ai-lbl">Base URL</label><input id="aiBase" class="ai-in" placeholder="https://your-endpoint/v1" value="'+esc(aiCustomBase())+'" data-chg="ai-base">';
     h+='<label class="ai-lbl">API key</label>'+
       '<input id="aiKeyInput" type="password" class="ai-in" placeholder="'+esc(AI_PROV[prov].hint)+'" value="'+esc(aiKey())+'">'+
       '<label class="ai-lbl">Model</label>';
     if(aiState.busy){h+='<div class="ai-busy"><span class="spin"></span>Loading your models\u2026</div>';}
     else{
-      if(models)h+='<select id="aiModelPick" class="ai-in" data-chg="ai-kmodel-pick"><option value="">\u2014 choose from your available models \u2014</option>'+models.map(function(m){return '<option value="'+esc(m)+'"'+(curM===m?' selected':'')+'>'+esc(m)+'</option>';}).join('')+'</select>';
+      var canFree=(prov==='openrouter'||prov==='custom');
+      var list=(models||[]).slice();
+      if(models&&canFree&&aiState.freeOnly){var ff=list.filter(function(x){return /:free$/i.test(x);});if(ff.length)list=ff;}
+      if(canFree)h+='<label class="ck"><input type="checkbox" data-chg="ai-freeonly"'+(aiState.freeOnly?' checked':'')+'>Free models only</label>';
+      if(models)h+='<select id="aiModelPick" class="ai-in" data-chg="ai-kmodel-pick"><option value="">\u2014 choose from '+list.length+' model'+(list.length===1?'':'s')+' \u2014</option>'+list.map(function(m){return '<option value="'+esc(m)+'"'+(curM===m?' selected':'')+'>'+esc(m)+'</option>';}).join('')+'</select>';
       h+='<input id="aiModelId" class="ai-in" style="margin-top:8px" placeholder="'+esc(aiDefaultModel(prov)||'model id')+'" value="'+esc(curM)+'" data-chg="ai-kmodel">';
-      h+='<div class="ai-row" style="margin-top:10px"><button class="btn ghost" data-act="ai-connect">'+(models?'Reload models':'Load my models')+'</button><button class="btn pri" data-act="ai-key-save">Save</button></div>';
+      h+='<div class="ai-row" style="margin-top:10px"><button class="btn ghost" data-act="ai-connect">'+(models?'Reload models':'Load models')+'</button><button class="btn pri" data-act="ai-key-save">Save</button></div>';
     }
     if(aiState.err)h+='<div class="ai-err">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
     h+='<p class="ai-mini">Key: '+esc(AI_PROV[prov].url)+' \u00b7 Data is sent to the provider only when you run a tool.</p></div>';
@@ -2171,7 +2180,7 @@ async function aiListModels(){
   try{
     if(prov==='gemini'){url='https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key)+'&pageSize=1000';res=await fetch(url);}
     else if(prov==='anthropic'){url='https://api.anthropic.com/v1/models?limit=1000';res=await fetch(url,{headers:{'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}});}
-    else{var base=(prov==='custom')?aiCustomBase():'https://api.openai.com/v1';if(!base)throw new Error('Set the base URL first.');url=base.replace(/\/+$/,'')+'/models';res=await fetch(url,{headers:{'Authorization':'Bearer '+key}});}
+    else{var P=AI_PROV[prov]||{};var base=P.custom?aiCustomBase():P.base;if(!base)throw new Error('Set the base URL first.');url=base.replace(/\/+$/,'')+'/models';var hh={'Authorization':'Bearer '+key};if(prov==='openrouter'){hh['HTTP-Referer']='https://actionables.local';hh['X-Title']='Actionables';}res=await fetch(url,{headers:hh});}
   }catch(e){throw new Error('Network/CORS error \u2014 could not reach the provider.');}
   if(!res.ok){var m='Could not load models ('+res.status+')';try{var j=await res.json();if(j&&j.error&&j.error.message)m=j.error.message;}catch(_){}throw new Error(m);}
   var data=await res.json(),out=[];
@@ -2184,6 +2193,9 @@ function aiPickDefault(prov,models){
   if(prov==='gemini'){var c=models.filter(function(x){return /^gemini-[0-9.]+-flash$/.test(x);}).sort();if(c.length)return c[c.length-1];var f=models.filter(function(x){return /flash/.test(x);});if(f.length)return f[f.length-1];return models[0];}
   if(prov==='openai'){var mi=models.filter(function(x){return /mini/i.test(x);});if(mi.length)return mi[0];var g=models.filter(function(x){return /^gpt/i.test(x);});return g[0]||models[0];}
   if(prov==='anthropic'){var hk=models.filter(function(x){return /haiku/i.test(x);}).sort();if(hk.length)return hk[hk.length-1];return models[0];}
+  if(prov==='groq'){var gi=models.filter(function(x){return /llama.*8b.*instant/i.test(x);});if(gi.length)return gi[0];var gl=models.filter(function(x){return /llama/i.test(x);});return gl[0]||models[0];}
+  if(prov==='xai'){var gk=models.filter(function(x){return /^grok/i.test(x)&&!/(vision|image)/i.test(x);}).sort();return gk.length?gk[gk.length-1]:models[0];}
+  if(prov==='openrouter'){var fr=models.filter(function(x){return /:free$/i.test(x);});var pool=fr.length?fr:models;var sm=pool.filter(function(x){return /(8b|9b|7b|mini|flash|instant|small|lite|haiku)/i.test(x);});return sm[0]||pool[0]||models[0];}
   return models[0];
 }
 async function aiConnect(){

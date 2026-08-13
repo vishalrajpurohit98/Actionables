@@ -1479,3 +1479,6 @@ select.ai-in{-webkit-appearance:none;appearance:none;cursor:pointer;}
   .railcredit{display:block;margin-top:10px;padding:8px 8px 0;font-size:.64rem;color:var(--tx3);text-align:center;line-height:1.6;border-top:1px solid var(--line);}
   .railcredit b{color:var(--tx2);font-weight:700;}
 }
+
+.ck{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--tx2);margin:2px 0 9px;cursor:pointer;}
+.ck input{width:17px;height:17px;accent-color:var(--acc);flex:none;}
