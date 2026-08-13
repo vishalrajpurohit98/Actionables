@@ -173,6 +173,8 @@ function ensureDefaults(){
   });
 }
 
+function notifState(){try{return (A&&A.notifState)?A.notifState():'web';}catch(e){return 'web';}}
+window.__permChanged=function(){if(view.name==='settings')render();};
 function saveState(){
   var json=JSON.stringify(S);
   try{localStorage.setItem('act_data',json);}catch(e){}
@@ -832,6 +834,18 @@ function vSettings(){
     '<button class="switch'+(s.notifEnabled?' on':'')+'" data-act="toggle-notif"><i></i></button></div>'+
     '<div class="fld" style="margin-top:10px"><label>Brief time</label>'+
     '<input type="time" data-chg="set-time" value="'+pad(s.notifHour)+':'+pad(s.notifMinute)+'"'+(s.notifEnabled?'':' disabled')+'></div></div>';
+  if(A&&A.notifState){
+    var ns=notifState();
+    var nsL=ns==='granted'?'Allowed':(ns==='denied'?'Not allowed':(ns==='na'?'On \u00b7 manage in system settings':'Browser-managed'));
+    var nsC=ns==='granted'?'var(--grn)':(ns==='denied'?'var(--amb)':'var(--tx2)');
+    h+='<div class="eyebrow">Permissions</div><div class="pane">'+
+      '<div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('bell')+'Notifications \u00b7 <b style="color:'+nsC+'">'+nsL+'</b></span>'+
+      (ns==='denied'?'<button class="btn pri mini" data-act="perm-notif">Allow</button>':'')+'</div>'+
+      '<div class="note" style="padding:9px 0 2px;line-height:1.55">Actionables only needs <b>notification</b> access \u2014 for the daily brief and follow-up reminders. It does <b>not</b> use microphone, camera, location, contacts or accessibility. Internet access (for sync &amp; AI) is a normal permission Android doesn\u2019t list separately.</div>'+
+      '<div class="btnrow" style="margin-top:8px"><button class="btn ghost" data-act="perm-test">'+I('bell')+'Send test notification</button>'+
+      '<button class="btn ghost" data-act="perm-appinfo">'+I('sliders')+'Open app info</button></div>'+
+      '</div>';
+  }
   h+='<div class="eyebrow">Data</div><div class="pane">'+
     '<button class="rowline" data-act="backup">'+I('dl')+'<span class="t">Back up data<br><span class="s">Export all data to JSON file (Downloads)</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="import">'+I('edit')+'<span class="t">Import backup<br><span class="s">Restore from a JSON backup file</span></span>'+I('chevR')+'</button>'+
@@ -1364,7 +1378,7 @@ document.addEventListener('click',function(e){
     }
     case 'export-list-excel':exportExcel(null,'All_Projects');break;
     /* Settings */
-    case 'toggle-notif':S.settings.notifEnabled=!S.settings.notifEnabled;saveState();syncSchedule();render();toast(S.settings.notifEnabled?'Daily brief on':'Daily brief off');break;
+    case 'toggle-notif':{S.settings.notifEnabled=!S.settings.notifEnabled;saveState();syncSchedule();if(S.settings.notifEnabled&&A&&A.requestNotif&&notifState()==='denied')A.requestNotif();render();toast(S.settings.notifEnabled?'Daily brief on':'Daily brief off');break;}
     case 'backup':{try{var json=JSON.stringify(S,null,1);var b64=btoa(unescape(encodeURIComponent(json)));deliverFile(b64,'Actionables_Backup_'+stamp()+'.json','application/json');}catch(e2){toast('Backup failed');}break;}
     case 'import':openImport();break;
     case 'import-file':{
@@ -1431,6 +1445,9 @@ document.addEventListener('click',function(e){
       tinp.click();
       break;
     }
+    case 'perm-notif':{if(A&&A.requestNotif)A.requestNotif();setTimeout(function(){render();},500);break;}
+    case 'perm-test':{if(A&&A.testNotification){A.testNotification();toast('Test notification sent');}else toast('Only available in the installed app');break;}
+    case 'perm-appinfo':{if(A&&A.openAppSettings)A.openAppSettings();else toast('Only available in the installed app');break;}
     case 'reseed':confirmSheet('Reset to demo data?','All current data will be replaced with the BCP / ICICI / SCB demo set.','Reset',true,function(){snapshot('Before reset');S=window.buildSeed(Date.now());saveState();applyTheme();filters=defaultFilters();render();syncSchedule();toast('Demo data restored');});break;
   }
 });
