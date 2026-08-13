@@ -1482,3 +1482,10 @@ select.ai-in{-webkit-appearance:none;appearance:none;cursor:pointer;}
 
 .ck{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--tx2);margin:2px 0 9px;cursor:pointer;}
 .ck input{width:17px;height:17px;accent-color:var(--acc);flex:none;}
+
+/* AI update: change diff */
+.ai-diff{display:flex;flex-direction:column;gap:3px;margin-top:7px;}
+.ai-dl{font-size:.78rem;color:var(--tx2);line-height:1.4;}
+.ai-dl b{color:var(--tx);font-weight:700;}
+.ai-dl s{color:var(--tx3);}
+.ai-dl i{color:var(--acc);font-style:normal;font-weight:700;}

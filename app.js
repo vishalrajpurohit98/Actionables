@@ -1183,12 +1183,13 @@ function exportExcel(projId,projLabel){
   if(!xlsxReady()){toast('Export engine loading \u2014 try again');return;}
   var list=projId?S.actionables.filter(function(a){return a.projectId===projId&&isOpen(a);}):S.actionables.filter(isOpen);
   list=sortActs(list,'project');
-  var head=['Project','Line Item','Description','Owner / SPOC','ETA','Status','Remarks'];
-  var rows=list.map(function(a){return[projName(a.projectId),a.lineItem,a.task,spocLabel(a),plainEta(a)||(a.etaKind==='tbd'?'TBD':''),a.status,a.notes||''];});
+  var head=['Project','Line Item','Description','Owner / SPOC','ETA','Status','Remarks','Comments (date-wise)'];
+  var rows=list.map(function(a){var cmt=(a.comments||[]).map(function(c){var d=new Date(c.ts);return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+(c.user?(' ('+c.user+')'):'')+': '+(c.text||'');}).join('\n');return[projName(a.projectId),a.lineItem,a.task,spocLabel(a),plainEta(a)||(a.etaKind==='tbd'?'TBD':''),a.status,a.notes||'',cmt];});
   var ws=XLSX.utils.aoa_to_sheet([head].concat(rows));
-  ws['!cols']=[{wch:14},{wch:32},{wch:48},{wch:18},{wch:16},{wch:20},{wch:40}];
+  ws['!cols']=[{wch:14},{wch:32},{wch:48},{wch:18},{wch:16},{wch:20},{wch:40},{wch:60}];
   /* Bold header row */
   for(var c=0;c<head.length;c++){var addr=XLSX.utils.encode_cell({r:0,c:c});if(ws[addr])ws[addr].s={font:{bold:true}};}
+  for(var rr=1;rr<=rows.length;rr++){var ca=XLSX.utils.encode_cell({r:rr,c:7});if(ws[ca])ws[ca].s={alignment:{wrapText:true,vertical:'top'}};}
   var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,projLabel||'All Projects');
   var b64=XLSX.write(wb,{bookType:'xlsx',type:'base64'});
   deliverFile(b64,(projLabel||'All_Projects').replace(/\s+/g,'_')+'_Report_'+stamp()+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1220,13 +1221,13 @@ function exportPdf(projId,projLabel){
     if(!list.length){doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(130,140,152);y+=12;doc.text(emptyMsg,M,y);y+=20;return;}
     doc.autoTable({
       startY:y+4,
-      head:[['Project','Line Item','Description','Owner','ETA','Status']],
-      body:list.map(function(a){return[projCode(a.projectId),a.lineItem,a.task||'',spocLabel(a),fmtEta(a),a.status];}),
+      head:[['Project','Line Item','Description','Owner','ETA','Status','Latest comment']],
+      body:list.map(function(a){var lc=(a.comments&&a.comments.length)?a.comments[a.comments.length-1]:null;var cd=lc?new Date(lc.ts):null;var lcs=lc?(cd.getDate()+' '+MON[cd.getMonth()]+' '+cd.getFullYear()+': '+(lc.text||'')):'';return[projCode(a.projectId),a.lineItem,a.task||'',spocLabel(a),fmtEta(a),a.status,lcs];}),
       margin:{left:M,right:M},
       styles:{fontSize:7.5,cellPadding:3.5,textColor:[45,55,70],lineColor:[225,232,240],lineWidth:.5,valign:'top'},
       headStyles:{fillColor:[17,24,38],textColor:255,fontStyle:'bold',fontSize:8},
       alternateRowStyles:{fillColor:[247,249,252]},
-      columnStyles:{0:{cellWidth:44},1:{cellWidth:72},2:{cellWidth:148},3:{cellWidth:60},4:{cellWidth:44},5:{cellWidth:62}}
+      columnStyles:{0:{cellWidth:38},1:{cellWidth:64},2:{cellWidth:104},3:{cellWidth:52},4:{cellWidth:40},5:{cellWidth:54},6:{cellWidth:112}}
     });
     y=doc.lastAutoTable.finalY+20;
   }
@@ -1303,7 +1304,7 @@ document.addEventListener('click',function(e){
     case 'open':openDetail(id);break;
     case 'add':openForm(null,view.name==='projectDetail'?{projectId:view.params.id}:null);break;
     case 'quick-new':openForm(null,{quick:true});break;
-    case 'ai-tab':aiState.tab=el.getAttribute('data-k');aiState.out='';aiState.outKind='';aiState.items=null;aiState.err='';aiState.input='';render();break;
+    case 'ai-tab':aiState.tab=el.getAttribute('data-k');aiState.out='';aiState.outKind='';aiState.items=null;aiState.edits=null;aiState.err='';aiState.input='';render();break;
     case 'ai-key-save':{var _k=$('#aiKeyInput');if(_k)aiSetKey(_k.value.trim());var _b=$('#aiBase');if(_b)S.settings.aiCustomBase=_b.value.trim();var _m=$('#aiModelId')||$('#aiModelPick');if(_m&&_m.value.trim())aiSetModel(_m.value.trim());if(!aiModel()){aiState.err='Enter or choose a model.';render();break;}aiState.editKey=false;aiState.err='';aiState.kModel='';saveState();render();break;}
     case 'ai-connect':case 'ai-reload-models':{var _k2=$('#aiKeyInput');if(_k2)aiSetKey(_k2.value.trim());var _b2=$('#aiBase');if(_b2)S.settings.aiCustomBase=_b2.value.trim();aiConnect();break;}
     case 'ai-key-edit':{aiState.editKey=true;aiState.err='';aiState.kModel=aiModel();if(aiKey()&&!aiModelsCache())aiConnect();else render();break;}
@@ -1313,6 +1314,8 @@ document.addEventListener('click',function(e){
     case 'ai-brief':{var _e=$('#aiProject');if(_e)aiState.project=_e.value;aiBrief();break;}
     case 'ai-open-parsed':{var _p=aiState.parsed;if(_p)openForm(null,{projectId:_p.projectId,spocIds:_p.spocIds,lineItem:_p.lineItem,task:_p.task,status:_p.status,etaKind:_p.etaKind,eta:_p.eta,etaEnd:_p.etaEnd,tags:_p.tags});break;}
     case 'ai-add-selected':aiAddSelected();break;
+    case 'ai-edit':{var _ee=$('#aiInput');if(_ee)aiState.input=_ee.value;aiUpdate();break;}
+    case 'ai-apply-edits':aiApplyEdits();break;
     case 'ai-copy':aiCopy();break;
     case 'ai-pdf':aiExportPDF(aiState.outTitle||'AI response',aiState.out||'');break;
     case 'f-important':{var fri=sheetFor('form');if(fri){fri.data.f.important=!fri.data.f.important;renderForm(fri);}break;}
@@ -1491,6 +1494,7 @@ document.addEventListener('change',function(e){
   if(chg==='ai-kmodel'){aiState.kModel=v;return;}
   if(chg==='ai-kmodel-pick'){if(v){aiState.kModel=v;render();}return;}
   if(chg==='ai-item'){var _ii=+el.getAttribute('data-i');if(aiState.items&&aiState.items[_ii])aiState.items[_ii]._sel=el.checked;return;}
+  if(chg==='ai-edit-tg'){var _ex=+el.getAttribute('data-i');if(aiState.edits&&aiState.edits[_ex])aiState.edits[_ex]._sel=el.checked;return;}
   if(chg==='psort'){peopleView.sort=v;render();return;}
   if(chg==='flt-sort'){filters.sort=v;render();return;}
   if(chg==='flt-from'){filters.from=v;render();return;}
@@ -1883,7 +1887,7 @@ function railTipHtml(){
 }
 
 /* ================= AI features (Gemini) ================= */
-var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,project:'__all',editKey:false,freeOnly:true,kModel:''};
+var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,edits:null,project:'__all',editKey:false,freeOnly:true,kModel:''};
 
 var AI_PROV={
   gemini:{name:'Google Gemini',kind:'gemini',free:true,hint:'AIza\u2026 key',url:'aistudio.google.com/apikey'},
@@ -2029,6 +2033,12 @@ function aiContext(projectId){
 function aiResultBlock(){
   if(aiState.busy)return '<div class="ai-busy"><span class="spin"></span>Working with '+esc(AI_PROV[aiProv()].name)+'\u2026</div>';
   if(aiState.err)return '<div class="ai-err">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
+  if(aiState.edits){
+    if(!aiState.edits.length)return '<div class="ai-note">No matching task to update. Try naming the ticket, title, project or owner.</div>';
+    var ne=aiState.edits.filter(function(x){return x._sel;}).length;
+    return '<div class="ai-items">'+aiState.edits.map(function(e,i){return '<label class="ai-item"><input type="checkbox" data-chg="ai-edit-tg" data-i="'+i+'"'+(e._sel?' checked':'')+'><span class="ai-it-b"><span class="ai-it-t">'+esc(e.title)+'</span><span class="ai-it-m">'+esc(e.project)+'</span><span class="ai-diff">'+e.diff.map(function(d){return '<span class="ai-dl"><b>'+esc(d[0])+'</b> '+(d[1]?'<s>'+esc(d[1])+'</s> \u2192 ':'')+'<i>'+esc(d[2])+'</i></span>';}).join('')+'</span></span></label>';}).join('')+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-apply-edits">Apply '+ne+' change'+(ne===1?'':'s')+'</button></div></div>';
+  }
   if(aiState.items){
     if(!aiState.items.length)return '<div class="ai-note">No action items found in that text.</div>';
     var n=aiState.items.filter(function(x){return x._sel;}).length;
@@ -2045,7 +2055,7 @@ function aiResultBlock(){
 }
 function vAI(){
   var h=topbar('AI features',esc(aiConfigured()?('via '+AI_PROV[aiProv()].name):'Gemini, OpenAI, Claude & more'),true,'<button class="iconbtn" data-act="ai-key-edit" title="AI settings">'+I('sliders')+'</button>');
-  var tabs=[['add','Quick add'],['notes','From notes'],['ask','Ask'],['brief','Daily brief']];
+  var tabs=[['add','Quick add'],['notes','From notes'],['edit','Update'],['ask','Ask'],['brief','Daily brief']];
   h+='<div class="chips aitabs">'+tabs.map(function(t){return '<button class="chip'+(aiState.tab===t[0]?' on':'')+'" data-act="ai-tab" data-k="'+t[0]+'">'+t[1]+'</button>';}).join('')+'</div>';
   if(!aiConfigured()||aiState.editKey){
     var prov=aiProv();
@@ -2086,6 +2096,10 @@ function vAI(){
     h+='<div class="aicard"><div class="ai-h">Ask your data</div><p class="ai-sub">Ask in plain language across your actionables.</p>'+
       '<textarea id="aiInput" class="ai-ta" rows="2" placeholder="e.g. What\u2019s blocking ICICI go-live?   /   Everything waiting on Mastercard" data-chg="ai-input">'+esc(aiState.input)+'</textarea>'+
       '<div class="ai-actions"><button class="btn pri" data-act="ai-ask"'+(aiState.busy?' disabled':'')+'>'+(aiState.busy?'Thinking\u2026':'Ask')+'</button></div>'+aiResultBlock()+'</div>';
+  }else if(aiState.tab==='edit'){
+    h+='<div class="aicard"><div class="ai-h">Update a task</div><p class="ai-sub">Describe a change; AI finds the task and updates its status or details \u2014 you confirm before it is applied.</p>'+
+      '<textarea id="aiInput" class="ai-ta" rows="3" placeholder="e.g. Mark ORP-3803 as completed  \u00b7  set BCP FSD sign-off ETA to next Monday and status Dependency" data-chg="ai-input">'+esc(aiState.input)+'</textarea>'+
+      '<div class="ai-actions"><button class="btn pri" data-act="ai-edit"'+(aiState.busy?' disabled':'')+'>'+(aiState.busy?'Finding\u2026':'Find & preview')+'</button></div>'+aiResultBlock()+'</div>';
   }else{
     var projs=S.projects.filter(function(p){return p.id!=='__personal';});
     h+='<div class="aicard"><div class="ai-h">Daily brief</div><p class="ai-sub">A short, prioritized focus summary \u2014 grouped by project.</p>'+
@@ -2248,3 +2262,61 @@ function aiExportPDF(title,text){
   var b64=doc.output('datauristring').split(',')[1];
   deliverFile(b64,fn,'application/pdf');
 }
+
+/* ---- AI: update a task's status / details ---- */
+function aiEtaLabel(ek,ev,ee){return ek==='date'?fmtDY(ev):(ek==='range'?(fmtD(ev)+'\u2013'+fmtDY(ee||ev)):(ek==='tbd'?'TBD':'No ETA'));}
+function aiEditContext(){
+  return S.actionables.map(function(a){
+    var o={id:a.id,project:(a.projectId==='__personal'?'Personal':projName(a.projectId)),item:a.lineItem,owner:spocLabel(a),status:a.status,eta:plainEta(a)||'none'};
+    if(a.ticket)o.ticket=a.ticket;
+    if(a.tags&&a.tags.length)o.tags=a.tags;
+    if(a.important)o.important=true;
+    return o;
+  });
+}
+async function aiUpdate(){
+  var text=(aiState.input||'').trim();
+  if(!text){aiState.err='Describe the change to make.';render();return;}
+  aiStart();
+  try{
+    var sys='You update EXISTING actionables from an instruction. Output ONLY a JSON array (no prose) of items to change. Each element MUST include "id" (exactly from the provided list) and ONLY the fields that change: {"id":string,"status"?:"In Progress"|"On Hold"|"Dependency"|"Completed","etaKind"?:"none"|"tbd"|"date"|"range","eta"?:"YYYY-MM-DD","etaEnd"?:"YYYY-MM-DD","owners"?:string[] (person names, full replacement),"tags"?:string[] (full replacement),"important"?:boolean,"lineItem"?:string,"task"?:string}. Match the instruction to the right item(s) by ticket, title, project or owner. Resolve relative dates using today='+todayISO()+'. If nothing clearly matches, return [].';
+    var prompt='Actionables (JSON): '+JSON.stringify(aiEditContext())+'\nKnown people: '+JSON.stringify(aiPeopleList())+'\nInstruction: """'+text+'"""';
+    var arr=aiJSON(await aiCall(prompt,sys));
+    if(!Array.isArray(arr))arr=[];
+    var edits=[];
+    arr.forEach(function(o){
+      if(!o||!o.id)return; var a=actById(o.id); if(!a)return;
+      var patch={},diff=[];
+      if(o.status&&STATUSES.indexOf(o.status)>=0&&o.status!==a.status){patch.status=o.status;diff.push(['Status',a.status,o.status]);}
+      if(o.etaKind!==undefined||o.eta!==undefined||o.etaEnd!==undefined){
+        var ek=o.etaKind||(o.eta?'date':(o.etaEnd?'range':a.etaKind)),ev=(o.eta!==undefined?o.eta:a.eta)||'',ee=(o.etaEnd!==undefined?o.etaEnd:a.etaEnd)||'';
+        if(ek==='date'&&!/^\d{4}-\d{2}-\d{2}$/.test(ev)){ek=ev?'tbd':'none';ev='';}
+        if(ek!=='range')ee='';if(ek==='none'||ek==='tbd'){ev='';ee='';}
+        if(ek!==a.etaKind||ev!==a.eta||ee!==a.etaEnd){patch.etaKind=ek;patch.eta=ev;patch.etaEnd=ee;diff.push(['ETA',aiEtaLabel(a.etaKind,a.eta,a.etaEnd),aiEtaLabel(ek,ev,ee)]);}
+      }
+      if(o.owners!==undefined){var ids=aiMapOwners(o.owners);var ok=a.spocIds.slice().sort().join(','),nk=ids.slice().sort().join(',');if(ok!==nk){patch.spocIds=ids;diff.push(['Owner',spocLabel(a),ids.length?ids.map(personName).join(' & '):'Unassigned']);}}
+      if(o.tags!==undefined){var t2=(o.tags||[]).slice(0,8);var okt=(a.tags||[]).slice().sort().join('|'),nkt=t2.slice().sort().join('|');if(okt!==nkt){patch.tags=t2;diff.push(['Tags',(a.tags||[]).join(', ')||'\u2014',t2.join(', ')||'\u2014']);}}
+      if(o.important!==undefined&&!!o.important!==!!a.important){patch.important=!!o.important;diff.push(['Important',a.important?'Yes':'No',o.important?'Yes':'No']);}
+      if(o.lineItem&&o.lineItem!==a.lineItem){patch.lineItem=o.lineItem;diff.push(['Title',cap(a.lineItem,40),cap(o.lineItem,40)]);}
+      if(o.task!==undefined&&(o.task||'')!==(a.task||'')){patch.task=o.task;diff.push(['Details',a.task?cap(a.task,40):'\u2014',o.task?cap(o.task,60):'\u2014']);}
+      if(diff.length)edits.push({id:a.id,title:(a.ticket?a.ticket+' \u2014 ':'')+a.lineItem,project:(a.projectId==='__personal'?'Personal':projName(a.projectId)),patch:patch,diff:diff,_sel:true});
+    });
+    aiState.edits=edits;aiState.out='';aiState.outKind='';aiState.items=null;
+    aiDone();
+  }catch(e){aiFail(e);}
+}
+function aiApplyEdits(){
+  var sel=(aiState.edits||[]).filter(function(x){return x._sel;});
+  if(!sel.length){toast('Select at least one change');return;}
+  var n=0; sel.forEach(function(e){ if(updateAct(e.id,e.patch))n++; });
+  aiState.edits=null;aiState.input='';render();
+  toast(n+' actionable'+(n===1?'':'s')+' updated',{label:'View',fn:function(){nav('list',{});}});
+}
+
+/* ---- deep-link from the AI widget ---- */
+window.__openAiTool=function(tool){
+  var ok=['add','notes','edit','ask','brief'];
+  if(ok.indexOf(tool)<0)tool='add';
+  aiState.tab=tool;aiState.out='';aiState.outKind='';aiState.items=null;aiState.edits=null;aiState.err='';aiState.input='';
+  try{nav('ai',{});}catch(e){}
+};
