@@ -481,6 +481,7 @@ function tabbar(){
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
     tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
     '<div class="railtip">'+railTipHtml()+'</div>'+
+    '<div class="railcredit">Developed by <b>Vishal</b> \u00b7 personal use only</div>'+
   '</nav>';
 }
 function notifBadgeOn(m){var n=m.overdue.length+m.today.length+m.remDueL.length;return n>0&&S.settings.notifSeenDate!==todayISO();}
@@ -855,6 +856,7 @@ function vSettings(){
   }
   h+='</div>';
   h+='<div class="note">Actionables \u00b7 '+(cloudOn?'offline-first with cloud sync':'fully offline \u00b7 data stays on this device')+'.</div>';
+  h+='<div class="appcredit">Developed by <b>Vishal</b><span>For personal use only</span></div>';
   return h;
 }
 
@@ -875,7 +877,7 @@ function closeSheet(rec){
   var idx=sheetStack.indexOf(rec===undefined?sheetStack[sheetStack.length-1]:rec);
   if(idx<0)return;rec=sheetStack[idx];sheetStack.splice(idx,1);
   rec.scrim.classList.remove('in');rec.sheet.classList.remove('in');
-  setTimeout(function(){if(rec.scrim.parentNode)rec.scrim.parentNode.removeChild(rec.scrim);if(rec.sheet.parentNode)rec.sheet.parentNode.removeChild(rec.sheet);},220);
+  setTimeout(function(){if(rec.scrim.parentNode)rec.scrim.parentNode.removeChild(rec.scrim);if(rec.sheet.parentNode)rec.sheet.parentNode.removeChild(rec.sheet);},210);
 }
 function closeTop(){if(sheetStack.length)closeSheet(sheetStack[sheetStack.length-1]);}
 function sheetFor(tag){for(var i=sheetStack.length-1;i>=0;i--)if(sheetStack[i].tag===tag)return sheetStack[i];return null;}
@@ -1135,6 +1137,7 @@ function openMore(){
     moreRow('reports','doc','Reports & exports','PDF / Excel with project selection')+
     moreRow('notifications','bell','Notifications',badge?'Actionables need attention today':'All clear')+
     moreRow('settings','sliders','Settings','Theme, name, daily brief, backup')+
+    '<div class="appcredit">Developed by <b>Vishal</b><span>For personal use only</span></div>'+
     '</div>',{tag:'more'});
 }
 function moreRow(v,ic,t,s){return '<button class="rowline" data-act="go" data-v="'+v+'">'+I(ic)+'<span class="t">'+t+'<br><span class="s">'+esc(s)+'</span></span>'+I('chevR')+'</button>';}
