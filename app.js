@@ -125,6 +125,7 @@ var peopleView={sort:'open',filt:'all'};
 var tagDropOpen=false;
 var calState=null;
 var exportSel={projId:''};
+var globalSearchState={q:''};
 
 function defaultFilters(){
   return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
@@ -464,6 +465,7 @@ function render(){
     case 'reports':html=vReports();break;
     case 'notifications':html=vNotifications();break;
     case 'settings':html=vSettings();break;
+    case 'brief':html=vBrief();break;
     case 'ai':html=vAI();break;
   }
   var fabViews=['home','list','calendar','projects','projectDetail','people','personDetail'];
@@ -478,7 +480,7 @@ function nav(name,params,noHist){
 }
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
-  var moreViews=['projects','projectDetail','reports','notifications','settings'];
+  var moreViews=['projects','projectDetail','reports','notifications','settings','brief'];
   function tab(k,ic,lbl){
     var on=(k==='more')?(moreViews.indexOf(view.name)>=0):(k==='ai')?(view.name==='ai'):(view.name!=='ai'&&moreViews.indexOf(view.name)<0);
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';
@@ -1155,6 +1157,86 @@ function openDay(iso){
     '</div>',{tag:'day'});
 }
 
+/* ---- GLOBAL SEARCH ---- */
+function globalSearchMatches(q){
+  q=(q||'').trim().toLowerCase();
+  if(!q)return [];
+  var out=[];
+  S.actionables.forEach(function(a){
+    var hay=[a.ticket,a.lineItem,a.task,a.notes,projName(a.projectId),projCode(a.projectId),spocLabel(a),(a.tags||[]).join(' '),
+      (a.comments||[]).map(function(c){return c.text||'';}).join(' ')].join(' ').toLowerCase();
+    if(hay.indexOf(q)>=0)out.push({kind:'task',id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,meta:(a.projectId==='__personal'?'Personal':projName(a.projectId))+' · '+spocLabel(a)+' · '+a.status,sub:plainEta(a)||'No ETA'});
+  });
+  S.projects.forEach(function(pr){
+    var hay=[pr.name,pr.code].join(' ').toLowerCase();
+    if(hay.indexOf(q)>=0)out.push({kind:'project',id:pr.id,title:pr.name,meta:'Project'+(pr.code?' · '+pr.code:''),sub:''});
+  });
+  S.people.forEach(function(pe){
+    if((pe.name||'').toLowerCase().indexOf(q)>=0)out.push({kind:'person',id:pe.id,title:pe.name,meta:'Owner / SPOC',sub:''});
+  });
+  return out.slice(0,50);
+}
+function renderGlobalSearch(rec){
+  var q=globalSearchState.q||'';
+  var results=globalSearchMatches(q);
+  var b='<div class="shead"><h2>Global Search</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
+    '<div class="sbody global-search-body">'+
+    '<div class="global-search-input"><span>'+I('search')+'</span><input id="globalSearchInput" type="search" placeholder="Search tasks, projects, people, tickets…" value="'+esc(q)+'" autocomplete="off"></div>';
+  if(!q)b+='<div class="global-search-hint">Search across <b>Actionables</b>, projects, owners/SPOCs, tickets, notes, tags and comments.</div>';
+  else if(!results.length)b+=emptyBox('No matches found','Try a ticket ID, project, person, task or keyword.');
+  else {
+    b+='<div class="global-search-count">'+results.length+(results.length===50?'+':'')+' result'+(results.length===1?'':'s')+'</div><div class="global-search-results">';
+    results.forEach(function(r){
+      if(r.kind==='task')b+='<button class="global-result" data-act="open" data-id="'+r.id+'"><span class="gr-ic">'+I('items')+'</span><span class="gr-main"><b>'+esc(r.title)+'</b><span>'+esc(r.meta)+'</span></span><span class="gr-side">'+esc(r.sub)+'</span></button>';
+      else if(r.kind==='project')b+='<button class="global-result" data-act="proj-nav" data-id="'+r.id+'"><span class="gr-ic">'+I('proj')+'</span><span class="gr-main"><b>'+esc(r.title)+'</b><span>'+esc(r.meta)+'</span></span></button>';
+      else b+='<button class="global-result" data-act="person" data-id="'+r.id+'"><span class="gr-ic">'+I('person')+'</span><span class="gr-main"><b>'+esc(r.title)+'</b><span>'+esc(r.meta)+'</span></span></button>';
+    });
+    b+='</div>';
+  }
+  b+='</div>';
+  rec.sheet.innerHTML='<div class="grab"></div>'+b;
+  setTimeout(function(){var inp=$('#globalSearchInput',rec.sheet);if(inp){inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}},20);
+}
+function openGlobalSearch(){
+  globalSearchState.q='';
+  var rec=openSheet('',{full:true,tag:'globalsearch'});
+  renderGlobalSearch(rec);
+}
+
+/* ---- DAILY BRIEFING ---- */
+function briefData(){
+  var t=todayISO(),m=metrics();
+  return {
+    overdue:sortActs(m.overdue,'smart'),
+    today:sortActs(m.today,'smart'),
+    followups:sortActs(m.remDueL,'smart'),
+    deps:sortActs(m.awaitAll,'smart'),
+    week:sortActs(m.week,'smart'),
+    done30:sortActs(m.done30,'smart')
+  };
+}
+function briefSection(title,list,empty,limit){
+  var h='<div class="brief-section"><div class="brief-sec-head"><span>'+esc(title)+'</span><b>'+list.length+'</b></div>';
+  if(!list.length)h+='<div class="brief-empty">'+esc(empty)+'</div>';
+  else h+='<div class="brief-list">'+list.slice(0,limit||6).map(function(a){return '<button class="brief-item" data-act="open" data-id="'+a.id+'"><span class="brief-dot '+(isOver(a,todayISO())?'bad':a.status==='Dependency'?'wait':a.status==='Completed'?'done':'')+'"></span><span class="brief-main"><b>'+esc((a.ticket?a.ticket+' — ':'')+a.lineItem)+'</b><span>'+esc((a.projectId==='__personal'?'Personal':projName(a.projectId))+' · '+spocLabel(a))+'</span></span><span class="brief-eta">'+esc(fmtEta(a))+'</span></button>';}).join('')+'</div>';
+  if(list.length>(limit||6))h+='<button class="brief-more" data-act="brief-view-all">View all '+list.length+'</button>';
+  return h+'</div>';
+}
+function vBrief(){
+  var d=briefData(),m=metrics(),h=topbar('Daily briefing',fmtDY(todayISO()),true,'<button class="iconbtn" data-act="theme-toggle" title="Switch theme">'+I((S.settings.theme||'dark')==='dark'?'sun':'moon')+'</button>');
+  h+='<div class="brief-wrap">'+
+    '<div class="brief-kpis"><div><b>'+m.overdue.length+'</b><span>Overdue</span></div><div><b>'+m.today.length+'</b><span>Due today</span></div><div><b>'+m.remDueL.length+'</b><span>Follow-ups</span></div><div><b>'+m.awaitAll.length+'</b><span>Dependencies</span></div></div>'+
+    '<div class="brief-actions"><button class="btn pri" data-act="brief-ai"'+(aiConfigured()?'':' disabled')+'>'+I('spark')+' AI summary</button><button class="btn ghost" data-act="brief-mark">Mark reviewed</button></div>'+
+    briefSection('Needs attention · overdue',d.overdue,'Nothing overdue.',7)+
+    briefSection('Due today',d.today,'Nothing due today.',7)+
+    briefSection('Follow-ups due',d.followups,'No follow-ups due.',6)+
+    briefSection('Waiting / dependencies',d.deps,'Nothing is blocked.',6)+
+    briefSection('Due this week',d.week,'Nothing else due this week.',7)+
+    briefSection('Recently completed',d.done30,'No recent completions.',5)+
+    '</div>';
+  return h;
+}
+
 /* ---- MORE MENU ---- */
 function openMore(){
   var m=metrics(),badge=notifBadgeOn(m);
@@ -1163,6 +1245,7 @@ function openMore(){
     moreRow('projects','proj','Projects','Browse & manage projects, add new')+
     moreRow('reports','doc','Reports & exports','PDF / Excel with project selection')+
     moreRow('notifications','bell','Notifications',badge?'Actionables need attention today':'All clear')+
+    moreRow('brief','doc','Daily briefing','Today’s priorities, overdue work and follow-ups')+
     moreRow('settings','sliders','Settings','Theme, name, daily brief, backup')+
     '<div class="appcredit">Developed by <b>Vishal</b><span>For personal use only</span></div>'+
     '</div>',{tag:'more'});
@@ -1284,7 +1367,10 @@ document.addEventListener('click',function(e){
     case 'tag-rename':{var tm=sheetFor('tagmgr');if(tm){var orig=el.getAttribute('data-tag'),inps=tm.sheet.querySelectorAll('input[data-tagorig]'),inp=null;for(var _i=0;_i<inps.length;_i++)if(inps[_i].getAttribute('data-tagorig')===orig){inp=inps[_i];break;}var nv=inp?inp.value:'';if(nv&&nv.trim()&&renameTag(orig,nv)){renderTagManager(tm);render();toast('Tag renamed');}else toast('Enter a new tag name');}break;}
     case 'tag-delete':{var tm2=sheetFor('tagmgr');if(tm2){var tgd=el.getAttribute('data-tag');confirmSheet('Delete tag?','Remove \u201c'+tgd+'\u201d from all tasks.','Delete',true,function(){deleteTag(tgd);renderTagManager(tm2);render();toast('Tag deleted');});}break;}
     case 'd-tag-addbuf':{var dr3=sheetFor('detail');if(dr3){var a3=actById(dr3.data.id);if(a3){var nt3=(a3.tags||[]).slice(),di=$('#dTagIn',dr3.sheet);if(di&&di.value){parseTagList(di.value).forEach(function(t){addTagTo(nt3,t);});di.value='';}updateAct(dr3.data.id,{tags:nt3});renderDetail(dr3);render();}}break;}
-    case 'go-search':filters=defaultFilters();nav('list',{});setTimeout(function(){var i=$('#srch');if(i)i.focus();},60);break;
+    case 'go-search':openGlobalSearch();break;
+    case 'brief-ai':{aiState.input="Give me today's daily briefing and prioritize overdue, due today, dependencies and follow-ups.";aiChat=[];nav('ai',{});setTimeout(function(){aiSend();},40);break;}
+    case 'brief-mark':S.settings.notifSeenDate=todayISO();saveState();render();toast('Daily briefing marked reviewed');break;
+    case 'brief-view-all':filters=defaultFilters();filters.quick='all';nav('list',{});break;
     case 'go-notif':nav('notifications',{});break;
     case 'go-calendar':nav('calendar',{});break;
     case 'go-people':nav('people',{});break;
@@ -1328,6 +1414,8 @@ document.addEventListener('click',function(e){
     case 'ai-open-parsed':{var _p=aiState.parsed;if(_p)openForm(null,{projectId:_p.projectId,spocIds:_p.spocIds,lineItem:_p.lineItem,task:_p.task,status:_p.status,etaKind:_p.etaKind,eta:_p.eta,etaEnd:_p.etaEnd,tags:_p.tags});break;}
     case 'ai-add-selected':aiAddSelected();break;
     case 'ai-send':{var _ai=$('#aiInput');if(_ai)aiState.input=_ai.value;aiSend();break;}
+    case 'ai-apply-pending':aiApplyPending();break;
+    case 'ai-cancel-pending':aiState.pending=null;aiChatPush('ai','Cancelled. No data was changed.');render();break;
     case 'ai-suggest':{aiState.input=el.getAttribute('data-q')||'';aiSend();break;}
     case 'ai-open':{openDetail(el.getAttribute('data-id'));break;}
     case 'ai-undo':{aiUndo(+el.getAttribute('data-i'));break;}
@@ -1516,6 +1604,7 @@ document.addEventListener('change',function(e){
   }
   if(chg==='lst-proj'){filters.project=(v==='__all')?[]:[v];filters.spoc=[];render();return;}
   if(chg==='lst-spoc'){filters.spoc=(v==='__all')?[]:(v==='__none'?['__tbc']:[v]);render();return;}
+  if(chg==='global-search'){globalSearchState.q=v;var gs=sheetFor('globalsearch');if(gs)renderGlobalSearch(gs);return;}
   if(chg==='ai-input'){aiState.input=v;return;}
   if(chg==='ai-project'){aiState.project=v;return;}
   if(chg==='ai-provider'){S.settings.aiProvider=v;aiState.kModel=aiModel();aiState.err='';saveState();render();return;}
@@ -1552,6 +1641,11 @@ function bindViewInputs(){
     repSel.addEventListener('change',function(){hidden.value=this.value;});
   }
 }
+
+document.addEventListener('input',function(e){
+  var el=e.target;
+  if(el&&el.id==='globalSearchInput'){globalSearchState.q=el.value;var gs=sheetFor('globalsearch');if(gs){clearTimeout(window.__gsTimer);window.__gsTimer=setTimeout(function(){renderGlobalSearch(gs);},90);}}
+});
 
 /* ---- BACK / LIFECYCLE ---- */
 function goBack(){
@@ -1921,7 +2015,7 @@ function railTipHtml(){
 }
 
 /* ================= AI features (Gemini) ================= */
-var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,edits:null,project:'__all',editKey:false,freeOnly:true,kModel:''};
+var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,edits:null,project:'__all',editKey:false,freeOnly:true,kModel:'',pending:null};
 var aiChat=[];
 var AI_ROUTER_SYS='You are the command center for "Actionables", a delivery task tracker. The user types one natural-language request. Decide the single best action and respond with ONLY minified JSON (no prose, no code fences).\n'+
 'Schema: {"action":"add|update|delete|search|report|answer|clarify","reply":string,'+
@@ -1929,6 +2023,7 @@ var AI_ROUTER_SYS='You are the command center for "Actionables", a delivery task
 '"update":[{"id":string,"status":string,"etaKind":string,"eta":string,"etaEnd":string,"owners":string[],"tags":string[],"important":boolean,"lineItem":string,"task":string}],'+
 '"delete":["id"],"search":{"filter":{"person":string,"text":string,"status":string,"overdue":boolean,"completed":boolean,"open":boolean,"mine":boolean,"important":boolean,"dueWithinDays":number,"project":string,"tag":string},"ids":["id"]},"report":{"filter":{},"ids":["id"],"format":"pdf|excel","label":string}}\n'+
 'Rules:\n'+
+'- For add/update/delete, return a proposed change only. The application will validate it and ask the user for confirmation before changing data. Never assume a mutation has already happened.\n'+
 '- Use ids EXACTLY from the Actionables list provided. For update include only the fields that change.\n'+
 '- "priority/high/urgent" => important=true; "low/normal priority" => important=false. There is no other priority field.\n'+
 '- "waiting on X"/"blocked" => status "Dependency". "done/finished" => status "Completed".\n'+
@@ -2108,7 +2203,7 @@ function aiResultBlock(){
   return '';
 }
 function vAI(){
-  var h=topbar('AI',esc(aiConfigured()?('via '+AI_PROV[aiProv()].name):'AI command center'),true,'<button class="iconbtn" data-act="ai-key-edit" title="AI settings">'+I('sliders')+'</button>');
+  var h=topbar('Universal AI Assistant',esc(aiConfigured()?('via '+AI_PROV[aiProv()].name):'Command center'),true,'<button class="iconbtn" data-act="go-search" title="Global search">'+I('search')+'</button><button class="iconbtn" data-act="ai-key-edit" title="AI settings">'+I('sliders')+'</button>');
   if(!aiConfigured()||aiState.editKey){
     var prov=aiProv();
     var models=aiModelsCache();
@@ -2135,10 +2230,10 @@ function vAI(){
     h+='<p class="ai-mini">Key: '+esc(AI_PROV[prov].url)+' \u00b7 Data is sent to the provider only when you run a command.</p></div>';
     return h;
   }
-  h+='<div class="ai-cmdbar"><textarea id="aiInput" class="ai-cmd" rows="1" placeholder="Message AI\u2026  (e.g. add a task to call BCP tomorrow)" data-chg="ai-input" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();var b=document.querySelector(\'[data-act=ai-send]\');if(b)b.click();}">'+esc(aiState.input)+'</textarea><button class="ai-sendbtn" data-act="ai-send"'+(aiState.busy?' disabled':'')+'>'+I('spark')+'</button></div>';
+  h+='<div class="ai-cmdbar"><textarea id="aiInput" class="ai-cmd" rows="1" placeholder="Tell Actionables what you need\u2026  (e.g. move Rahul\u2019s ICICI task to tomorrow)" data-chg="ai-input" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();var b=document.querySelector(\'[data-act=ai-send]\');if(b)b.click();}">'+esc(aiState.input)+'</textarea><button class="ai-sendbtn" data-act="ai-send"'+(aiState.busy?' disabled':'')+'>'+I('spark')+'</button></div>';
   if(aiState.err)h+='<div class="ai-err" style="margin:0 16px 10px">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
   if(!aiChat.length){
-    h+='<div class="ai-hello">'+I('spark')+'<div class="ai-hello-t">AI command center</div><div class="ai-hello-s">Type anything \u2014 add, update, find, remove or report on tasks. I\u2019ll understand it, do it, and confirm.</div></div>';
+    h+='<div class="ai-hello">'+I('spark')+'<div class="ai-hello-t">Universal AI Assistant</div><div class="ai-hello-s">Type anything \u2014 add, update, find, remove or report on tasks. I\u2019ll understand it, validate the change, ask for confirmation, then apply it.</div></div>';
     var sugg=['Show me all overdue tasks','Add a task to follow up with John tomorrow','Report of this month\u2019s completed tasks','What\u2019s assigned to me?','Change the ICICI task priority to high'];
     h+='<div class="ai-sugg">'+sugg.map(function(sg){return '<button class="ai-sg" data-act="ai-suggest" data-q="'+esc(sg)+'">'+esc(sg)+'</button>';}).join('')+'</div>';
     return h;
@@ -2431,7 +2526,50 @@ function aiPatchFor(a,c){
   return {patch:patch,prev:prev,diff:diff};
 }
 
+function aiValidateAdd(it){
+  var errs=[];
+  if(!it.lineItem||!it.lineItem.trim())errs.push('Task title is missing');
+  if(!it.projectId)errs.push('Project could not be matched');
+  if(it.etaKind==='date'&&(!it.eta||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(it.eta)))errs.push('ETA date is invalid');
+  if(it.etaKind==='range'&&(!it.eta||!it.etaEnd||diffDays(it.etaEnd,it.eta)<0))errs.push('ETA range is invalid');
+  return errs;
+}
+function aiValidatedUpdate(a,c){
+  var pr=aiPatchFor(a,c),errs=[];
+  if(!pr.diff.length)errs.push('No actual change');
+  if(c.status!==undefined&&STATUSES.indexOf(c.status)<0)errs.push('Invalid status');
+  if(c.owners!==undefined&&[].concat(c.owners||[]).length&&!aiMapOwners(c.owners).length)errs.push('Owner/SPOC could not be matched');
+  if((c.etaKind==='date'||c.etaKind===undefined)&&c.eta!==undefined&&c.eta&&!/^\d{4}-\d{2}-\d{2}$/.test(c.eta))errs.push('ETA date is invalid');
+  if(c.etaKind==='range'&&(!c.eta||!c.etaEnd||diffDays(c.etaEnd,c.eta)<0))errs.push('ETA range is invalid');
+  return {patch:pr.patch,prev:pr.prev,diff:pr.diff,errors:errs};
+}
+function aiPendingCard(p){
+  var h='<div class="ai-pending"><div class="ai-pending-head"><span>'+I('alert')+'</span><b>Review changes before applying</b></div>';
+  if(p.kind==='add')h+='<div class="ai-pending-list">'+p.items.map(function(it){return '<div class="ai-pchg"><b>ADD · '+esc(it.lineItem)+'</b><span>'+esc([it._projLabel,it._ownerLabel,it.etaLabel,it.status].filter(Boolean).join(' · '))+'</span></div>';}).join('')+'</div>';
+  if(p.kind==='update')h+='<div class="ai-pending-list">'+p.items.map(function(it){return '<div class="ai-pchg"><b>UPDATE · '+esc(it.title)+'</b>'+it.diff.map(function(d){return '<span>'+esc(d[0])+': '+(d[1]?'<s>'+esc(d[1])+'</s> → ':'')+'<i>'+esc(d[2])+'</i></span>';}).join('')+'</div>';}).join('')+'</div>';
+  if(p.kind==='delete')h+='<div class="ai-pending-list">'+p.items.map(function(it){return '<div class="ai-pchg"><b>DELETE · '+esc(it.title)+'</b><span>'+esc(it.meta||'This action cannot be automatically reversed.')+'</span></div>';}).join('')+'</div>';
+  if(p.errors&&p.errors.length)h+='<div class="ai-err" style="margin-top:10px">'+I('alert')+'<span>'+esc(p.errors.join(' · '))+'</span></div>';
+  else h+='<div class="ai-actions"><button class="btn ghost" data-act="ai-cancel-pending">Cancel</button><button class="btn pri" data-act="ai-apply-pending">Apply '+(p.items.length)+' change'+(p.items.length===1?'':'s')+'</button></div>';
+  return h+'</div>';
+}
+function aiApplyPending(){
+  var p=aiState.pending;if(!p)return;
+  if(p.kind==='add'){
+    var rows=[];p.items.forEach(function(it){var a=aiCreate(it);rows.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,meta:[it._projLabel,it._ownerLabel,it.etaLabel,it.status].filter(Boolean).join(' · ')});});
+    saveState();aiState.pending=null;aiChatPush('ai','Applied '+rows.length+' change'+(rows.length===1?'':'s')+'.',{type:'added',rows:rows,undo:{kind:'add',ids:rows.map(function(x){return x.id;})}});
+  }else if(p.kind==='update'){
+    var rows=[],undo=[];p.items.forEach(function(it){var a=actById(it.id);if(!a)return;updateAct(a.id,it.patch);rows.push({title:(a.ticket?a.ticket+' — ':'')+a.lineItem,diff:it.diff});undo.push({id:a.id,patch:it.prev});});
+    saveState();aiState.pending=null;aiChatPush('ai','Applied '+rows.length+' change'+(rows.length===1?'':'s')+'.',{type:'updated',rows:rows,undo:{kind:'update',changes:undo}});
+  }else if(p.kind==='delete'){
+    var removed=[];p.items.forEach(function(it){var a=actById(it.id);if(!a)return;removed.push({ix:S.actionables.indexOf(a),a:a,title:(a.ticket?a.ticket+' — ':'')+a.lineItem});});
+    removed.slice().sort(function(a,b){return b.ix-a.ix;}).forEach(function(r){S.actionables.splice(r.ix,1);});
+    saveState();aiState.pending=null;aiChatPush('ai','Applied '+removed.length+' deletion'+(removed.length===1?'':'s')+'.',{type:'deleted',rows:removed,undo:{kind:'delete',removed:removed}});
+  }
+  render();
+}
+
 async function aiSend(){
+  if(aiState.pending){toast('Review the proposed change first');return;}
   var text=(aiState.input||'').trim(); if(!text)return;
   aiChatPush('user',text);
   aiState.input=''; aiState.busy=true; aiState.err=''; render();
@@ -2448,49 +2586,46 @@ function aiExec(o){
   var act=(o&&o.action)||'answer';
   if(act==='add'){
     var items=(o.add||[]).map(aiNormalize).filter(function(x){return x.lineItem;});
-    if(!items.length){aiChatPush('ai', (o&&o.reply)||'I couldn\u2019t find task details to add \u2014 try including what and when.');return;}
-    var rows=[]; items.forEach(function(it){var a=aiCreate(it);rows.push({id:a.id,title:(a.ticket?a.ticket+' \u2014 ':'')+a.lineItem,meta:[it._projLabel,it._ownerLabel,it.etaLabel,it.status].filter(Boolean).join(' \u00b7 ')});});
-    saveState();
-    aiChatPush('ai', (o&&o.reply)||('Added '+rows.length+' task'+(rows.length===1?'':'s')+'.'), {type:'added',rows:rows,undo:{kind:'add',ids:rows.map(function(x){return x.id;})}});
+    if(!items.length){aiChatPush('ai',(o&&o.reply)||'I could not find task details to add.');return;}
+    var errors=[];items.forEach(function(it){errors=errors.concat(aiValidateAdd(it).map(function(e){return it.lineItem+': '+e;}));});
+    aiState.pending={kind:'add',items:items,errors:errors};
+    aiChatPush('ai',(o&&o.reply)||'I prepared the change for review.',{type:'pending',pending:aiState.pending});
   } else if(act==='update'){
-    var rows2=[],undo=[];
-    (o.update||[]).forEach(function(c){ if(!c||!c.id)return; var a=actById(c.id); if(!a)return; var pr=aiPatchFor(a,c); if(!pr.diff.length)return; updateAct(a.id,pr.patch); rows2.push({title:(a.ticket?a.ticket+' \u2014 ':'')+a.lineItem,diff:pr.diff}); undo.push({id:a.id,patch:pr.prev}); });
-    if(!rows2.length){aiChatPush('ai', (o&&o.reply)||'I couldn\u2019t find a matching task to update \u2014 try naming the ticket, title or project.');return;}
-    saveState();
-    aiChatPush('ai', (o&&o.reply)||('Updated '+rows2.length+' task'+(rows2.length===1?'':'s')+'.'), {type:'updated',rows:rows2,undo:{kind:'update',changes:undo}});
+    var items2=[],errors2=[];
+    (o.update||[]).forEach(function(c){if(!c||!c.id)return;var a=actById(c.id);if(!a){errors2.push('Task '+c.id+' was not found');return;}var pr=aiValidatedUpdate(a,c);if(pr.errors.length)errors2=errors2.concat(pr.errors.map(function(e){return a.lineItem+': '+e;}));else items2.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,patch:pr.patch,prev:pr.prev,diff:pr.diff});});
+    if(!items2.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid change to apply.');return;}
+    aiState.pending={kind:'update',items:items2,errors:errors2};
+    aiChatPush('ai',(o&&o.reply)||'I prepared the change for review.',{type:'pending',pending:aiState.pending});
   } else if(act==='delete'){
-    var removed=[];
-    (o.delete||[]).forEach(function(id){var a=actById(id); if(!a)return; removed.push({ix:S.actionables.indexOf(a),a:a,title:(a.ticket?a.ticket+' \u2014 ':'')+a.lineItem});});
-    if(!removed.length){aiChatPush('ai', (o&&o.reply)||'I couldn\u2019t find that task to remove.');return;}
-    removed.slice().sort(function(x,y){return y.ix-x.ix;}).forEach(function(r){S.actionables.splice(r.ix,1);});
-    saveState();
-    aiChatPush('ai', (o&&o.reply)||('Removed '+removed.length+' task'+(removed.length===1?'':'s')+'.'), {type:'deleted',rows:removed,undo:{kind:'delete',removed:removed}});
+    var items3=[],errors3=[];
+    (o.delete||[]).forEach(function(id){var a=actById(id);if(!a){errors3.push('Task '+id+' was not found');return;}items3.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,meta:(a.projectId==='__personal'?'Personal':projName(a.projectId))+' · '+spocLabel(a)});});
+    if(!items3.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid task to delete.');return;}
+    aiState.pending={kind:'delete',items:items3,errors:errors3};
+    aiChatPush('ai',(o&&o.reply)||'I prepared the deletion for review.',{type:'pending',pending:aiState.pending});
   } else if(act==='search'){
     var sids;
-    if(o.search&&o.search.filter&&Object.keys(o.search.filter).length){ sids=aiFilterList(o.search.filter).map(function(a){return a.id;}); }
-    else { sids=((o.search&&o.search.ids)||[]).filter(function(id){return !!actById(id);}); }
-    aiChatPush('ai', (o&&o.reply)||(sids.length?('Found '+sids.length+' task'+(sids.length===1?'':'s')+'.'):'No matching tasks found.'), sids.length?{type:'search',ids:sids}:null);
+    if(o.search&&o.search.filter&&Object.keys(o.search.filter).length){sids=aiFilterList(o.search.filter).map(function(a){return a.id;});}
+    else{sids=((o.search&&o.search.ids)||[]).filter(function(id){return !!actById(id);});}
+    aiChatPush('ai',(o&&o.reply)||(sids.length?('Found '+sids.length+' task'+(sids.length===1?'':'s')+'.'):'No matching tasks found.'),sids.length?{type:'search',ids:sids}:null);
   } else if(act==='report'){
     var rlist;
-    if(o.report&&o.report.filter&&Object.keys(o.report.filter).length){ rlist=aiFilterList(o.report.filter); }
-    else { rlist=((o.report&&o.report.ids)||[]).map(actById).filter(Boolean); }
-    if(!rlist.length){aiChatPush('ai', (o&&o.reply)||'No tasks matched that report.');return;}
-    var fmt=((o.report&&o.report.format)||'pdf').toLowerCase();
-    var label=(o.report&&o.report.label)||'AI report';
-    if(fmt==='excel'||fmt==='xlsx'){exportExcel(null,label,rlist);} else {aiReportPdf(rlist,label);}
-    aiChatPush('ai', (o&&o.reply)||('Downloaded a '+((fmt==='excel'||fmt==='xlsx')?'spreadsheet':'PDF')+' report of '+rlist.length+' task'+(rlist.length===1?'':'s')+'.'));
+    if(o.report&&o.report.filter&&Object.keys(o.report.filter).length)rlist=aiFilterList(o.report.filter);else rlist=((o.report&&o.report.ids)||[]).map(actById).filter(Boolean);
+    if(!rlist.length){aiChatPush('ai',(o&&o.reply)||'No tasks matched that report.');return;}
+    var fmt=((o.report&&o.report.format)||'pdf').toLowerCase(),label=(o.report&&o.report.label)||'AI report';
+    if(fmt==='excel'||fmt==='xlsx')exportExcel(null,label,rlist);else aiReportPdf(rlist,label);
+    aiChatPush('ai',(o&&o.reply)||('Downloaded a '+((fmt==='excel'||fmt==='xlsx')?'spreadsheet':'PDF')+' report of '+rlist.length+' task'+(rlist.length===1?'':'s')+'.'));
   } else if(act==='clarify'){
-    aiChatPush('ai', (o&&o.reply)||'Could you clarify which task you mean?');
+    aiChatPush('ai',(o&&o.reply)||'Could you clarify which task you mean?');
   } else {
-    aiChatPush('ai', (o&&o.reply)||'\u2014', {type:'answer'});
+    aiChatPush('ai',(o&&o.reply)||'—',{type:'answer'});
   }
 }
-
 function aiBubble(m,idx){
   return '<div class="ai-msg ai-ai"><div class="ai-bub ai-md">'+aiMd(m.text||'')+'</div>'+(m.card?aiCard(m.card,idx):'')+'</div>';
 }
 function aiCard(c,idx){
   if(!c)return '';
+  if(c.type==='pending')return aiPendingCard(c.pending||aiState.pending||{});
   var undoBtn=(c.undo&&!c.undone)?'<button class="ai-undo" data-act="ai-undo" data-i="'+idx+'">Undo</button>':(c.undone?'<span class="ai-undone">\u2713 Undone</span>':'');
   if(c.type==='search'){
     var items=(c.ids||[]).map(actById).filter(Boolean);
