@@ -20,7 +20,7 @@
 
   var cfg = window.FIREBASE_CONFIG || null;
   var auth = null, db = null, ref = null, unsub = null;
-  var uid = null;
+  var uid = null, unlocked = false;
   var status = { configured: false, signedIn: false, email: '', label: 'Local only' };
   var pushTimer = null, offlineOnly = false, started = false;
 
@@ -77,7 +77,7 @@
         '<div class="lock-avatar">A</div>' +
         '<div class="cg-h">Actionables</div>' +
         '<div class="lock-user" id="cgUserLabel">Project Management Workspace</div>' +
-        '<div class="cg-s">Sign in to access your workspace</div>' +
+        '<div class="cg-s" id="cgSub">Enter your password to unlock your workspace</div>' +
         '<div class="cg-err" id="cgErr"></div>' +
         '<label class="cg-l">Email</label>' +
         '<input id="cgEmail" type="email" autocomplete="username" placeholder="you@example.com">' +
@@ -101,9 +101,18 @@
 
     g.querySelector('#cgIn').addEventListener('click', function () {
       var c = creds();
-      if (!c.e || !c.p) { setGateErr(g, 'Enter email and password'); return; }
+      if (!c.e || !c.p) { setGateErr(g, 'Enter your password'); return; }
       busy(true); setGateErr(g, '');
-      auth.signInWithEmailAndPassword(c.e, c.p).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
+      var current = auth && auth.currentUser;
+      var action = current && current.email === c.e
+        ? current.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(c.e, c.p))
+        : auth.signInWithEmailAndPassword(c.e, c.p);
+      action.then(function () {
+        unlocked = true;
+        busy(false);
+        gate(false);
+        subscribe();
+      }).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
     });
     g.querySelector('#cgUp').addEventListener('click', function () {
       var c = creds();
@@ -207,13 +216,34 @@
           if (user) {
             uid = user.uid;
             status.signedIn = true; status.email = user.email || '';
-            gate(false);
-            subscribe();
+            unlocked = false;
+            gate(true);
+            var g = document.getElementById('cloudgate');
+            if (g) {
+              var email = g.querySelector('#cgEmail');
+              var sub = g.querySelector('#cgSub');
+              var up = g.querySelector('#cgUp');
+              var reset = g.querySelector('#cgReset');
+              if (email) { email.value = user.email || ''; email.readOnly = true; email.setAttribute('aria-readonly','true'); }
+              if (sub) sub.textContent = 'Enter your password to unlock your workspace';
+              if (up) up.style.display = 'none';
+              if (reset) reset.style.display = 'inline-block';
+            }
+            setLabel('Locked');
           } else {
-            uid = null; status.signedIn = false; status.email = '';
+            uid = null; status.signedIn = false; status.email = ''; unlocked = false;
             if (unsub) { try { unsub(); } catch (e) {} unsub = null; }
             ref = null;
             gate(true); setLabel('Signed out');
+            var g = document.getElementById('cloudgate');
+            if (g) {
+              var email = g.querySelector('#cgEmail');
+              var sub = g.querySelector('#cgSub');
+              var up = g.querySelector('#cgUp');
+              if (email) { email.readOnly = false; email.removeAttribute('aria-readonly'); }
+              if (sub) sub.textContent = 'Sign in to access your workspace';
+              if (up) up.style.display = '';
+            }
           }
         });
       }).catch(function () {
