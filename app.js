@@ -124,7 +124,11 @@ var filters=defaultFilters();
 var peopleView={sort:'open',filt:'all',mode:'people'};
 var tagDropOpen=false;
 var calState=null;
+<<<<<<< HEAD
 var exportSel={projId:'',from:'',to:'',preset:'all'};
+=======
+var exportSel={projId:''};
+>>>>>>> backup-global-ai
 var globalSearchState={q:''};
 
 function defaultFilters(){
@@ -526,7 +530,11 @@ function nav(name,params,noHist){
 }
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
+<<<<<<< HEAD
   var moreViews=['projects','projectDetail','reports','notifications','settings','brief','workload'];
+=======
+  var moreViews=['projects','projectDetail','reports','notifications','settings','brief'];
+>>>>>>> backup-global-ai
   function tab(k,ic,lbl){
     var on=(k==='more')?(moreViews.indexOf(view.name)>=0):(k==='ai')?(view.name==='ai'):(view.name!=='ai'&&moreViews.indexOf(view.name)<0);
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';
@@ -2617,9 +2625,12 @@ function aiValidateAdd(it){
   if(!it.projectId)errs.push('Project could not be matched');
   if(it.etaKind==='date'&&(!it.eta||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(it.eta)))errs.push('ETA date is invalid');
   if(it.etaKind==='range'&&(!it.eta||!it.etaEnd||diffDays(it.etaEnd,it.eta)<0))errs.push('ETA range is invalid');
+<<<<<<< HEAD
   if(it.recurrence&&it.recurrence.enabled&&it.etaKind!=='date'&&it.etaKind!=='range')errs.push('Recurring task needs an ETA');
   if(it.recurrence&&it.recurrence.enabled&&it.recurrence.endDate&&it.eta&&it.recurrence.endDate<it.eta)errs.push('Recurrence end date is before the ETA');
   if(it.followup&&it.followup.on&&(!it.followup.date||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(it.followup.date)))errs.push('Follow-up date is invalid');
+=======
+>>>>>>> backup-global-ai
   return errs;
 }
 function aiValidatedUpdate(a,c){
@@ -2629,7 +2640,10 @@ function aiValidatedUpdate(a,c){
   if(c.owners!==undefined&&[].concat(c.owners||[]).length&&!aiMapOwners(c.owners).length)errs.push('Owner/SPOC could not be matched');
   if((c.etaKind==='date'||c.etaKind===undefined)&&c.eta!==undefined&&c.eta&&!/^\d{4}-\d{2}-\d{2}$/.test(c.eta))errs.push('ETA date is invalid');
   if(c.etaKind==='range'&&(!c.eta||!c.etaEnd||diffDays(c.etaEnd,c.eta)<0))errs.push('ETA range is invalid');
+<<<<<<< HEAD
   if(c.followup&&c.followup.nextFollowup&&!/^\d{4}-\d{2}-\d{2}$/.test(c.followup.nextFollowup))errs.push('Follow-up date is invalid');
+=======
+>>>>>>> backup-global-ai
   return {patch:pr.patch,prev:pr.prev,diff:pr.diff,errors:errs};
 }
 function aiPendingCard(p){
