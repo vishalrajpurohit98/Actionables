@@ -157,7 +157,7 @@ function ensureDefaults(){
   S.version=Math.max(S.version,9);
   S.exportPrefs=S.exportPrefs||{projId:'',from:'',to:'',preset:'all'};
   S.settings=S.settings||{};
-  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default'};
+  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default',density:'comfortable'};
   for(var k in d)if(S.settings[k]===undefined)S.settings[k]=d[k];
   if(!Array.isArray(S.taskTypes)||!S.taskTypes.length)S.taskTypes=['Activity','Development','Testing','Deployment','Meeting','Follow-up','Documentation'];
   if(S.taskTypes.indexOf('Activity')<0)S.taskTypes.unshift('Activity');
@@ -195,7 +195,7 @@ function applyTheme(){
   if(!document.documentElement)return;
   var s=(S&&S.settings)?S.settings:{};
   var root=document.documentElement;
-  root.className=(s.theme||'dark')==='light'?'light-theme':'';
+  root.className=((s.theme||'dark')==='light'?'light-theme ':'')+((s.density||'comfortable')==='compact'?'density-compact':'');
   var acc=ACCENTS[s.accent||'orange']||ACCENTS.orange;
   root.style.setProperty('--acc',acc.c);
   root.style.setProperty('--acc-dim',acc.d);
@@ -258,7 +258,10 @@ function relEta(a){
 function remDue(a,t){return isOpen(a)&&a.rem&&a.rem.on&&!a.rem.done&&a.rem.date&&a.rem.date<=t;}
 function createdDateISO(a){return a&&a.createdAt?isoFromMs(a.createdAt):'';}
 function assignedDateISO(a){return a&&a.assignedAt?isoFromMs(a.assignedAt):'';}
-function agingDays(a,asOf){var start=a&&a.createdAt?isoFromMs(a.createdAt):todayISO(),end=a&&a.status==='Completed'&&a.completedAt?isoFromMs(a.completedAt):(asOf||todayISO());return start&&end?Math.max(0,diffDays(end,start)):0;}
+function updatedDateISO(a){return a&&a.updatedAt?isoFromMs(a.updatedAt):'';}
+function agingDays(a,asOf){var start=assignedDateISO(a)||createdDateISO(a)||todayISO(),end=a&&a.status==='Completed'&&a.completedAt?isoFromMs(a.completedAt):(asOf||todayISO());return start&&end?Math.max(0,diffDays(end,start)):0;}
+function staleDays(a,asOf){if(!a||a.status==='Completed')return 0;var u=updatedDateISO(a)||createdDateISO(a);return u?Math.max(0,diffDays(asOf||todayISO(),u)):0;}
+function staleChip(a){var d=staleDays(a);return d>=7?'<span class="stale-chip">No update '+d+'d</span>':'';}
 function agingBucket(days){if(days<=3)return{label:'0–3 days',cls:'age-good'};if(days<=7)return{label:'4–7 days',cls:'age-watch'};if(days<=14)return{label:'8–14 days',cls:'age-warn'};return{label:'15+ days',cls:'age-bad'};}
 function ageChip(a){var ag=agingDays(a),b=agingBucket(ag);return '<span class="agechip '+b.cls+'">Age '+ag+'d</span>';}
 function followupAgeDays(a,t){var r=a&&a.rem;if(!r||!r.on||r.done)return 0;var start=r.requestedOn||createdDateISO(a);return start?Math.max(0,diffDays(t||todayISO(),start)):0;}
@@ -439,8 +442,9 @@ function updateAct(id,patch){
   if(patch.tags!==undefined){var okt=(a.tags||[]).slice().sort().join('\u0001'),nkt=patch.tags.slice().sort().join('\u0001');if(okt!==nkt){a.tags=patch.tags.slice();logAct(a,'Tags updated','',patch.tags.join(', '));changed=true;}}
   if(patch.spocIds!==undefined){
     var oldK=a.spocIds.slice().sort().join(','),newK=patch.spocIds.slice().sort().join(',');
-    if(oldK!==newK){logAct(a,'Owner/SPOC changed',spocLabel(a),patch.spocIds.length?patch.spocIds.map(function(i2){return personName(i2);}).join(' & '):'To be assigned');a.spocIds=patch.spocIds.slice();if(patch.spocIds.length)a.assignedAt=Date.now();else a.assignedAt=null;changed=true;}
+    if(oldK!==newK){logAct(a,'Owner/SPOC changed',spocLabel(a),patch.spocIds.length?patch.spocIds.map(function(i2){return personName(i2);}).join(' & '):'To be assigned');a.spocIds=patch.spocIds.slice();if(patch.spocIds.length&&!a.assignedAt)a.assignedAt=Date.now();changed=true;}
   }
+  if(patch.assignedAt!==undefined){var nad=patch.assignedAt||null;if(nad!==a.assignedAt){var ab=assignedDateISO(a)||createdDateISO(a)||'N/A',an=nad?isoFromMs(nad):'N/A';a.assignedAt=nad;logAct(a,'Assigned date changed',ab,an);changed=true;}}
   var ek=patch.etaKind!==undefined?patch.etaKind:a.etaKind,ev=patch.eta!==undefined?patch.eta:a.eta,ee=patch.etaEnd!==undefined?patch.etaEnd:a.etaEnd;
   if(ek!=='range')ee='';if(ek==='none'||ek==='tbd'){ev='';ee='';}
   if(ek!==a.etaKind||ev!==a.eta||ee!==a.etaEnd){var before=fmtEta(a);a.etaKind=ek;a.eta=ev;a.etaEnd=ee;logAct(a,'ETA changed',before,fmtEta(a));changed=true;}
@@ -477,7 +481,7 @@ function actRow(a,opts){
       (desc?'<div class="row-desc">'+esc(desc)+'</div>':'')+
       '<div class="row-meta"><span class="badge '+stCls(a.status)+'">'+esc(stShort(a.status))+'</span>'+typeChip(a)+
         '<span class="who'+(a.spocIds.length?'':' un')+'">'+esc(spocLabel(a))+'</span>'+
-        fuChip(a,t)+(a.categoryId?'<span class="chipmini">'+esc(categoryName(a.projectId,a.categoryId))+'</span>':'')+tagsHtml(a)+'</div>'+
+        '<span class="date-meta">Assigned '+esc(fmtDY(assignedDateISO(a)||createdDateISO(a)))+'</span>'+ageChip(a)+staleChip(a)+fuChip(a,t)+(a.categoryId?'<span class="chipmini">'+esc(categoryName(a.projectId,a.categoryId))+'</span>':'')+tagsHtml(a)+'</div>'+
     '</div>'+
     '<div class="row-side">'+etaView(a)+(a.important?'<div class="row-prio">'+I('star')+'Important</div>':'')+'</div>'+
   '</button>';
@@ -916,7 +920,7 @@ function vSettings(){
     '</button></div>'+
     '<div class="fld" style="margin-top:16px"><label>Accent colour</label>'+
     '<div class="swatches">'+Object.keys(ACCENTS).map(function(k){var a=ACCENTS[k];var on=(s.accent||'orange')===k;return '<button class="swatch'+(on?' on':'')+'" data-act="set-accent" data-k="'+k+'" style="--sw:'+a.c+'" title="'+a.name+'">'+(on?I('check'):'')+'</button>';}).join('')+'</div></div>'+
-    '<div class="fld" style="margin-top:16px"><label>Font style</label>'+
+    '<div class="fld" style="margin-top:16px"><label>Daily update density</label><select data-chg="set-density"><option value="comfortable"'+((s.density||'comfortable')==='comfortable'?' selected':'')+'>Comfortable · easier reading</option><option value="compact"'+(s.density==='compact'?' selected':'')+'>Compact · more tasks on screen</option></select><div class="hint">Compact is useful for daily bulk review.</div></div>'+     '<div class="fld" style="margin-top:16px"><label>Font style</label>'+
     '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:4px">'+FONTS.map(function(fo){var on=(s.font||'default')===fo[0];return '<button class="chip'+(on?' on':'')+'" data-act="set-font" data-k="'+fo[0]+'" style="font-family:'+FONT_STACK[fo[0]]+'">'+fo[1]+'</button>';}).join('')+'</div></div>'+
     '</div>';
   h+='<div class="eyebrow">You</div><div class="pane">'+
@@ -1032,9 +1036,11 @@ function renderDetail(rec){
     '<div class="fld"><label>Project</label><div class="kv">'+esc(projName(a.projectId))+'</div></div>'+
     '<div class="fld"><label>Ticket / Ref ID</label><div class="kv num">'+esc(a.ticket||'N/A')+'</div></div>'+
     '<div class="fld wide"><label>Line item</label><div class="kv">'+esc(a.lineItem)+'</div></div>'+
-    '<div class=\"fld\"><label>Assigned date</label><div class=\"kv\">'+esc(fmtDY(assignedDateISO(a)||createdDateISO(a)))+'</div></div>'+
+    '<div class=\"fld\"><label>Assigned date</label><input type=\"date\" class=\"date-edit\" data-chg=\"d-assigned\" value=\"'+esc(assignedDateISO(a)||createdDateISO(a))+'\"></div>'+
     '<div class=\"fld\"><label>Age</label><div class=\"kv\"><span class=\"agechip '+agingBucket(agingDays(a)).cls+'\">'+agingDays(a)+' day'+(agingDays(a)===1?'':'s')+'</span></div></div>'+
+    '<div class=\"fld\"><label>Last updated</label><div class=\"kv\">'+esc(fmtDY(updatedDateISO(a)||createdDateISO(a)))+'</div></div>'+
     '</div>';
+  if(staleDays(a)>=7)b+='<div class="stale-note">'+I('clock')+' No update for '+staleDays(a)+' days. Review this actionable.</div>';
   b+='<div class="eyebrow" style="padding:16px 0 8px">Owner / SPOC</div>';
   var _assigned=a.spocIds.map(function(id){return '<button class="ownchip sel" data-act="d-spoc" data-id="'+id+'">'+I('check')+'<span>'+esc(personName(id))+'</span><b>\u00d7</b></button>';}).join('');
   var _avail=peopleSorted().filter(function(u){return a.spocIds.indexOf(u.id)<0;});
@@ -1108,7 +1114,7 @@ function openForm(id,prefill){
   var quick=!!(prefill&&prefill.quick);
   if(a){
     f={projectId:a.projectId,ticket:a.ticket,ticketUrl:a.ticketUrl,lineItem:a.lineItem,task:a.task,
-      spocIds:a.spocIds.slice(),etaKind:a.etaKind,eta:a.eta,etaEnd:a.etaEnd,
+      spocIds:a.spocIds.slice(),assignedAt:a.assignedAt||null,etaKind:a.etaKind,eta:a.eta,etaEnd:a.etaEnd,
       remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',remWaiting:a.rem?a.rem.waitingFor:'',remRequested:a.rem?a.rem.requestedOn:'',remExpected:a.rem?a.rem.expectedBy:'',
       recurrence:a.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:a.id},
       status:a.status,notes:a.notes,important:!!a.important,tags:(a.tags||[]).slice(),type:a.type||'Activity',categoryId:a.categoryId||'',quick:false};
@@ -1116,7 +1122,7 @@ function openForm(id,prefill){
     var P=prefill||{};
     var proj=quick?'__personal':(P.projectId||(S.projects[0]?S.projects[0].id:''));
     f={projectId:proj,ticket:P.ticket||'',ticketUrl:'',lineItem:P.lineItem||'',task:P.task||'',spocIds:P.spocIds?P.spocIds.slice():[],
-      etaKind:P.etaKind||(P.eta?'date':'none'),eta:P.eta||'',etaEnd:P.etaEnd||'',
+      assignedAt:P.assignedAt!==undefined?P.assignedAt:Date.now(),etaKind:P.etaKind||(P.eta?'date':'none'),eta:P.eta||'',etaEnd:P.etaEnd||'',
       remOn:false,remDate:'',remTime:'',remNote:'',remWaiting:'',remRequested:'',remExpected:'',recurrence:P.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:''},status:P.status||'In Progress',notes:P.notes||'',
       important:!!P.important,tags:(P.tags||[]).slice(),type:P.type||'Activity',categoryId:P.categoryId||'',quick:quick};
   }
@@ -1159,6 +1165,8 @@ function renderForm(rec){
     '</div>'+
     '<div class="sech">Assignment</div><div class="meta">'+
       '<div class="fld wide"><label>5 \u00b7 Owner / SPOC</label>'+ownerSelHtml(f)+'</div>'+
+      '<div class="fld"><label>Assigned date</label><input type="date" data-chg="f-assigned" value="'+esc(f.assignedAt?isoFromMs(f.assignedAt):todayISO())+'"></div>'+
+      '<div class="fld"><label>Age</label><div class="kv readonly-calc">'+(rec.data.id?agingDays(actById(rec.data.id)):'0')+' days · calculated</div></div>'+
       '<div class="fld wide"><label>6 \u00b7 Priority</label>'+impToggle+'</div>'+
       '<div class="fld wide"><label>7 \u00b7 Tags</label>'+tagEditHtml(f.tags,'f-tag-del','f-tag-add','f-tag-addbuf','fTagIn')+'</div>'+
     '</div>'+
@@ -1191,7 +1199,7 @@ function saveForm(rec){
   if(f.recurrence.enabled&&!f.recurrence.seriesId)f.recurrence.seriesId=rec.data.id||uid('series');
   if(rec.data.id){
     var a0=actById(rec.data.id);
-    updateAct(rec.data.id,{projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),lineItem:f.lineItem,task:f.task,type:f.type||'Activity',spocIds:f.spocIds,etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,status:f.status,notes:f.notes,important:f.important,tags:f.tags,recurrence:f.recurrence,categoryId:f.categoryId||''});
+    updateAct(rec.data.id,{projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),lineItem:f.lineItem,task:f.task,type:f.type||'Activity',spocIds:f.spocIds,assignedAt:f.assignedAt||null,etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,status:f.status,notes:f.notes,important:f.important,tags:f.tags,recurrence:f.recurrence,categoryId:f.categoryId||''});
     if(a0){
       var was=a0.rem&&a0.rem.on;
       if(f.remOn&&!was)remPatch(rec.data.id,{on:true,date:f.remDate,time:f.remTime,note:f.remNote,waitingFor:f.remWaiting,requestedOn:f.remRequested,expectedBy:f.remExpected,done:false},{e:'Follow-up set',t:f.remDate?fmtDY(f.remDate):''});
@@ -1205,7 +1213,7 @@ function saveForm(rec){
       lineItem:f.lineItem,task:f.task,type:f.type||'Activity',spocIds:f.spocIds.slice(),etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,
       status:f.status,important:!!f.important,tags:(f.tags||[]).slice(),rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,waitingFor:f.remWaiting,requestedOn:f.remRequested,expectedBy:f.remExpected,done:false},
       recurrence:f.recurrence,
-      notes:f.notes,comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null,archived:false,categoryId:f.categoryId||'',assignedAt:f.spocIds.length?now:null};
+      notes:f.notes,comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null,archived:false,categoryId:f.categoryId||'',assignedAt:f.assignedAt||now};
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
     if(a.rem.on)logAct(a,'Reminder set','',a.rem.date?fmtDY(a.rem.date):'');
@@ -1383,20 +1391,16 @@ function vBrief(){
 
 /* ---- MORE MENU ---- */
 function openMore(){
-  var m=metrics(),badge=notifBadgeOn(m);
   openSheet('<div class="shead"><h2>More</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody more-nav" style="padding-top:6px">'+
     '<div class="nav-group-label">WORK</div>'+
     moreRow('list','items','Actionables','All tasks, filters and quick actions')+
-    moreRow('calendar','calendar','Calendar','View work by ETA')+
     moreRow('brief','doc','Daily briefing','Today’s priorities, overdue work and follow-ups')+
     '<div class="nav-group-label">PROJECTS</div>'+
     moreRow('projects','proj','Projects','Projects and categories')+
-    moreRow('people','person','Owners / SPOCs','People and assignment load')+
     '<div class="nav-group-label">INSIGHTS</div>'+
     moreRow('workload','chart','Smart workload','Capacity, due work and overload')+
     moreRow('reports','doc','Reports & exports','PDF / Excel with project selection')+
-    moreRow('notifications','bell','Notifications',badge?'Actionables need attention today':'All clear')+
     '<div class="nav-group-label">SYSTEM</div>'+
     moreRow('settings','sliders','Settings','Theme, name, daily brief, backup')+
     '<div class="appcredit">Developed by <b>Vishal</b><span>For personal use only</span></div>'+
@@ -1737,7 +1741,8 @@ document.addEventListener('change',function(e){
     if(chg==='d-type'){if(v==='__newtype'){inputSheet('New type','Type name',function(name){name=(name||'').trim();if(name){if(S.taskTypes.indexOf(name)<0)S.taskTypes.push(name);updateAct(aid,{type:name});saveState();renderDetail(dr);render();}});return;}updateAct(aid,{type:v});renderDetail(dr);render();return;}
     if(chg==='d-spoc-add'){var aSp=actById(aid);if(v==='__new'){personSheet(function(u){var a2=actById(aid);if(a2)updateAct(aid,{spocIds:a2.spocIds.concat([u.id])});renderDetail(dr);render();});return;}if(v&&aSp&&aSp.spocIds.indexOf(v)<0)updateAct(aid,{spocIds:aSp.spocIds.concat([v])});renderDetail(dr);render();return;}
     if(chg==='d-tag-add-dd'){if(v){var aTg=actById(aid);var ntg=(aTg.tags||[]).slice();addTagTo(ntg,v);updateAct(aid,{tags:ntg});}renderDetail(dr);render();return;}
-    if(chg==='d-status')updateAct(aid,{status:v});
+    if(chg==='d-assigned')updateAct(aid,{assignedAt:v?isoToDate(v).getTime():null});
+    else if(chg==='d-status')updateAct(aid,{status:v});
     else if(chg==='d-etakind')updateAct(aid,{etaKind:v});
     else if(chg==='d-eta')updateAct(aid,{eta:v});
     else if(chg==='d-etaend')updateAct(aid,{etaEnd:v});
@@ -1756,7 +1761,7 @@ document.addEventListener('change',function(e){
       case 'f-proj':
         if(v==='__new'){inputSheet('New project','Project name',function(name){var p={id:uid('p'),name:name,code:name.split(/\s+/)[0].toUpperCase().slice(0,6)};ensureProjectCategories(p);S.projects.push(p);saveState();f.projectId=p.id;renderForm(fr);});}
         else{f.projectId=v;f.categoryId='';renderForm(fr);}break;
-      case 'f-ticket':f.ticket=v;break;case 'f-url':f.ticketUrl=v;break;case 'f-line':f.lineItem=v;break;case 'f-task':f.task=v;break;case 'f-category':f.categoryId=v;break;
+      case 'f-ticket':f.ticket=v;break;case 'f-url':f.ticketUrl=v;break;case 'f-line':f.lineItem=v;break;case 'f-task':f.task=v;break;case 'f-category':f.categoryId=v;break;case 'f-assigned':f.assignedAt=v?isoToDate(v).getTime():null;break;
       case 'f-etakind':f.etaKind=v;renderForm(fr);break;case 'f-eta':f.eta=v;break;case 'f-etaend':f.etaEnd=v;break;
       case 'f-remon':f.remOn=!!v;if(f.remOn&&!f.remDate)f.remDate=todayISO();renderForm(fr);break;
       case 'f-remdate':f.remDate=v;break;case 'f-remtime':f.remTime=v;break;case 'f-remnote':f.remNote=v;break;case 'f-remwaiting':f.remWaiting=v;break;case 'f-remrequested':f.remRequested=v;break;case 'f-remexpected':f.remExpected=v;break;
@@ -1791,6 +1796,7 @@ document.addEventListener('change',function(e){
   if(chg==='rep-from'){exportSel.from=v;exportSel.preset='custom';render();return;}
   if(chg==='rep-to'){exportSel.to=v;exportSel.preset='custom';render();return;}
   if(chg==='set-name'){S.settings.userName=v;saveState();render();return;}
+  if(chg==='set-density'){S.settings.density=v==='compact'?'compact':'comfortable';saveState();applyTheme();render();return;}
   if(chg==='set-time'){var parts=v.split(':');if(parts.length===2){S.settings.notifHour=+parts[0];S.settings.notifMinute=+parts[1];saveState();syncSchedule();toast('Daily brief at '+v);}return;}
 });
 
