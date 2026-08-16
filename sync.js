@@ -61,34 +61,43 @@
     return (err && err.message) || 'Something went wrong.';
   }
 
-  /* ---- sign-in gate overlay (self-contained) ---- */
+  /* ---- Actionables lock/login screen ---- */
   function gate(show, msg) {
     var g = document.getElementById('cloudgate');
+    document.body.classList.toggle('auth-locked', !!show);
     if (!show) { if (g && g.parentNode) g.parentNode.removeChild(g); return; }
     if (g) { if (msg) setGateErr(g, msg); return; }
     g = document.createElement('div');
     g.id = 'cloudgate';
     g.className = 'cloudgate';
     g.innerHTML =
-      '<div class="cloudcard">' +
-        '<div class="cg-h">Cloud sync</div>' +
-        '<div class="cg-s">Sign in to sync your actionables across devices. Use the same account on every device.</div>' +
+      '<div class="lock-bg"></div>' +
+      '<div class="lock-top"><div class="lock-clock" id="cgClock"></div><div class="lock-date" id="cgDate"></div></div>' +
+      '<div class="cloudcard lock-card">' +
+        '<div class="lock-avatar">A</div>' +
+        '<div class="cg-h">Actionables</div>' +
+        '<div class="lock-user" id="cgUserLabel">Project Management Workspace</div>' +
+        '<div class="cg-s">Sign in to access your workspace</div>' +
         '<div class="cg-err" id="cgErr"></div>' +
         '<label class="cg-l">Email</label>' +
         '<input id="cgEmail" type="email" autocomplete="username" placeholder="you@example.com">' +
         '<label class="cg-l">Password</label>' +
-        '<input id="cgPass" type="password" autocomplete="current-password" placeholder="At least 6 characters">' +
-        '<div class="cg-btns">' +
-          '<button class="btn pri" id="cgIn">Sign in</button>' +
-          '<button class="btn ghost" id="cgUp">Create account</button>' +
-        '</div>' +
-        '<button class="cg-skip" id="cgReset">Forgot password?</button>' +
-        '<button class="cg-skip" id="cgSkip">Use offline only on this device</button>' +
+        '<input id="cgPass" type="password" autocomplete="current-password" placeholder="Enter your password">' +
+        '<div class="cg-btns"><button class="btn pri lock-unlock" id="cgIn">Unlock</button></div>' +
+        '<div class="lock-links"><button class="cg-skip" id="cgReset">Forgot password?</button><button class="cg-skip" id="cgUp">Create account</button></div>' +
+        '<div class="lock-secure">🔒 Protected by Firebase Authentication</div>' +
       '</div>';
     document.body.appendChild(g);
 
     function busy(b) { g.querySelector('#cgIn').disabled = b; g.querySelector('#cgUp').disabled = b; }
     function creds() { return { e: (g.querySelector('#cgEmail').value || '').trim(), p: g.querySelector('#cgPass').value || '' }; }
+    function updateClock(){
+      var now=new Date(), clock=g.querySelector('#cgClock'), date=g.querySelector('#cgDate');
+      if(!clock||!date)return;
+      clock.textContent=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      date.textContent=now.toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
+    }
+    updateClock(); g.__clockTimer=setInterval(updateClock,1000);
 
     g.querySelector('#cgIn').addEventListener('click', function () {
       var c = creds();
@@ -105,16 +114,12 @@
     });
     g.querySelector('#cgReset').addEventListener('click', function () {
       var c = creds();
-      if (!c.e) { setGateErr(g, 'Enter your email above, then tap Forgot password.'); return; }
+      if (!c.e) { setGateErr(g, 'Enter your email above, then choose Forgot password.'); return; }
       auth.sendPasswordResetEmail(c.e)
         .then(function () { setGateErr(g, 'Password reset email sent to ' + c.e + '.'); })
         .catch(function (err) { setGateErr(g, pretty(err)); });
     });
-    g.querySelector('#cgSkip').addEventListener('click', function () {
-      offlineOnly = true; gate(false); setLabel('Offline only (this device)');
-    });
-    if (msg) setGateErr(g, msg);
-    setTimeout(function () { var i = g.querySelector('#cgEmail'); if (i) i.focus(); }, 80);
+    setTimeout(function () { var i = g.querySelector('#cgEmail'); if (i) i.focus(); }, 120);
   }
   function setGateErr(g, e) {
     var el = g.querySelector('#cgErr');
@@ -208,13 +213,13 @@
             uid = null; status.signedIn = false; status.email = '';
             if (unsub) { try { unsub(); } catch (e) {} unsub = null; }
             ref = null;
-            if (!offlineOnly) { gate(true); setLabel('Signed out'); }
-            else setLabel('Offline only (this device)');
+            gate(true); setLabel('Signed out');
           }
         });
       }).catch(function () {
-        // SDK could not load (offline / blocked). App keeps working locally.
-        setLabel('Sync unavailable (offline)');
+        // Authentication is required when Firebase is configured. Keep the app locked if the SDK cannot load.
+        setLabel('Authentication unavailable');
+        gate(true, 'Unable to load authentication. Check your internet connection and reload.');
       });
     }
   };

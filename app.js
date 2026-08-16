@@ -195,7 +195,8 @@ function applyTheme(){
   if(!document.documentElement)return;
   var s=(S&&S.settings)?S.settings:{};
   var root=document.documentElement;
-  root.className=((s.theme||'dark')==='light'?'light-theme ':'')+((s.density||'comfortable')==='compact'?'density-compact':'');
+  var _theme=s.theme||'dark';
+  root.className=(_theme==='light'?'light-theme ':(_theme==='high-contrast'?'high-contrast-theme ':''))+((s.density||'comfortable')==='compact'?'density-compact':'');
   var acc=ACCENTS[s.accent||'orange']||ACCENTS.orange;
   root.style.setProperty('--acc',acc.c);
   root.style.setProperty('--acc-dim',acc.d);
@@ -577,8 +578,8 @@ function vHome(){
   if(m.week.length)    pills.push('<button class="sumpill sp-week"  data-act="kpi" data-q="week">'+m.week.length+' due this week</button>');
   if(m.awaitAll.length)pills.push('<button class="sumpill sp-wait"  data-act="kpi" data-q="awaiting">'+m.awaitAll.length+' dependency</button>');
   if(m.remDueL.length) pills.push('<button class="sumpill sp-fu"    data-act="kpi" data-q="followup">'+m.remDueL.length+' follow-ups due</button>');
-  var isDark=(S.settings.theme||'dark')==='dark';
-  var themeBtn='<button class="iconbtn" data-act="theme-toggle" title="Switch to '+(isDark?'light':'dark')+' theme">'+I(isDark?'sun':'moon')+'</button>';
+  var _theme=S.settings.theme||'dark';
+  var themeBtn='<button class="iconbtn" data-act="theme-toggle" title="Switch theme · current: '+themeLabel(_theme)+'">'+I(_theme==='dark'?'sun':'moon')+'</button>';
   var bell='<button class="iconbtn" data-act="go-notif">'+I('bell')+(notifBadgeOn(m)?'<span class="dot"></span>':'')+' </button>';
   var search='<button class="search-pill" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search anything…</span><kbd>Ctrl K</kbd></button>';
   var h=topbar('Actionables',esc(dateLine),false,cloudSyncBtnHtml()+cloudBadgeHtml()+themeBtn+search+bell);
@@ -904,23 +905,28 @@ function vNotifications(){
   return h;
 }
 
+function themeLabel(t){return t==='light'?'Light':t==='high-contrast'?'High Contrast':'Dark AMOLED';}
+function themeNext(t){return t==='dark'?'light':(t==='light'?'high-contrast':'dark');}
+
 /* ---- SETTINGS ---- */
 function vSettings(){
   var s=S.settings;
   var names=[];S.people.forEach(function(u){if(names.indexOf(u.name)<0)names.push(u.name);});
   if(names.indexOf(s.userName)<0)names.unshift(s.userName);
-  var isDark=(s.theme||'dark')==='dark';
+  var theme=s.theme||'dark';
   var h=topbar('Settings','Actionables v'+(A&&A.version?A.version():'2.0')+' \u00b7 offline',true,'');
   h+='<div style="height:12px"></div>';
   h+='<div class="eyebrow">Appearance</div><div class="pane">'+
-    '<div class="togglerow">'+
-    '<span class="t">'+(isDark?'Dark AMOLED theme':'Light theme')+'</span>'+
-    '<button class="btn ghost mini" data-act="theme-toggle" style="gap:6px">'+
-    I(isDark?'sun':'moon')+(isDark?'Switch to Light':'Switch to Dark')+
-    '</button></div>'+
+    '<div class="fld"><label>Theme</label><select data-chg="set-theme">'+
+      '<option value="dark"'+(theme==='dark'?' selected':'')+'>Dark AMOLED · normal</option>'+
+      '<option value="light"'+(theme==='light'?' selected':'')+'>Light · normal</option>'+
+      '<option value="high-contrast"'+(theme==='high-contrast'?' selected':'')+'>High Contrast · maximum visibility</option>'+
+    '</select><div class="hint">High Contrast increases text, border and focus visibility for daily updates.</div></div>'+
+    '<div class="theme-preview-row"><span class="theme-preview-swatch" data-theme-preview="'+esc(theme)+'"></span><span><b>'+themeLabel(theme)+'</b><small>Current appearance</small></span></div>'+
     '<div class="fld" style="margin-top:16px"><label>Accent colour</label>'+
     '<div class="swatches">'+Object.keys(ACCENTS).map(function(k){var a=ACCENTS[k];var on=(s.accent||'orange')===k;return '<button class="swatch'+(on?' on':'')+'" data-act="set-accent" data-k="'+k+'" style="--sw:'+a.c+'" title="'+a.name+'">'+(on?I('check'):'')+'</button>';}).join('')+'</div></div>'+
-    '<div class="fld" style="margin-top:16px"><label>Daily update density</label><select data-chg="set-density"><option value="comfortable"'+((s.density||'comfortable')==='comfortable'?' selected':'')+'>Comfortable · easier reading</option><option value="compact"'+(s.density==='compact'?' selected':'')+'>Compact · more tasks on screen</option></select><div class="hint">Compact is useful for daily bulk review.</div></div>'+     '<div class="fld" style="margin-top:16px"><label>Font style</label>'+
+    '<div class="fld" style="margin-top:16px"><label>Daily update density</label><select data-chg="set-density"><option value="comfortable"'+((s.density||'comfortable')==='comfortable'?' selected':'')+'>Comfortable · easier reading</option><option value="compact"'+(s.density==='compact'?' selected':'')+'>Compact · more tasks on screen</option></select><div class="hint">Compact is useful for daily bulk review.</div></div>'+
+    '<div class="fld" style="margin-top:16px"><label>Font style</label>'+
     '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:4px">'+FONTS.map(function(fo){var on=(s.font||'default')===fo[0];return '<button class="chip'+(on?' on':'')+'" data-act="set-font" data-k="'+fo[0]+'" style="font-family:'+FONT_STACK[fo[0]]+'">'+fo[1]+'</button>';}).join('')+'</div></div>'+
     '</div>';
   h+='<div class="eyebrow">You</div><div class="pane">'+
@@ -1423,7 +1429,7 @@ function briefSection(title,list,empty,limit){
   return h+'</div>';
 }
 function vBrief(){
-  var d=briefData(),m=metrics(),h=topbar('Daily briefing',fmtDY(todayISO()),true,'<button class="search-pill compact" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search</span><kbd>Ctrl K</kbd></button><button class="iconbtn" data-act="theme-toggle" title="Switch theme">'+I((S.settings.theme||'dark')==='dark'?'sun':'moon')+'</button>');
+  var d=briefData(),m=metrics(),h=topbar('Daily briefing',fmtDY(todayISO()),true,'<button class="search-pill compact" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search</span><kbd>Ctrl K</kbd></button><button class="iconbtn" data-act="theme-toggle" title="Switch theme · current: '+themeLabel(S.settings.theme||'dark')+'">'+I((S.settings.theme||'dark')==='dark'?'sun':'moon')+'</button>');
   h+='<div class="brief-wrap">'+
     intelligenceSection()+
     '<div class="brief-kpis"><div><b>'+m.overdue.length+'</b><span>Overdue</span></div><div><b>'+m.today.length+'</b><span>Due today</span></div><div><b>'+m.remDueL.length+'</b><span>Follow-ups</span></div><div><b>'+m.awaitAll.length+'</b><span>Dependencies</span></div></div>'+
@@ -1605,11 +1611,11 @@ document.addEventListener('click',function(e){
     case 'tag-toggle':{var _tt=el.getAttribute('data-tag')||'';var _ti2=-1;for(var _k=0;_k<filters.tags.length;_k++)if(filters.tags[_k].toLowerCase()===_tt.toLowerCase()){_ti2=_k;break;}if(_ti2>=0)filters.tags.splice(_ti2,1);else filters.tags.push(_tt);render();break;}
     case 'tags-clear':filters.tags=[];render();break;
     case 'notif-read':S.settings.notifSeenDate=todayISO();saveState();render();toast('Marked as read');break;
-    /* Theme toggle */
+    /* Theme toggle — cycles Dark → Light → High Contrast */
     case 'theme-toggle':{
-      S.settings.theme=(S.settings.theme||'dark')==='dark'?'light':'dark';
+      S.settings.theme=themeNext(S.settings.theme||'dark');
       saveState();applyTheme();render();
-      toast('Switched to '+(S.settings.theme==='light'?'light':'dark AMOLED')+' theme');
+      toast('Switched to '+themeLabel(S.settings.theme)+' theme');
       break;
     }
     case 'set-accent':{S.settings.accent=el.getAttribute('data-k');saveState();applyTheme();render();break;}
@@ -1851,6 +1857,7 @@ document.addEventListener('change',function(e){
   if(chg==='rep-preset'){exportSel.preset=v;var t0=todayISO();if(v==='today'){exportSel.from=t0;exportSel.to=t0;}else if(v==='7'){exportSel.from=t0;exportSel.to=addDaysISO(t0,7);}else if(v==='30'){exportSel.from=t0;exportSel.to=addDaysISO(t0,30);}else if(v==='all'){exportSel.from='';exportSel.to='';}render();return;}
   if(chg==='rep-from'){exportSel.from=v;exportSel.preset='custom';render();return;}
   if(chg==='rep-to'){exportSel.to=v;exportSel.preset='custom';render();return;}
+  if(chg==='set-theme'){S.settings.theme=(v==='light'||v==='high-contrast')?v:'dark';saveState();applyTheme();render();toast('Theme: '+themeLabel(S.settings.theme));return;}
   if(chg==='set-name'){S.settings.userName=v;saveState();render();return;}
   if(chg==='set-density'){S.settings.density=v==='compact'?'compact':'comfortable';saveState();applyTheme();render();return;}
   if(chg==='set-time'){var parts=v.split(':');if(parts.length===2){S.settings.notifHour=+parts[0];S.settings.notifMinute=+parts[1];saveState();syncSchedule();toast('Daily brief at '+v);}return;}
