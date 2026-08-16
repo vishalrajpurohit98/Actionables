@@ -1128,12 +1128,16 @@ function openForm(id,prefill){
   }
   if(a&&prefill&&prefill.aiPatch){var ap=prefill.aiPatch;Object.keys(ap).forEach(function(k){if(k==='spocIds')f.spocIds=(ap[k]||[]).slice();else if(k==='tags')f.tags=(ap[k]||[]).slice();else if(k==='important')f.important=!!ap[k];else if(Object.prototype.hasOwnProperty.call(f,k))f[k]=ap[k];});}
   var title=id?'Edit actionable':(quick?'Quick task':'Add actionable');
+  var isAIReview=!!(prefill&&prefill.aiReview);
   var rec=openSheet('<div class="shead"><h2>'+title+'</h2>'+
     '<button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody"></div>'+
-    '<div class="sfoot"><button class="btn ghost" data-act="close-sheet">Cancel</button>'+
-    '<button class="btn pri" data-act="form-save">Save</button></div>',
-    {full:!quick,tag:'form',data:{id:id||'',f:f,aiReview:!!(prefill&&prefill.aiReview),aiReviewSource:(prefill&&prefill.aiReviewSource)||''}});
+    '<div class="sfoot">'+
+    (isAIReview?'<button class="btn ghost" data-act="ai-review-reject">Reject</button>':'<button class="btn ghost" data-act="close-sheet">Cancel</button>')+
+    '<button class="btn pri" data-act="form-save">'+(isAIReview?'Save change':'Save')+'</button></div>',
+    {full:!quick,tag:'form',data:{id:id||'',f:f,aiReview:isAIReview,aiReviewSource:(prefill&&prefill.aiReviewSource)||'',
+      aiPendingKind:(prefill&&prefill.aiPendingKind)||'',aiPendingIndex:(prefill&&prefill.aiPendingIndex),
+      aiPendingItem:(prefill&&prefill.aiPendingItem)||null}});
   renderForm(rec);
 }
 function renderForm(rec){
@@ -1185,9 +1189,48 @@ function renderForm(rec){
   $('.sbody',rec.sheet).innerHTML=b;updateSaveBtn(rec,f);wireOwnerSearch(rec);
 }
 
+function aiPendingFinish(kind,index,accepted,createdId){
+  var p=aiState.pending;
+  if(!p||p.kind!==kind||index===undefined||index===null)return;
+  if(!p.items[index])return;
+  p.items.splice(index,1);
+  if(!p.items.length){
+    aiState.pending=null;
+    aiChatPush('ai',accepted?'Change saved. No other AI changes remain to review.':'Rejected. No other AI changes remain to review.',{type:'review-complete'});
+  }else{
+    var remaining=p.items.length;
+    aiChatPush('ai',accepted?'Change saved. '+remaining+' AI change'+(remaining===1?'':'s')+' remain for review.':'Rejected. '+remaining+' AI change'+(remaining===1?'':'s')+' remain for review.',{type:'pending',pending:p});
+  }
+}
+function aiOpenPendingItem(index){
+  var p=aiState.pending;if(!p||!p.items||!p.items[index])return;
+  var it=p.items[index];
+  if(p.kind==='add'){
+    var fu=it.followup||{};
+    openForm(null,{projectId:it.projectId,categoryId:it.categoryId||'',spocIds:(it.spocIds||[]).slice(),
+      lineItem:it.lineItem,task:it.task,status:it.status,etaKind:it.etaKind,eta:it.eta,etaEnd:it.etaEnd,
+      tags:(it.tags||[]).slice(),important:!!it.important,recurrence:it.recurrence,
+      remOn:!!fu.on,remDate:fu.date||'',remTime:fu.time||'',remNote:fu.note||'',remWaiting:fu.waitingFor||'',
+      remRequested:fu.requestedOn||'',remExpected:fu.expectedBy||'',
+      aiReview:true,aiReviewSource:'AI add',aiPendingKind:'add',aiPendingIndex:index,aiPendingItem:it});
+  }else if(p.kind==='update'){
+    var a=actById(it.id);if(!a){p.items.splice(index,1);render();return;}
+    openForm(a.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:it.patch||{},
+      aiPendingKind:'update',aiPendingIndex:index,aiPendingItem:it});
+  }
+}
+function aiRejectPendingItem(rec){
+  var kind=rec.data.aiPendingKind,index=rec.data.aiPendingIndex;
+  if(!kind||index===undefined||index===null){closeSheet(rec);return;}
+  closeSheet(rec);
+  aiPendingFinish(kind,index,false,'');
+  render();
+  toast('AI change rejected');
+}
+
 function saveForm(rec){
   var f=rec.data.f;
-  var _goPersonal=false;
+  var _goPersonal=false, _createdId='';
   f.tags=f.tags||[];var _ti=$('#fTagIn',rec.sheet);if(_ti&&_ti.value){parseTagList(_ti.value).forEach(function(t){addTagTo(f.tags,t);});_ti.value='';}
   if(!f.projectId){toast('Pick a project');return;}
   if(!f.lineItem||!f.lineItem.trim()){toast(f.quick?'Add a task':'Add a line item');return;}
@@ -1220,7 +1263,10 @@ function saveForm(rec){
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
     if(a.rem.on)logAct(a,'Reminder set','',a.rem.date?fmtDY(a.rem.date):'');
-    S.actionables.unshift(a);saveState();toast(f.projectId==='__personal'?'Added to your tasks':'Actionable created');_goPersonal=(f.projectId==='__personal');
+    S.actionables.unshift(a);saveState();_createdId=a.id;toast(f.projectId==='__personal'?'Added to your tasks':'Actionable created');_goPersonal=(f.projectId==='__personal');
+  }
+  if(rec.data.aiReview&&rec.data.aiPendingKind){
+    aiPendingFinish(rec.data.aiPendingKind,rec.data.aiPendingIndex,true,_createdId||rec.data.id||'');
   }
   closeSheet(rec);var det=sheetFor('detail');if(det)renderDetail(det);render();
   if(_goPersonal)nav('projectDetail',{id:'__personal',seg:'open'});
@@ -1597,9 +1643,11 @@ document.addEventListener('click',function(e){
     case 'ai-extract':{var _e=$('#aiInput');if(_e)aiState.input=_e.value;aiExtract();break;}
     case 'ai-ask':{var _e=$('#aiInput');if(_e)aiState.input=_e.value;aiAsk();break;}
     case 'ai-brief':{var _e=$('#aiProject');if(_e)aiState.project=_e.value;aiBrief();break;}
-    case 'ai-open-parsed':{var _p=aiState.parsed;if(_p)openForm(null,{projectId:_p.projectId,spocIds:_p.spocIds,lineItem:_p.lineItem,task:_p.task,status:_p.status,etaKind:_p.etaKind,eta:_p.eta,etaEnd:_p.etaEnd,tags:_p.tags});break;}
+    case 'ai-open-parsed':{var _p=aiState.parsed;if(_p)openForm(null,{projectId:_p.projectId,categoryId:_p.categoryId||'',spocIds:_p.spocIds,lineItem:_p.lineItem,task:_p.task,status:_p.status,etaKind:_p.etaKind,eta:_p.eta,etaEnd:_p.etaEnd,tags:_p.tags,important:!!_p.important,aiReview:true,aiReviewSource:'AI add'});break;}
     case 'ai-add-selected':aiAddSelected();break;
     case 'ai-send':{var _ai=$('#aiInput');if(_ai)aiState.input=_ai.value;aiSend();break;}
+    case 'ai-voice':aiStartVoice();break;
+    case 'ai-clear-chat':aiClearChat();break;
     case 'ai-apply-pending':aiApplyPending();break;
     case 'ai-cancel-pending':aiState.pending=null;aiChatPush('ai','Cancelled. No data was changed.');render();break;
     case 'ai-suggest':{aiState.input=el.getAttribute('data-q')||'';aiSend();break;}
@@ -1609,6 +1657,7 @@ document.addEventListener('click',function(e){
     case 'ai-pdf-b':{var _cm=aiChat[+el.getAttribute('data-i')];if(_cm)aiExportPDF('AI response',_cm.text||'');break;}
     case 'ai-edit':{var _ee=$('#aiInput');if(_ee)aiState.input=_ee.value;aiUpdate();break;}
     case 'ai-apply-edits':aiApplyEdits();break;
+    case 'ai-cancel-edits':{aiState.edits=null;render();toast('AI updates rejected');break;}
     case 'ai-copy':aiCopy();break;
     case 'ai-pdf':aiExportPDF(aiState.outTitle||'AI response',aiState.out||'');break;
     case 'f-important':{var fri=sheetFor('form');if(fri){fri.data.f.important=!fri.data.f.important;renderForm(fri);}break;}
@@ -1647,6 +1696,10 @@ document.addEventListener('click',function(e){
     case 'cal-today':{var n2=new Date();calState={y:n2.getFullYear(),m:n2.getMonth()};render();break;}
     /* Sheets */
     case 'close-sheet':closeTop();break;
+    case 'form-save':{var frSave=sheetFor('form');if(frSave)saveForm(frSave);break;}
+    case 'ai-review-reject':{var frReject=sheetFor('form');if(frReject)aiRejectPendingItem(frReject);break;}
+    case 'ai-pending-open':{var piOpen=parseInt(el.getAttribute('data-i'),10);if(!isNaN(piOpen))aiOpenPendingItem(piOpen);break;}
+    case 'ai-edit-proposal-open':{var eiOpen=parseInt(el.getAttribute('data-i'),10),ed=(aiState.edits||[])[eiOpen];if(ed)openForm(ed.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:ed.patch||{}});break;}
     case 'confirm-ok':{var cs=sheetFor('confirm');if(cs){var cb=cs.onOk;closeSheet(cs);if(cb)cb();}break;}
     case 'input-ok':{var isRec=sheetFor('input');if(isRec){var val=($('#inpS',isRec.sheet)||{}).value||'';val=val.trim();if(!val){toast('Enter a value');break;}var cb2=isRec.onOk;closeSheet(isRec);if(cb2)cb2(val);}break;}
     /* Detail sheet */
@@ -2185,7 +2238,7 @@ function railTipHtml(){
 }
 
 /* ================= AI features (Gemini) ================= */
-var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,edits:null,project:'__all',editKey:false,freeOnly:true,kModel:'',pending:null};
+var aiState={tab:'add',busy:false,input:'',out:'',outKind:'',err:'',items:null,parsed:null,edits:null,project:'__all',editKey:false,freeOnly:true,kModel:'',pending:null,voiceListening:false,voiceSupported:null};
 var aiChat=[];
 var AI_ROUTER_SYS='You are the command center for "Actionables", a delivery task tracker. The user types one natural-language request. Decide the single best action and respond with ONLY minified JSON (no prose, no code fences).\n'+
 'Schema: {"action":"add|update|delete|search|report|answer|clarify","reply":string,'+
@@ -2363,9 +2416,8 @@ function aiResultBlock(){
   if(aiState.err)return '<div class="ai-err">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
   if(aiState.edits){
     if(!aiState.edits.length)return '<div class="ai-note">No matching task to update. Try naming the ticket, title, project or owner.</div>';
-    var ne=aiState.edits.filter(function(x){return x._sel;}).length;
-    return '<div class="ai-items">'+aiState.edits.map(function(e,i){return '<label class="ai-item"><input type="checkbox" data-chg="ai-edit-tg" data-i="'+i+'"'+(e._sel?' checked':'')+'><span class="ai-it-b"><span class="ai-it-t">'+esc(e.title)+'</span><span class="ai-it-m">'+esc(e.project)+'</span><span class="ai-diff">'+e.diff.map(function(d){return '<span class="ai-dl"><b>'+esc(d[0])+'</b> '+(d[1]?'<s>'+esc(d[1])+'</s> \u2192 ':'')+'<i>'+esc(d[2])+'</i></span>';}).join('')+'</span></span></label>';}).join('')+
-      '<div class="ai-actions"><button class="btn pri" data-act="ai-apply-edits">Apply '+ne+' change'+(ne===1?'':'s')+'</button></div></div>';
+    return '<div class="ai-items">'+aiState.edits.map(function(e,i){return '<button class="ai-item ai-item-btn" data-act="ai-edit-proposal-open" data-i="'+i+'"><span class="ai-it-b"><span class="ai-it-t">'+esc(e.title)+'</span><span class="ai-it-m">'+esc(e.project)+' · Open edit</span><span class="ai-diff">'+e.diff.map(function(d){return '<span class="ai-dl"><b>'+esc(d[0])+'</b> '+(d[1]?'<s>'+esc(d[1])+'</s> → ':'')+'<i>'+esc(d[2])+'</i></span>';}).join('')+'</span></span></button>';}).join('')+
+      '<div class="ai-actions"><button class="btn ghost" data-act="ai-cancel-edits">Reject all</button></div></div>';
   }
   if(aiState.items){
     if(!aiState.items.length)return '<div class="ai-note">No action items found in that text.</div>';
@@ -2381,8 +2433,67 @@ function aiResultBlock(){
   if(aiState.out)return '<div class="ai-out ai-md">'+aiMd(aiState.out)+'</div><div class="ai-actions ai-outacts"><button class="btn ghost" data-act="ai-copy">'+I('copy')+'Copy</button><button class="btn ghost" data-act="ai-pdf">'+I('dl')+'Export PDF</button></div>';
   return '';
 }
+function aiVoiceSupported(){
+  return !!(window.SpeechRecognition||window.webkitSpeechRecognition);
+}
+function aiStopVoice(){
+  try{if(window.__aiRecognition){window.__aiRecognition.onend=null;window.__aiRecognition.stop();}}catch(e){}
+  window.__aiRecognition=null;
+  aiState.voiceListening=false;
+}
+function aiStartVoice(){
+  if(aiState.busy){toast('Wait for the current AI request to finish');return;}
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){aiState.voiceSupported=false;render();toast('Voice input is not supported in this browser');return;}
+  if(aiState.voiceListening){aiStopVoice();render();return;}
+  aiState.voiceSupported=true;
+  var base=(aiState.input||'').trim();
+  var finalText=base?base+' ':'',rec;
+  try{rec=new SR();}catch(e){toast('Could not start voice input');return;}
+  rec.lang='en-IN';
+  rec.continuous=false;
+  rec.interimResults=true;
+  window.__aiRecognition=rec;
+  aiState.voiceListening=true;
+  aiState.err='';
+  render();
+  setTimeout(function(){var inp=$('#aiInput');if(inp){inp.focus();}},30);
+  rec.onresult=function(ev){
+    var interim='';
+    for(var i=ev.resultIndex;i<ev.results.length;i++){
+      var txt=ev.results[i][0]&&ev.results[i][0].transcript||'';
+      if(ev.results[i].isFinal)finalText+=txt+' ';else interim+=txt;
+    }
+    aiState.input=(finalText+interim).replace(/\s+/g,' ').trim();
+    var inp=$('#aiInput');
+    if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
+  };
+  rec.onerror=function(ev){
+    aiState.voiceListening=false;window.__aiRecognition=null;
+    var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech'?'No speech detected. Try again.':'Voice input failed. Try again.');
+    aiState.err=msg;render();
+  };
+  rec.onend=function(){
+    aiState.voiceListening=false;window.__aiRecognition=null;
+    var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';
+    render();
+  };
+  try{rec.start();}catch(e){aiStopVoice();render();toast('Could not start microphone');}
+}
+function aiClearChat(){
+  if(!aiChat.length&&!aiState.pending){toast('AI chat is already clear');return;}
+  if(aiState.voiceListening)aiStopVoice();
+  var hasReview=!!(aiState.pending&&aiState.pending.items&&aiState.pending.items.length);
+  var msg=hasReview?
+    'This clears the AI conversation and removes the '+aiState.pending.items.length+' pending AI review item'+(aiState.pending.items.length===1?'':'s')+'. No task or project data will be changed.':
+    'This clears the current AI conversation. Your Actionables, projects and other app data will not be changed.';
+  confirmSheet('Clear AI chat?',msg,'Clear chat',true,function(){
+    aiChat=[];aiState.pending=null;aiState.input='';aiState.out='';aiState.outKind='';aiState.outTitle='';aiState.items=null;aiState.parsed=null;aiState.edits=null;aiState.err='';render();toast('AI chat cleared');
+  });
+}
+
 function vAI(){
-  var h=topbar('Universal AI Assistant',esc(aiConfigured()?('via '+AI_PROV[aiProv()].name):'Command center'),true,'<button class="search-pill compact" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search</span><kbd>Ctrl K</kbd></button><button class="iconbtn" data-act="ai-key-edit" title="AI settings">'+I('sliders')+'</button>');
+  var h=topbar('Universal AI Assistant',esc(aiConfigured()?('via '+AI_PROV[aiProv()].name):'Command center'),true,'<button class="search-pill compact" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search</span><kbd>Ctrl K</kbd></button>'+'<button class="iconbtn" data-act="ai-clear-chat" title="Clear AI chat">'+I('trash')+'</button><button class="iconbtn" data-act="ai-key-edit" title="AI settings">'+I('sliders')+'</button>');
   h+='<div class="ai-safety-banner"><span class="ai-safe-icon">'+I('check')+'</span><div><b>Review before apply</b><span>AI proposes changes. You edit them, validation runs again, then you approve.</span></div></div>';
   if(!aiConfigured()||aiState.editKey){
     var prov=aiProv();
@@ -2410,7 +2521,7 @@ function vAI(){
     h+='<p class="ai-mini">Key: '+esc(AI_PROV[prov].url)+' \u00b7 Data is sent to the provider only when you run a command.</p></div>';
     return h;
   }
-  h+='<div class="ai-cmdbar"><textarea id="aiInput" class="ai-cmd" rows="1" placeholder="Tell Actionables what you need\u2026  (e.g. move Rahul\u2019s ICICI task to tomorrow)" data-chg="ai-input" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();var b=document.querySelector(\'[data-act=ai-send]\');if(b)b.click();}">'+esc(aiState.input)+'</textarea><button class="ai-sendbtn" data-act="ai-send"'+(aiState.busy?' disabled':'')+'>'+I('spark')+'</button></div>';
+  h+='<div class="ai-cmdbar"><textarea id="aiInput" class="ai-cmd" rows="1" placeholder="Tell Actionables what you need…  (e.g. move Rahul’s ICICI task to tomorrow)" data-chg="ai-input" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();var b=document.querySelector(\'[data-act=ai-send]\');if(b)b.click();}">'+esc(aiState.input)+'</textarea><button class="ai-micbtn'+(aiState.voiceListening?' listening':'')+'" data-act="ai-voice" title="'+(aiState.voiceListening?'Stop listening':'Speak to AI')+'"'+(aiState.busy?' disabled':'')+'>'+I('mic')+'</button><button class="ai-sendbtn" data-act="ai-send"'+(aiState.busy||aiState.voiceListening?' disabled':'')+'>'+I('spark')+'</button></div>'+(aiState.voiceListening?'<div class="ai-voice-status"><span class="ai-voice-dot"></span>Listening… speak naturally. Your transcription will appear above; review it before sending.</div>':'')+(aiState.voiceSupported===false?'<div class="ai-voice-note">Voice input is not supported in this browser. Try Chrome or Edge.</div>':'');
   if(aiState.err)h+='<div class="ai-err" style="margin:0 16px 10px">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
   if(!aiChat.length){
     h+='<div class="ai-hello">'+I('spark')+'<div class="ai-hello-t">Universal AI Assistant</div><div class="ai-hello-s">Type anything \u2014 add, update, find, remove or report on tasks. I\u2019ll understand it, validate the change, ask for confirmation, then apply it.</div></div>';
@@ -2504,7 +2615,7 @@ function aiAddSelected(){
   var sel=(aiState.items||[]).filter(function(x){return x._sel;});
   if(!sel.length){toast('Select at least one item');return;}
   aiState.pending={kind:'add',items:sel.map(function(x){return aiNormalize(x);}),errors:[]};
-  aiState.items=null;aiChatPush('ai','I prepared the additions for review. You can edit any field before applying.',{type:'pending',pending:aiState.pending});render();
+  aiState.items=null;aiChatPush('ai','I identified '+sel.length+' additions. Review each item before it is saved.',{type:'pending',pending:aiState.pending});render();
 }
 
 /* ---- model discovery (ListModels) ---- */
@@ -2625,14 +2736,14 @@ async function aiUpdate(){
     });
     aiState.edits=edits;aiState.out='';aiState.outKind='';aiState.items=null;
     aiDone();
+    if(edits.length===1){
+      var onlyEdit=edits[0];
+      setTimeout(function(){openForm(onlyEdit.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:onlyEdit.patch||{}});},0);
+    }
   }catch(e){aiFail(e);}
 }
 function aiApplyEdits(){
-  var sel=(aiState.edits||[]).filter(function(x){return x._sel;});
-  if(!sel.length){toast('Select at least one change');return;}
-  var n=0; sel.forEach(function(e){ if(updateAct(e.id,e.patch))n++; });
-  aiState.edits=null;aiState.input='';render();
-  toast(n+' actionable'+(n===1?'':'s')+' updated',{label:'View',fn:function(){nav('list',{});}});
+  toast('Open each AI update to review and save it individually');
 }
 
 /* ---- deep-link from the AI widget ---- */
@@ -2732,31 +2843,28 @@ function aiPendingField(p,i,field,label,value,kind){
 function aiRebuildDiff(it){if(it._kind==='add')return;var a=actById(it.id);if(!a)return;var pr=aiPatchFor(a,it.patch||{});it.patch=pr.patch;it.prev=pr.prev;it.diff=pr.diff;}
 function aiRebuildDiff(it){if(it._kind==='add')return;var a=actById(it.id);if(!a)return;var pr=aiPatchFor(a,it.patch||{});it.patch=pr.patch;it.prev=pr.prev;it.diff=pr.diff;}
 function aiPendingCard(p){
-  var h='<div class="ai-pending"><div class="ai-pending-head"><span>'+I('alert')+'</span><b>Review and edit before applying</b></div>';
-  if(p.kind==='add')h+='<div class="ai-pending-list">'+p.items.map(function(it,i){return '<div class="ai-pchg"><b>ADD</b><div class="meta ai-edit-grid">'+aiPendingField(p,i,'lineItem','Line item',it.lineItem,'text')+aiPendingField(p,i,'projectId','Project',it.projectId,'project')+aiPendingField(p,i,'categoryId','Category',it.categoryId||'','category')+aiPendingField(p,i,'ownerId','Owner',it.spocIds&&it.spocIds[0]||'','owner')+aiPendingField(p,i,'status','Status',it.status,'status')+aiPendingField(p,i,'eta','ETA',it.eta||'','date')+aiPendingField(p,i,'task','Details',it.task||'','text')+aiPendingField(p,i,'important','Priority',it.important?'1':'0','priority')+aiPendingField(p,i,'tags','Tags',(it.tags||[]).join(', '),'text')+'</div></div>';}).join('')+'</div>';
-  if(p.kind==='update')h+='<div class="ai-pending-list">'+p.items.map(function(it,i){var a=actById(it.id),patch=it.patch||{};return '<div class="ai-pchg"><b>UPDATE · '+esc(it.title)+'</b><div class="meta ai-edit-grid">'+aiPendingField(p,i,'lineItem','Line item',patch.lineItem!==undefined?patch.lineItem:(a?a.lineItem:''),'text')+aiPendingField(p,i,'projectId','Project',patch.projectId!==undefined?patch.projectId:(a?a.projectId:''),'project')+aiPendingField(p,i,'categoryId','Category',patch.categoryId!==undefined?patch.categoryId:(a?a.categoryId||'':''),'category')+aiPendingField(p,i,'ownerId','Owner',(patch.spocIds&&patch.spocIds[0])||(a&&a.spocIds[0]||''),'owner')+aiPendingField(p,i,'status','Status',patch.status!==undefined?patch.status:(a?a.status:''),'status')+aiPendingField(p,i,'eta','ETA',patch.eta!==undefined?patch.eta:(a&&a.eta||''),'date')+aiPendingField(p,i,'task','Details',patch.task!==undefined?patch.task:(a&&a.task||''),'text')+aiPendingField(p,i,'important','Priority',patch.important!==undefined?(patch.important?'1':'0'):(a&&a.important?'1':'0'),'priority')+aiPendingField(p,i,'tags','Tags',patch.tags!==undefined?(patch.tags||[]).join(', '):(a&&a.tags||[]).join(', '),'text')+'</div></div>';}).join('')+'</div>';
-  if(p.kind==='delete')h+='<div class="ai-pending-list">'+p.items.map(function(it){return '<div class="ai-pchg"><b>DELETE · '+esc(it.title)+'</b><span>'+esc(it.meta||'This action can be restored from version history.')+'</span></div>';}).join('')+'</div>';
-  if(p.errors&&p.errors.length)h+='<div class="ai-err" style="margin-top:10px">'+I('alert')+'<span>'+esc(p.errors.join(' · '))+'</span></div>';
-  else h+='<div class="ai-actions"><button class="btn ghost" data-act="ai-cancel-pending">Cancel</button><button class="btn pri" data-act="ai-apply-pending">Apply '+(p.items.length)+' change'+(p.items.length===1?'':'s')+'</button></div>';
-  return h+'</div>';
-}
-function aiApplyPending(){
-  var p=aiState.pending;if(!p)return;
+  var kindLabel=p.kind==='add'?'additions':(p.kind==='update'?'updates':'deletions');
+  var h='<div class="ai-pending"><div class="ai-pending-head"><span>'+I('alert')+'</span><div><b>Review required · '+p.items.length+' '+kindLabel+'</b><small>Click any item to open the normal Actionable edit screen. Review, change anything you want, then Save or Reject.</small></div></div>';
   if(p.kind==='add'){
-    var addErr=[];p.items.forEach(function(it){addErr=addErr.concat(aiValidateAdd(it));});if(addErr.length){p.errors=addErr;render();toast('Fix the highlighted AI changes before applying');return;}
-
-    var rows=[];p.items.forEach(function(it){var a=aiCreate(it);rows.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,meta:[it._projLabel,it._ownerLabel,it.etaLabel,it.status].filter(Boolean).join(' · ')});});
-    saveState();aiState.pending=null;aiChatPush('ai','Applied '+rows.length+' change'+(rows.length===1?'':'s')+'.',{type:'added',rows:rows,undo:{kind:'add',ids:rows.map(function(x){return x.id;})}});
+    h+='<div class="ai-pending-list">'+p.items.map(function(it,i){
+      return '<button class="ai-pchg ai-pchg-btn" data-act="ai-pending-open" data-i="'+i+'"><span class="ai-pchg-top"><b>ADD</b><span class="ai-review-link">Open edit</span></span><strong>'+esc(it.lineItem||'(untitled)')+'</strong><span>'+esc([it._projLabel,it.categoryId?categoryName(it.projectId,it.categoryId):'',it._ownerLabel,it.etaLabel,it.status].filter(Boolean).join(' · '))+'</span>'+(it.task?'<em>'+esc(cap(it.task,150))+'</em>':'')+'</button>';
+    }).join('')+'</div>';
   }else if(p.kind==='update'){
-    var uerr=[];p.items.forEach(function(it){var a=actById(it.id);if(!a){uerr.push('Task not found');return;}var vr=aiValidatedUpdate(a,it.patch||{});if(vr.errors.length)uerr=uerr.concat(vr.errors);});if(uerr.length){p.errors=uerr;render();toast('Fix the highlighted AI changes before applying');return;}
-    var rows=[],undo=[];p.items.forEach(function(it){var a=actById(it.id);if(!a)return;updateAct(a.id,it.patch);rows.push({title:(a.ticket?a.ticket+' — ':'')+a.lineItem,diff:it.diff});undo.push({id:a.id,patch:it.prev});});
-    saveState();aiState.pending=null;aiChatPush('ai','Applied '+rows.length+' change'+(rows.length===1?'':'s')+'.',{type:'updated',rows:rows,undo:{kind:'update',changes:undo}});
+    h+='<div class="ai-pending-list">'+p.items.map(function(it,i){
+      var a=actById(it.id);
+      var diffs=(it.diff||[]).map(function(d){return d[0]+': '+(d[1]||'—')+' → '+(d[2]||'—');}).join(' · ');
+      return '<button class="ai-pchg ai-pchg-btn" data-act="ai-pending-open" data-i="'+i+'"><span class="ai-pchg-top"><b>UPDATE</b><span class="ai-review-link">Open edit</span></span><strong>'+esc(it.title||((a&&a.lineItem)||'Actionable'))+'</strong><span>'+esc((a?(a.projectId==='__personal'?'Personal':projName(a.projectId)):'')+' · '+(a?spocLabel(a):''))+'</span>'+(diffs?'<em>'+esc(diffs)+'</em>':'')+'</button>';
+    }).join('')+'</div>';
   }else if(p.kind==='delete'){
-    var removed=[];p.items.forEach(function(it){var a=actById(it.id);if(!a)return;removed.push({ix:S.actionables.indexOf(a),a:a,title:(a.ticket?a.ticket+' — ':'')+a.lineItem});});
-    removed.slice().sort(function(a,b){return b.ix-a.ix;}).forEach(function(r){S.actionables.splice(r.ix,1);});
-    saveState();aiState.pending=null;aiChatPush('ai','Applied '+removed.length+' deletion'+(removed.length===1?'':'s')+'.',{type:'deleted',rows:removed,undo:{kind:'delete',removed:removed}});
+    h+='<div class="ai-pending-list">'+p.items.map(function(it){return '<div class="ai-pchg"><span class="ai-pchg-top"><b>DELETE</b></span><strong>'+esc(it.title)+'</strong><span>'+esc(it.meta||'Review deletion before applying.')+'</span></div>';}).join('')+'</div>';
   }
-  render();
+  if(p.errors&&p.errors.length)h+='<div class="ai-err" style="margin-top:10px">'+I('alert')+'<span>'+esc(p.errors.join(' · '))+'</span></div>';
+  h+='<div class="ai-actions"><button class="btn ghost" data-act="ai-cancel-pending">Reject all</button></div></div>';
+  return h;
+}
+
+function aiApplyPending(){
+  if(aiState.pending)toast('Open each AI change to review and save it individually');
 }
 
 async function aiSend(){
@@ -2781,11 +2889,11 @@ function aiExec(o){
     var errors=[];items.forEach(function(it){errors=errors.concat(aiValidateAdd(it).map(function(e){return it.lineItem+': '+e;}));});
     if(items.length===1&&!errors.length){
       var one=items[0];
-      aiChatPush('ai',(o&&o.reply)||'I prepared this new actionable. Review it before saving.',{type:'edit-review',id:'__new',title:one.lineItem});
+      aiChatPush('ai','I prepared this addition. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:'__new',title:one.lineItem});
       openForm(null,Object.assign({},one,{aiReview:true,aiReviewSource:'AI add'}));
     }else{
       aiState.pending={kind:'add',items:items,errors:errors};
-      aiChatPush('ai',(o&&o.reply)||'I prepared the additions for review. Review each item before applying.',{type:'pending',pending:aiState.pending});
+      aiChatPush('ai','I identified '+items.length+' additions. Review each item before it is saved.',{type:'pending',pending:aiState.pending});
     }
   } else if(act==='update'){
     var items2=[],errors2=[];
@@ -2793,18 +2901,18 @@ function aiExec(o){
     if(!items2.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid change to review.');return;}
     if(items2.length===1&&!errors2.length){
       var uone=items2[0];
-      aiChatPush('ai',(o&&o.reply)||'I prepared this update. Review it before saving.',{type:'edit-review',id:uone.id,title:uone.title});
+      aiChatPush('ai','I prepared this update. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:uone.id,title:uone.title});
       openForm(uone.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:uone.patch});
     }else{
       aiState.pending={kind:'update',items:items2,errors:errors2};
-      aiChatPush('ai',(o&&o.reply)||'I prepared the updates for review. Review each item before applying.',{type:'pending',pending:aiState.pending});
+      aiChatPush('ai','I identified '+items2.length+' updates. Review each item before it is saved.',{type:'pending',pending:aiState.pending});
     }
   } else if(act==='delete'){
     var items3=[],errors3=[];
     (o.delete||[]).forEach(function(id){var a=actById(id);if(!a){errors3.push('Task '+id+' was not found');return;}items3.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,meta:(a.projectId==='__personal'?'Personal':projName(a.projectId))+' · '+spocLabel(a)});});
     if(!items3.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid task to delete.');return;}
     aiState.pending={kind:'delete',items:items3,errors:errors3};
-    aiChatPush('ai',(o&&o.reply)||'I prepared the deletion for review.',{type:'pending',pending:aiState.pending});
+    aiChatPush('ai','I identified '+items3.length+' deletions. Review them before anything is removed.',{type:'pending',pending:aiState.pending});
   } else if(act==='search'){
     var sids;
     if(o.search&&o.search.filter&&Object.keys(o.search.filter).length){sids=aiFilterList(o.search.filter).map(function(a){return a.id;});}
