@@ -1126,13 +1126,14 @@ function openForm(id,prefill){
       remOn:false,remDate:'',remTime:'',remNote:'',remWaiting:'',remRequested:'',remExpected:'',recurrence:P.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:''},status:P.status||'In Progress',notes:P.notes||'',
       important:!!P.important,tags:(P.tags||[]).slice(),type:P.type||'Activity',categoryId:P.categoryId||'',quick:quick};
   }
+  if(a&&prefill&&prefill.aiPatch){var ap=prefill.aiPatch;Object.keys(ap).forEach(function(k){if(k==='spocIds')f.spocIds=(ap[k]||[]).slice();else if(k==='tags')f.tags=(ap[k]||[]).slice();else if(k==='important')f.important=!!ap[k];else if(Object.prototype.hasOwnProperty.call(f,k))f[k]=ap[k];});}
   var title=id?'Edit actionable':(quick?'Quick task':'Add actionable');
   var rec=openSheet('<div class="shead"><h2>'+title+'</h2>'+
     '<button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody"></div>'+
     '<div class="sfoot"><button class="btn ghost" data-act="close-sheet">Cancel</button>'+
     '<button class="btn pri" data-act="form-save">Save</button></div>',
-    {full:!quick,tag:'form',data:{id:id||'',f:f}});
+    {full:!quick,tag:'form',data:{id:id||'',f:f,aiReview:!!(prefill&&prefill.aiReview),aiReviewSource:(prefill&&prefill.aiReviewSource)||''}});
   renderForm(rec);
 }
 function renderForm(rec){
@@ -1152,7 +1153,9 @@ function renderForm(rec){
       '<div class="note">Personal task \u00b7 no owner. Filed under the <b>Personal</b> project.</div>';
     $('.sbody',rec.sheet).innerHTML=bq;updateSaveBtn(rec,f);wireOwnerSearch(rec);return;
   }
+  var aiReviewBanner=rec.data.aiReview?'<div class="ai-review-banner"><span>'+I('spark')+'</span><div><b>AI suggested changes — review before saving</b><small>Review the pre-filled values and edit any field you want. Nothing is saved until you click Save.</small></div></div>':'';
   var b=
+    aiReviewBanner+
     '<div class="sech first">Basic details</div><div class="meta">'+
       '<div class="fld wide"><label>1 \u00b7 Line item <span class="req">*</span></label><input data-chg="f-line" placeholder="e.g. ORP-3902 Downtime requirement" value="'+esc(f.lineItem)+'"></div>'+
       '<div class="fld wide"><label>2 \u00b7 Description \u00b7 latest update <span class="req">*</span></label><textarea data-chg="f-task" placeholder="e.g. Bank to confirm downtime of 3\u20135 days.">'+esc(f.task)+'</textarea></div>'+
@@ -2776,14 +2779,26 @@ function aiExec(o){
     var items=(o.add||[]).map(aiNormalize).filter(function(x){return x.lineItem;});
     if(!items.length){aiChatPush('ai',(o&&o.reply)||'I could not find task details to add.');return;}
     var errors=[];items.forEach(function(it){errors=errors.concat(aiValidateAdd(it).map(function(e){return it.lineItem+': '+e;}));});
-    aiState.pending={kind:'add',items:items,errors:errors};
-    aiChatPush('ai',(o&&o.reply)||'I prepared the change for review.',{type:'pending',pending:aiState.pending});
+    if(items.length===1&&!errors.length){
+      var one=items[0];
+      aiChatPush('ai',(o&&o.reply)||'I prepared this new actionable. Review it before saving.',{type:'edit-review',id:'__new',title:one.lineItem});
+      openForm(null,Object.assign({},one,{aiReview:true,aiReviewSource:'AI add'}));
+    }else{
+      aiState.pending={kind:'add',items:items,errors:errors};
+      aiChatPush('ai',(o&&o.reply)||'I prepared the additions for review. Review each item before applying.',{type:'pending',pending:aiState.pending});
+    }
   } else if(act==='update'){
     var items2=[],errors2=[];
     (o.update||[]).forEach(function(c){if(!c||!c.id)return;var a=actById(c.id);if(!a){errors2.push('Task '+c.id+' was not found');return;}var pr=aiValidatedUpdate(a,c);if(pr.errors.length)errors2=errors2.concat(pr.errors.map(function(e){return a.lineItem+': '+e;}));else items2.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,patch:pr.patch,prev:pr.prev,diff:pr.diff});});
-    if(!items2.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid change to apply.');return;}
-    aiState.pending={kind:'update',items:items2,errors:errors2};
-    aiChatPush('ai',(o&&o.reply)||'I prepared the change for review.',{type:'pending',pending:aiState.pending});
+    if(!items2.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid change to review.');return;}
+    if(items2.length===1&&!errors2.length){
+      var uone=items2[0];
+      aiChatPush('ai',(o&&o.reply)||'I prepared this update. Review it before saving.',{type:'edit-review',id:uone.id,title:uone.title});
+      openForm(uone.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:uone.patch});
+    }else{
+      aiState.pending={kind:'update',items:items2,errors:errors2};
+      aiChatPush('ai',(o&&o.reply)||'I prepared the updates for review. Review each item before applying.',{type:'pending',pending:aiState.pending});
+    }
   } else if(act==='delete'){
     var items3=[],errors3=[];
     (o.delete||[]).forEach(function(id){var a=actById(id);if(!a){errors3.push('Task '+id+' was not found');return;}items3.push({id:a.id,title:(a.ticket?a.ticket+' — ':'')+a.lineItem,meta:(a.projectId==='__personal'?'Personal':projName(a.projectId))+' · '+spocLabel(a)});});
@@ -2814,6 +2829,7 @@ function aiBubble(m,idx){
 function aiCard(c,idx){
   if(!c)return '';
   if(c.type==='pending')return aiPendingCard(c.pending||aiState.pending||{});
+  if(c.type==='edit-review')return '<div class="ai-rescard ai-review-result"><div class="ai-review-result-head">'+I('edit')+'<b>Review required</b></div><div class="ai-review-result-body">'+esc(c.title||'Actionable')+' is open in Edit mode. Review and change any field, then click <b>Save</b>.</div></div>';
   var undoBtn=(c.undo&&!c.undone)?'<button class="ai-undo" data-act="ai-undo" data-i="'+idx+'">Undo</button>':(c.undone?'<span class="ai-undone">\u2713 Undone</span>':'');
   if(c.type==='search'){
     var items=(c.ids||[]).map(actById).filter(Boolean);
