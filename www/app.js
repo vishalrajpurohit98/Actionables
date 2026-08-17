@@ -1727,7 +1727,7 @@ document.addEventListener('click',function(e){
     /* Detail sheet */
     case 'd-spoc':{var dr0=sheetFor('detail');if(dr0){var a0=actById(dr0.data.id);if(a0){var arr0=a0.spocIds.slice();var ix0=arr0.indexOf(id);if(ix0>=0)arr0.splice(ix0,1);else arr0.push(id);updateAct(dr0.data.id,{spocIds:arr0});renderDetail(dr0);render();}}break;}
     case 'd-act-toggle':{var drA=sheetFor('detail');if(drA){drA.data.actOpen=!drA.data.actOpen;renderDetail(drA);}break;}
-    case 'd-comment':{var drC=sheetFor('detail');if(drC){var host=el.closest('.sheet'),ci=host?$('#cmtIn',host):$('#cmtIn',drC.sheet),txt=ci?(ci.value||'').trim():'';if(!txt){toast('Type a comment first');break;}if(!actById(drC.data.id)){toast('Task no longer exists');break;}addComment(drC.data.id,txt);drC.data.editCmt=null;renderDetail(drC);render();toast('Comment added');}break;}
+    case 'd-comment':{var drC=sheetFor('detail');if(drC){var ci=$('#cmtIn',drC.sheet),txt=ci?(ci.value||'').trim():'';if(!txt){toast('Type a comment first');break;}addComment(drC.data.id,txt);drC.data.editCmt=null;renderDetail(drC);render();toast('Comment added');}break;}
     case 'd-cmt-rephrase':{var drR=sheetFor('detail');if(drR)aiRephraseComment(drR);break;}
     case 'd-cmt-edit':{var drE=sheetFor('detail');if(drE){drE.data.editCmt=parseInt(el.getAttribute('data-i'),10);renderDetail(drE);setTimeout(function(){var ta=$('#cmtEdit',drE.sheet);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}break;}
     case 'd-cmt-editcancel':{var drEC=sheetFor('detail');if(drEC){drEC.data.editCmt=null;renderDetail(drEC);}break;}
@@ -2477,57 +2477,10 @@ function aiVoiceSupported(){
   return !!(window.SpeechRecognition||window.webkitSpeechRecognition);
 }
 function aiStopVoice(){
-  if(window.__nativeVoiceRequestId&&A&&A.stopSpeechRecognition){try{A.stopSpeechRecognition();}catch(e){} window.__nativeVoiceRequestId=null;}
   try{if(window.__aiRecognition){window.__aiRecognition.onend=null;window.__aiRecognition.stop();}}catch(e){}
   window.__aiRecognition=null;
   aiState.voiceListening=false;
 }
-/* ---- Native mic + speech bridge --------------------------------------- */
-var __pendingPermResolvers={};
-var __nativeVoiceRequestId=null;
-var __nativeVoiceBase='';
-window.__actionablesResolvePermission=function(kind,requestId,granted){
-  var resolver=__pendingPermResolvers[requestId];
-  if(!resolver)return;
-  delete __pendingPermResolvers[requestId];
-  resolver(granted);
-};
-function requestNativeMicPermission(cb){
-  if(!(A&&A.requestMicPermission)){cb(true);return;}
-  var requestId='mic_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-  __pendingPermResolvers[requestId]=cb;
-  try{A.requestMicPermission(requestId);}catch(e){delete __pendingPermResolvers[requestId];cb(false);}
-}
-window.__actionablesVoiceState=function(requestId,listening){
-  if(requestId!==__nativeVoiceRequestId)return;
-  aiState.voiceListening=!!listening;
-  if(!listening){__nativeVoiceRequestId=null;}
-  render();
-};
-window.__actionablesVoiceResult=function(requestId,text,isFinal){
-  if(requestId!==__nativeVoiceRequestId)return;
-  text=(text||'').trim();
-  var combined=(__nativeVoiceBase+(text?' '+text:'')).replace(/\s+/g,' ').trim();
-  aiState.input=combined;
-  var inp=$('#aiInput');
-  if(inp){inp.value=combined;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
-  if(isFinal)__nativeVoiceBase=combined;
-  render();
-};
-window.__actionablesVoiceError=function(requestId,message){
-  if(requestId!==__nativeVoiceRequestId)return;
-  __nativeVoiceRequestId=null;aiState.voiceListening=false;aiState.err=message||'Voice input failed. Try again.';render();
-};
-function aiStartNativeVoice(){
-  var requestId='voice_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-  __nativeVoiceRequestId=requestId;
-  __nativeVoiceBase=(aiState.input||'').trim();
-  aiState.voiceListening=true;aiState.voiceSupported=true;aiState.err='';render();
-  try{A.startSpeechRecognition(requestId,'en-IN');}
-  catch(e){__nativeVoiceRequestId=null;aiState.voiceListening=false;aiState.err='Could not start microphone.';render();}
-}
-/* ---- Native mic-permission bridge (Android) -----------------------------
-   Requested only on the mic button press. */
 /* ---- Native mic-permission bridge (Android) -----------------------------
    Mirrors the save-file pattern: A.requestMicPermission() cannot block on
    the system permission dialog, so the native side calls back into
@@ -2549,22 +2502,20 @@ function requestNativeMicPermission(cb){
 }
 function aiStartVoice(){
   if(aiState.busy){toast('Wait for the current AI request to finish');return;}
-  if(aiState.voiceListening){aiStopVoice();render();return;}
-  if(A&&A.startSpeechRecognition){
-    requestNativeMicPermission(function(granted){
-      if(!granted){aiState.voiceListening=false;aiState.err='Microphone permission was denied.';render();return;}
-      aiStartNativeVoice();
-    });
-    return;
-  }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){aiState.voiceSupported=false;render();toast('Voice input is not supported in this browser');return;}
+  if(aiState.voiceListening){aiStopVoice();render();return;}
   aiState.voiceSupported=true;
   var base=(aiState.input||'').trim();
   var finalText=base?base+' ':'',rec;
   try{rec=new SR();}catch(e){toast('Could not start voice input');return;}
-  rec.lang='en-IN';rec.continuous=false;rec.interimResults=true;window.__aiRecognition=rec;
-  aiState.voiceListening=true;aiState.err='';render();
+  rec.lang='en-IN';
+  rec.continuous=false;
+  rec.interimResults=true;
+  window.__aiRecognition=rec;
+  aiState.voiceListening=true;
+  aiState.err='';
+  render();
   setTimeout(function(){var inp=$('#aiInput');if(inp){inp.focus();}},30);
   rec.onresult=function(ev){
     var interim='';
@@ -2573,10 +2524,19 @@ function aiStartVoice(){
       if(ev.results[i].isFinal)finalText+=txt+' ';else interim+=txt;
     }
     aiState.input=(finalText+interim).replace(/\s+/g,' ').trim();
-    var inp=$('#aiInput');if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
+    var inp=$('#aiInput');
+    if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
   };
-  rec.onerror=function(ev){aiState.voiceListening=false;window.__aiRecognition=null;var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech'?'No speech detected. Try again.':'Voice input failed. Try again.');aiState.err=msg;render();};
-  rec.onend=function(){aiState.voiceListening=false;window.__aiRecognition=null;var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';render();};
+  rec.onerror=function(ev){
+    aiState.voiceListening=false;window.__aiRecognition=null;
+    var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech'?'No speech detected. Try again.':'Voice input failed. Try again.');
+    aiState.err=msg;render();
+  };
+  rec.onend=function(){
+    aiState.voiceListening=false;window.__aiRecognition=null;
+    var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';
+    render();
+  };
   try{rec.start();}catch(e){aiStopVoice();render();toast('Could not start microphone');}
 }
 function aiClearChat(){
