@@ -65,43 +65,86 @@
   function gate(show, msg) {
     var g = document.getElementById('cloudgate');
     document.body.classList.toggle('auth-locked', !!show);
-    if (!show) { if (g && g.parentNode) g.parentNode.removeChild(g); return; }
+    if (!show) {
+      if (g && g.__clockTimer) clearInterval(g.__clockTimer);
+      if (g && g.parentNode) g.parentNode.removeChild(g);
+      return;
+    }
     if (g) { if (msg) setGateErr(g, msg); return; }
+
     g = document.createElement('div');
     g.id = 'cloudgate';
     g.className = 'cloudgate';
     g.innerHTML =
-      '<div class="lock-bg"></div>' +
-      '<div class="lock-top"><div class="lock-clock" id="cgClock"></div><div class="lock-date" id="cgDate"></div></div>' +
-      '<div class="cloudcard lock-card">' +
-        '<div class="lock-avatar">A</div>' +
-        '<div class="cg-h">Actionables</div>' +
-        '<div class="lock-user" id="cgUserLabel">Project Management Workspace</div>' +
-        '<div class="cg-s" id="cgSub">Enter your password to unlock your workspace</div>' +
+      '<div class="lock-minimal">' +
+        '<div class="lock-icon" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="5" y="10" width="14" height="11" rx="2"></rect>' +
+            '<path d="M8 10V7a4 4 0 0 1 8 0v3"></path>' +
+            '<circle cx="12" cy="15.5" r="1"></circle>' +
+            '<path d="M12 16.5v2"></path>' +
+          '</svg>' +
+        '</div>' +
+        '<div class="cg-h">ACTIONABLES</div>' +
+        '<div class="cg-s lock-subtitle" id="cgSub">Enter your password to unlock</div>' +
+        '<div class="lock-quote">' +
+          '<span class="lock-quote-mark">“</span>' +
+          '<span>What gets tracked, gets done.<br>Track today. Achieve tomorrow.</span>' +
+          '<span class="lock-quote-mark">”</span>' +
+        '</div>' +
         '<div class="cg-err" id="cgErr"></div>' +
-        '<label class="cg-l">Email</label>' +
-        '<input id="cgEmail" type="email" autocomplete="username" placeholder="you@example.com">' +
-        '<label class="cg-l">Password</label>' +
-        '<input id="cgPass" type="password" autocomplete="current-password" placeholder="Enter your password">' +
-        '<div class="cg-btns"><button class="btn pri lock-unlock" id="cgIn">Unlock</button></div>' +
-        '<div class="lock-links"><button class="cg-skip" id="cgReset">Forgot password?</button><button class="cg-skip" id="cgUp">Create account</button></div>' +
-        '<div class="lock-secure">🔒 Protected by Firebase Authentication</div>' +
+        '<div class="lock-field">' +
+          '<label class="cg-l" for="cgEmail">Email</label>' +
+          '<div class="lock-input-wrap">' +
+            '<span class="lock-input-icon" aria-hidden="true">✉</span>' +
+            '<input id="cgEmail" type="email" autocomplete="username" placeholder="Email address">' +
+          '</div>' +
+        '</div>' +
+        '<div class="lock-field">' +
+          '<label class="cg-l" for="cgPass">Password</label>' +
+          '<div class="lock-input-wrap">' +
+            '<span class="lock-input-icon" aria-hidden="true">⌑</span>' +
+            '<input id="cgPass" type="password" autocomplete="current-password" placeholder="Password">' +
+            '<button type="button" class="lock-eye" id="cgEye" aria-label="Show password" title="Show password">◉</button>' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn pri lock-unlock" id="cgIn">Unlock</button>' +
+        '<div class="lock-links">' +
+          '<button class="cg-skip" id="cgReset">Forgot password?</button>' +
+          '<button class="cg-skip" id="cgUp">Create account</button>' +
+        '</div>' +
+        '<div class="lock-footer"><div class="lock-theme-note">Theme follows system • Light / Dark</div>' +
+          '<div>Personal Workspace</div>' +
+          '<div class="lock-developed">Developed by <strong>Vishal</strong></div>' +
+        '</div>' +
       '</div>';
     document.body.appendChild(g);
 
-    function busy(b) { g.querySelector('#cgIn').disabled = b; g.querySelector('#cgUp').disabled = b; }
-    function creds() { return { e: (g.querySelector('#cgEmail').value || '').trim(), p: g.querySelector('#cgPass').value || '' }; }
-    function updateClock(){
-      var now=new Date(), clock=g.querySelector('#cgClock'), date=g.querySelector('#cgDate');
-      if(!clock||!date)return;
-      clock.textContent=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      date.textContent=now.toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
+    function busy(b) {
+      g.querySelector('#cgIn').disabled = b;
+      g.querySelector('#cgUp').disabled = b;
+      g.querySelector('#cgReset').disabled = b;
     }
-    updateClock(); g.__clockTimer=setInterval(updateClock,1000);
+    function creds() {
+      return {
+        e: (g.querySelector('#cgEmail').value || '').trim(),
+        p: g.querySelector('#cgPass').value || ''
+      };
+    }
+
+    g.querySelector('#cgEye').addEventListener('click', function () {
+      var p = g.querySelector('#cgPass');
+      var eye = g.querySelector('#cgEye');
+      var visible = p.type === 'text';
+      p.type = visible ? 'password' : 'text';
+      eye.textContent = visible ? '◉' : '◌';
+      eye.setAttribute('aria-label', visible ? 'Show password' : 'Hide password');
+      eye.title = visible ? 'Show password' : 'Hide password';
+    });
 
     g.querySelector('#cgIn').addEventListener('click', function () {
       var c = creds();
-      if (!c.e || !c.p) { setGateErr(g, 'Enter your password'); return; }
+      if (!c.e || !c.p) { setGateErr(g, 'Enter email and password'); return; }
       busy(true); setGateErr(g, '');
       var current = auth && auth.currentUser;
       var action = current && current.email === c.e
@@ -114,19 +157,26 @@
         subscribe();
       }).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
     });
+
     g.querySelector('#cgUp').addEventListener('click', function () {
       var c = creds();
       if (!c.e || !c.p) { setGateErr(g, 'Enter email and password'); return; }
       if (c.p.length < 6) { setGateErr(g, 'Password must be at least 6 characters'); return; }
       busy(true); setGateErr(g, '');
-      auth.createUserWithEmailAndPassword(c.e, c.p).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
+      auth.createUserWithEmailAndPassword(c.e, c.p)
+        .catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
     });
+
     g.querySelector('#cgReset').addEventListener('click', function () {
       var c = creds();
       if (!c.e) { setGateErr(g, 'Enter your email above, then choose Forgot password.'); return; }
       auth.sendPasswordResetEmail(c.e)
         .then(function () { setGateErr(g, 'Password reset email sent to ' + c.e + '.'); })
         .catch(function (err) { setGateErr(g, pretty(err)); });
+    });
+
+    g.querySelector('#cgPass').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') g.querySelector('#cgIn').click();
     });
     setTimeout(function () { var i = g.querySelector('#cgEmail'); if (i) i.focus(); }, 120);
   }
@@ -137,7 +187,7 @@
     el.style.display = e ? 'block' : 'none';
   }
 
-  /* ---- firestore realtime sync ---- */
+/* ---- firestore realtime sync ---- */
   function subscribe() {
     if (!uid) return;
     ref = db.collection('users').doc(uid);
