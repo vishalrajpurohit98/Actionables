@@ -1480,21 +1480,6 @@ function openImport(){
 function xlsxReady(){return typeof XLSX!=='undefined';}
 function pdfReady(){return window.jspdf&&window.jspdf.jsPDF;}
 function stamp(){var d=new Date();return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate());}
-/* ---- Native save-file bridge (Android/SAF) -----------------------------
-   A.saveFile() cannot block waiting for the user to pick a folder in the
-   system file picker, so it returns "PENDING:<requestId>" immediately and
-   the native side later calls window.__actionablesResolveSave(requestId,
-   success, messageOrName) once the picker flow finishes. We keep a small
-   registry of pending requestId -> resolver here so deliverFile() can stay
-   a plain function call (no await) at all 6 export call sites, matching
-   how the app already used it. */
-var __pendingSaveResolvers={};
-window.__actionablesResolveSave=function(requestId,success,messageOrName){
-  var resolver=__pendingSaveResolvers[requestId];
-  if(!resolver)return;
-  delete __pendingSaveResolvers[requestId];
-  resolver(success,messageOrName);
-};
 function deliverFile(b64,name,mime){
   if(A&&A.saveFile){var r=A.saveFile(b64,name,mime);if(r&&r.indexOf('ERR')===0)toast('Export failed \u2014 '+r.slice(4));else toast('Saved \u2192 '+r);return;}
   try{var bin=atob(b64),arr=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);var blob=new Blob([arr],{type:mime});var u=URL.createObjectURL(blob);var aEl=document.createElement('a');aEl.href=u;aEl.download=name;aEl.click();setTimeout(function(){URL.revokeObjectURL(u);},4000);}catch(e){toast('Export not available in this environment');}
@@ -1649,7 +1634,6 @@ document.addEventListener('click',function(e){
     case 'cloud-signout':{if(window.Cloud&&window.Cloud.signOut){confirmSheet('Sign out of sync?','This device will stop syncing until you sign in again. Your data stays saved locally.','Sign out',false,function(){window.Cloud.signOut();render();toast('Signed out of sync');});}break;}
     /* Actionables */
     case 'open':openDetail(id);break;
-    case 'd-delete':{var drd=sheetFor('detail');if(!drd)break;var da=actById(drd.data.id);if(!da){toast('Task no longer exists');closeSheet(drd);break;}confirmSheet('Delete this actionable?','Delete “'+(da.lineItem||'Untitled')+'”. A restore point will be created first.','Delete',true,function(){snapshot('Before delete');S.actionables=S.actionables.filter(function(x){return x.id!==da.id;});saveState();closeSheet(drd);render();toast('Deleted “'+(da.lineItem||'Untitled')+'”',{label:'Undo',fn:function(){restoreVersion(0);}});});break;}
     case 'bulk-select':{var bid=el.getAttribute('data-id')||id;if(bid){if(el.checked)bulkSel[bid]=true;else delete bulkSel[bid];render();}break;}
     case 'bulk-clear':bulkSel={};render();break;
     case 'bulk-open':openBulkActions();break;
@@ -1726,22 +1710,7 @@ document.addEventListener('click',function(e){
     case 'input-ok':{var isRec=sheetFor('input');if(isRec){var val=($('#inpS',isRec.sheet)||{}).value||'';val=val.trim();if(!val){toast('Enter a value');break;}var cb2=isRec.onOk;closeSheet(isRec);if(cb2)cb2(val);}break;}
     /* Detail sheet */
     case 'd-spoc':{var dr0=sheetFor('detail');if(dr0){var a0=actById(dr0.data.id);if(a0){var arr0=a0.spocIds.slice();var ix0=arr0.indexOf(id);if(ix0>=0)arr0.splice(ix0,1);else arr0.push(id);updateAct(dr0.data.id,{spocIds:arr0});renderDetail(dr0);render();}}break;}
-    case 'd-act-toggle':{var drA=sheetFor('detail');if(drA){drA.data.actOpen=!drA.data.actOpen;renderDetail(drA);}break;}
-    case 'd-comment':{var drC=sheetFor('detail');if(drC){var host=el.closest('.sheet'),ci=host?$('#cmtIn',host):$('#cmtIn',drC.sheet),txt=ci?(ci.value||'').trim():'';if(!txt){toast('Type a comment first');break;}if(!actById(drC.data.id)){toast('Task no longer exists');break;}addComment(drC.data.id,txt);drC.data.editCmt=null;renderDetail(drC);render();toast('Comment added');}break;}
-    case 'd-cmt-rephrase':{var drR=sheetFor('detail');if(drR)aiRephraseComment(drR);break;}
-    case 'd-cmt-edit':{var drE=sheetFor('detail');if(drE){drE.data.editCmt=parseInt(el.getAttribute('data-i'),10);renderDetail(drE);setTimeout(function(){var ta=$('#cmtEdit',drE.sheet);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}},30);}break;}
-    case 'd-cmt-editcancel':{var drEC=sheetFor('detail');if(drEC){drEC.data.editCmt=null;renderDetail(drEC);}break;}
-    case 'd-cmt-editsave':{var drES=sheetFor('detail');if(drES){var ixES=parseInt(el.getAttribute('data-i'),10),aES=actById(drES.data.id),taES=$('#cmtEdit',drES.sheet);if(aES&&aES.comments[ixES]&&taES){var nt=(taES.value||'').trim();if(!nt){toast('Comment cannot be empty');break;}aES.comments[ixES].text=nt;aES.comments[ixES].edited=true;aES.comments[ixES].editedAt=Date.now();logAct(aES,'Comment edited');aES.updatedAt=Date.now();saveState();drES.data.editCmt=null;renderDetail(drES);render();toast('Comment updated');}}break;}
-    case 'd-cmt-del':{var drCD=sheetFor('detail');if(drCD){var ixCD=parseInt(el.getAttribute('data-i'),10),aCD=actById(drCD.data.id);if(aCD&&aCD.comments[ixCD]){confirmSheet('Delete comment?','This comment will be removed.','Delete',true,function(){aCD.comments.splice(ixCD,1);logAct(aCD,'Comment deleted');aCD.updatedAt=Date.now();saveState();renderDetail(drCD);render();toast('Comment deleted');});}}break;}
-    case 'd-restore-point':{snapshot('Manual restore point');var vr=sheetFor('detail');toast('Restore point saved');if(vr)renderDetail(vr);break;}
-    case 'rem-add':{var drRA=sheetFor('detail');if(drRA){var aRA=actById(drRA.data.id);if(aRA){var dRA=addDaysISO(todayISO(),1);remPatch(aRA.id,{on:true,date:dRA,time:'09:00',note:'',done:false,waitingFor:'',requestedOn:todayISO(),expectedBy:dRA},{e:'Follow-up reminder added',t:fmtD(dRA)});renderDetail(drRA);render();toast('Follow-up reminder added');}}break;}
-    case 'rem-done':{var drRD=sheetFor('detail');if(drRD){remPatch(drRD.data.id,{done:true},{e:'Follow-up completed'});renderDetail(drRD);render();toast('Follow-up completed');}break;}
-    case 'rem-react':{var drRR=sheetFor('detail');if(drRR){remPatch(drRR.data.id,{on:true,done:false},{e:'Follow-up reactivated'});renderDetail(drRR);render();toast('Follow-up reactivated');}break;}
-    case 'rem-remove':{var drRM=sheetFor('detail');if(drRM){confirmSheet('Remove follow-up?','The follow-up reminder will be removed from this actionable.','Remove',true,function(){remPatch(drRM.data.id,{on:false,done:false},{e:'Follow-up removed'});renderDetail(drRM);render();toast('Follow-up removed');});}break;}
-    case 'rem-snooze':{var drRS=sheetFor('detail'),nRS=parseInt(el.getAttribute('data-n'),10)||1,aRS=drRS&&actById(drRS.data.id);if(aRS&&aRS.rem){var baseRS=aRS.rem.date&&/^\d{4}-\d{2}-\d{2}$/.test(aRS.rem.date)?aRS.rem.date:todayISO();var ndRS=addDaysISO(baseRS,nRS);remPatch(aRS.id,{date:ndRS,done:false},{e:'Follow-up snoozed',t:fmtD(ndRS)});renderDetail(drRS);render();toast('Follow-up moved to '+fmtD(ndRS));}break;}
     case 'd-spoc-new':{var drn=sheetFor('detail');if(drn){var an=actById(drn.data.id);if(an)personSheet(function(u){updateAct(drn.data.id,{spocIds:an.spocIds.concat([u.id])});renderDetail(drn);render();});}break;}
-    case 'f-spoc':{var frsp=sheetFor('form');if(frsp){var fid=id,arrsp=frsp.data.f.spocIds||[],ixsp=arrsp.indexOf(fid);if(ixsp>=0)arrsp.splice(ixsp,1);else arrsp.push(fid);frsp.data.f.spocIds=arrsp;renderForm(frsp);}break;}
-    case 'f-spoc-new':{var frsn=sheetFor('form');if(frsn)personSheet(function(u){frsn.data.f.spocIds=frsn.data.f.spocIds||[];if(frsn.data.f.spocIds.indexOf(u.id)<0)frsn.data.f.spocIds.push(u.id);renderForm(frsn);});break;}
     case 'd-complete':{var dr=sheetFor('detail');if(dr){updateAct(dr.data.id,{status:'Completed'});var a2=actById(dr.data.id);if(a2){logAct(a2,'Completed');saveState();}renderDetail(dr);render();toast('Completed');}break;}
     case 'd-reopen':{var dr2=sheetFor('detail');if(dr2){updateAct(dr2.data.id,{status:'In Progress'});var a3=actById(dr2.data.id);if(a3){logAct(a3,'Reopened');saveState();}renderDetail(dr2);render();toast('Reopened');}break;}
     case 'd-edit':{var dr3=sheetFor('detail');if(dr3)openForm(dr3.data.id);break;}
@@ -1749,7 +1718,6 @@ document.addEventListener('click',function(e){
       var pid2=exportSel.projId||null,lbl2=pid2?projName(pid2):'All Projects';
       exportPdf(pid2,lbl2,exportSel);break;
     }
-    case 'do-export-xlsx':{var pidX=exportSel.projId||null,lblX=pidX?projName(pidX):'All Projects';exportExcel(pidX,lblX,null,exportSel);break;}
     case 'export-list-excel':exportExcel(null,'All_Projects');break;
     /* Settings */
     case 'toggle-notif':{S.settings.notifEnabled=!S.settings.notifEnabled;saveState();syncSchedule();if(S.settings.notifEnabled&&A&&A.requestNotif&&notifState()==='denied')A.requestNotif();render();toast(S.settings.notifEnabled?'Daily brief on':'Daily brief off');break;}
@@ -1836,7 +1804,6 @@ document.addEventListener('change',function(e){
     if(chg==='d-spoc-add'){var aSp=actById(aid);if(v==='__new'){personSheet(function(u){var a2=actById(aid);if(a2)updateAct(aid,{spocIds:a2.spocIds.concat([u.id])});renderDetail(dr);render();});return;}if(v&&aSp&&aSp.spocIds.indexOf(v)<0)updateAct(aid,{spocIds:aSp.spocIds.concat([v])});renderDetail(dr);render();return;}
     if(chg==='d-tag-add-dd'){if(v){var aTg=actById(aid);var ntg=(aTg.tags||[]).slice();addTagTo(ntg,v);updateAct(aid,{tags:ntg});}renderDetail(dr);render();return;}
     if(chg==='d-assigned')updateAct(aid,{assignedAt:v?isoToDate(v).getTime():null});
-    else if(chg==='d-category')updateAct(aid,{categoryId:v||''});
     else if(chg==='d-status')updateAct(aid,{status:v});
     else if(chg==='d-etakind')updateAct(aid,{etaKind:v});
     else if(chg==='d-eta')updateAct(aid,{eta:v});
@@ -2477,94 +2444,26 @@ function aiVoiceSupported(){
   return !!(window.SpeechRecognition||window.webkitSpeechRecognition);
 }
 function aiStopVoice(){
-  if(window.__nativeVoiceRequestId&&A&&A.stopSpeechRecognition){try{A.stopSpeechRecognition();}catch(e){} window.__nativeVoiceRequestId=null;}
   try{if(window.__aiRecognition){window.__aiRecognition.onend=null;window.__aiRecognition.stop();}}catch(e){}
   window.__aiRecognition=null;
   aiState.voiceListening=false;
 }
-/* ---- Native mic + speech bridge --------------------------------------- */
-var __pendingPermResolvers={};
-var __nativeVoiceRequestId=null;
-var __nativeVoiceBase='';
-window.__actionablesResolvePermission=function(kind,requestId,granted){
-  var resolver=__pendingPermResolvers[requestId];
-  if(!resolver)return;
-  delete __pendingPermResolvers[requestId];
-  resolver(granted);
-};
-function requestNativeMicPermission(cb){
-  if(!(A&&A.requestMicPermission)){cb(true);return;}
-  var requestId='mic_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-  __pendingPermResolvers[requestId]=cb;
-  try{A.requestMicPermission(requestId);}catch(e){delete __pendingPermResolvers[requestId];cb(false);}
-}
-window.__actionablesVoiceState=function(requestId,listening){
-  if(requestId!==__nativeVoiceRequestId)return;
-  aiState.voiceListening=!!listening;
-  if(!listening){__nativeVoiceRequestId=null;}
-  render();
-};
-window.__actionablesVoiceResult=function(requestId,text,isFinal){
-  if(requestId!==__nativeVoiceRequestId)return;
-  text=(text||'').trim();
-  var combined=(__nativeVoiceBase+(text?' '+text:'')).replace(/\s+/g,' ').trim();
-  aiState.input=combined;
-  var inp=$('#aiInput');
-  if(inp){inp.value=combined;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
-  if(isFinal)__nativeVoiceBase=combined;
-  render();
-};
-window.__actionablesVoiceError=function(requestId,message){
-  if(requestId!==__nativeVoiceRequestId)return;
-  __nativeVoiceRequestId=null;aiState.voiceListening=false;aiState.err=message||'Voice input failed. Try again.';render();
-};
-function aiStartNativeVoice(){
-  var requestId='voice_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-  __nativeVoiceRequestId=requestId;
-  __nativeVoiceBase=(aiState.input||'').trim();
-  aiState.voiceListening=true;aiState.voiceSupported=true;aiState.err='';render();
-  try{A.startSpeechRecognition(requestId,'en-IN');}
-  catch(e){__nativeVoiceRequestId=null;aiState.voiceListening=false;aiState.err='Could not start microphone.';render();}
-}
-/* ---- Native mic-permission bridge (Android) -----------------------------
-   Requested only on the mic button press. */
-/* ---- Native mic-permission bridge (Android) -----------------------------
-   Mirrors the save-file pattern: A.requestMicPermission() cannot block on
-   the system permission dialog, so the native side calls back into
-   window.__actionablesResolvePermission('mic', requestId, granted) once the
-   user answers. Requested only here, on the mic button press \u2014 never at
-   app startup. */
-var __pendingPermResolvers={};
-window.__actionablesResolvePermission=function(kind,requestId,granted){
-  var resolver=__pendingPermResolvers[requestId];
-  if(!resolver)return;
-  delete __pendingPermResolvers[requestId];
-  resolver(granted);
-};
-function requestNativeMicPermission(cb){
-  if(!(A&&A.requestMicPermission)){cb(true);return;} // not in native wrapper \u2014 browser handles its own prompt
-  var requestId='mic_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-  __pendingPermResolvers[requestId]=cb;
-  A.requestMicPermission(requestId);
-}
 function aiStartVoice(){
   if(aiState.busy){toast('Wait for the current AI request to finish');return;}
-  if(aiState.voiceListening){aiStopVoice();render();return;}
-  if(A&&A.startSpeechRecognition){
-    requestNativeMicPermission(function(granted){
-      if(!granted){aiState.voiceListening=false;aiState.err='Microphone permission was denied.';render();return;}
-      aiStartNativeVoice();
-    });
-    return;
-  }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){aiState.voiceSupported=false;render();toast('Voice input is not supported in this browser');return;}
+  if(aiState.voiceListening){aiStopVoice();render();return;}
   aiState.voiceSupported=true;
   var base=(aiState.input||'').trim();
   var finalText=base?base+' ':'',rec;
   try{rec=new SR();}catch(e){toast('Could not start voice input');return;}
-  rec.lang='en-IN';rec.continuous=false;rec.interimResults=true;window.__aiRecognition=rec;
-  aiState.voiceListening=true;aiState.err='';render();
+  rec.lang='en-IN';
+  rec.continuous=false;
+  rec.interimResults=true;
+  window.__aiRecognition=rec;
+  aiState.voiceListening=true;
+  aiState.err='';
+  render();
   setTimeout(function(){var inp=$('#aiInput');if(inp){inp.focus();}},30);
   rec.onresult=function(ev){
     var interim='';
@@ -2573,10 +2472,19 @@ function aiStartVoice(){
       if(ev.results[i].isFinal)finalText+=txt+' ';else interim+=txt;
     }
     aiState.input=(finalText+interim).replace(/\s+/g,' ').trim();
-    var inp=$('#aiInput');if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
+    var inp=$('#aiInput');
+    if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
   };
-  rec.onerror=function(ev){aiState.voiceListening=false;window.__aiRecognition=null;var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech'?'No speech detected. Try again.':'Voice input failed. Try again.');aiState.err=msg;render();};
-  rec.onend=function(){aiState.voiceListening=false;window.__aiRecognition=null;var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';render();};
+  rec.onerror=function(ev){
+    aiState.voiceListening=false;window.__aiRecognition=null;
+    var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech'?'No speech detected. Try again.':'Voice input failed. Try again.');
+    aiState.err=msg;render();
+  };
+  rec.onend=function(){
+    aiState.voiceListening=false;window.__aiRecognition=null;
+    var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';
+    render();
+  };
   try{rec.start();}catch(e){aiStopVoice();render();toast('Could not start microphone');}
 }
 function aiClearChat(){
