@@ -98,3 +98,7 @@ Common causes:
   method above — it's less error-prone than drag-and-drop)
 
 Paste me the error text and I'll fix it.
+
+
+## Build workflow note
+The Android project in this package is a native Gradle project under `android/`, not a Capacitor CLI-generated platform directory. The GitHub Actions workflow therefore copies `www/` directly into `android/app/src/main/assets/public/` instead of running `npx cap sync android`.
