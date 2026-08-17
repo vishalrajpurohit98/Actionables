@@ -2055,3 +2055,526 @@ html.light-theme .theme-preview-swatch{background:#F0F4F8}.theme-preview-swatch[
   margin-bottom: 2px;
   opacity: .85;
 }
+
+
+/* ============================================================
+   V8.1 — Refined Light Workspace
+   Main content only. Sidebar/navigation structure is untouched.
+   ============================================================ */
+html.light-theme,
+html.light-theme body {
+  --bg: #F6F8FC;
+  --sur: #FFFFFF;
+  --sur2: #F1F5FA;
+  --line: #D9E2EF;
+  --line2: #B9C8DC;
+  --tx: #182338;
+  --tx2: #53647E;
+  --tx3: #7A8AA2;
+  --acc: #2167E8;
+  --acc-dim: rgba(33,103,232,.09);
+  --red: #D83B36;
+  --red-dim: rgba(216,59,54,.09);
+  --amb: #A96B00;
+  --amb-dim: rgba(169,107,0,.10);
+  --grn: #168253;
+  --grn-dim: rgba(22,130,83,.09);
+  --pur: #6841C6;
+  --pur-dim: rgba(104,65,198,.09);
+  --tea: #087E89;
+  --tea-dim: rgba(8,126,137,.09);
+  background: #F6F8FC;
+  color: var(--tx);
+}
+
+/* Main workspace background — intentionally not applied to the sidebar. */
+@media (min-width: 1024px) {
+  html.light-theme,
+  html.light-theme body {
+    background:
+      radial-gradient(circle at 76% 0%, rgba(33,103,232,.045), transparent 30%),
+      #F6F8FC;
+  }
+
+  #app {
+    background: transparent;
+  }
+
+  .screen {
+    min-height: 100vh;
+  }
+
+  .topbar {
+    padding: 24px 28px 14px;
+    background: linear-gradient(180deg, rgba(246,248,252,.98) 72%, rgba(246,248,252,0));
+  }
+
+  .topbar h1 {
+    font-size: 1.55rem;
+    letter-spacing: -.025em;
+    color: #152138;
+  }
+
+  .topbar .sub {
+    margin-top: 3px;
+    color: #7A8AA2;
+    font-size: .7rem;
+  }
+
+  .topbar .iconbtn,
+  .topbar .search-pill {
+    background: rgba(255,255,255,.88);
+    border-color: #D5E0EE;
+    box-shadow: 0 2px 7px rgba(42,70,110,.045);
+  }
+
+  .topbar .iconbtn:hover,
+  .topbar .search-pill:hover {
+    border-color: #9DB8DF;
+    background: #fff;
+  }
+
+  .search-pill {
+    border-radius: 11px;
+    color: #637694;
+  }
+
+  .search-pill kbd {
+    background: #F0F4F9;
+    border-color: #D6E0EC;
+    color: #73839A;
+  }
+
+  /* Summary pills */
+  .sumstrip {
+    padding: 2px 28px 15px;
+    gap: 8px;
+  }
+
+  .sumpill {
+    background: #FFFFFF;
+    border-color: #D5E0EE;
+    color: #53647E;
+    box-shadow: 0 2px 7px rgba(42,70,110,.035);
+  }
+
+  .sumpill:hover {
+    border-color: #AFC4E3;
+    transform: translateY(-1px);
+  }
+
+  /* Focus panel */
+  .home-focus {
+    margin: 0 28px 16px;
+    background: rgba(255,255,255,.82);
+    border: 1px solid #D8E2EF;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(42,70,110,.055);
+    overflow: hidden;
+  }
+
+  .home-focus-head {
+    padding: 15px 17px 10px;
+  }
+
+  .home-focus-head h2 {
+    color: #1B2940;
+    font-size: 1rem;
+    margin-top: 1px;
+    letter-spacing: -.012em;
+  }
+
+  .home-focus .eyebrow {
+    padding: 0;
+    color: #7A8AA2;
+  }
+
+  .home-focus .btn {
+    box-shadow: none;
+  }
+
+  .intel-section {
+    margin: 0;
+    padding: 0 14px 14px;
+  }
+
+  .intel-card {
+    background: #F8FAFD;
+    border-color: #DCE5F0;
+  }
+
+  .intel-main:hover {
+    background: #F1F6FD;
+  }
+
+  /* Quick actions */
+  .selfrow {
+    margin: 0 28px 15px;
+    gap: 10px;
+  }
+
+  .selfrow .quickadd {
+    min-height: 50px;
+    border-radius: 12px;
+    background: #FFFFFF;
+    border: 1px solid #BFD0E7;
+    box-shadow: 0 3px 10px rgba(42,70,110,.04);
+    color: #334D72;
+    font-weight: 650;
+  }
+
+  .selfrow .quickadd:hover {
+    border-color: #8FAED8;
+    background: #FBFDFF;
+    transform: translateY(-1px);
+  }
+
+  .selfrow .viewself {
+    border-color: #5AA77D;
+    color: #16734A;
+    background: #FBFEFC;
+  }
+
+  /* Section labels */
+  .eyebrow {
+    padding-left: 28px;
+    padding-right: 28px;
+    color: #7B8BA3;
+  }
+
+  .eyebrow .lnk {
+    color: #2167E8;
+  }
+
+  /* Board */
+  .board-grid {
+    padding: 0 28px;
+    column-gap: 20px;
+  }
+
+  .proj-block {
+    background: transparent;
+  }
+
+  .ownhead {
+    padding: 12px 12px 9px;
+    border-radius: 10px;
+    color: #22314A;
+  }
+
+  .ownhead:hover {
+    background: rgba(255,255,255,.72);
+  }
+
+  .ownhead h3 {
+    font-size: .96rem;
+  }
+
+  .ownhead .cnt {
+    color: #7A8AA2;
+  }
+
+  .grp {
+    padding: 8px 8px 6px;
+    color: #61738F;
+  }
+
+  .brows {
+    gap: 8px;
+  }
+
+  .brows .orow {
+    background: #FFFFFF;
+    border: 1px solid #D8E2EE;
+    border-radius: 13px;
+    box-shadow: 0 3px 11px rgba(42,70,110,.045);
+    padding: 12px 13px;
+  }
+
+  .brows .orow:hover {
+    border-color: #B7CBE6;
+    box-shadow: 0 6px 16px rgba(42,70,110,.07);
+    transform: translateY(-1px);
+  }
+
+  .brows .orow.od {
+    border-left: 3px solid var(--red);
+    background: #FFFDFC;
+  }
+
+  .orow .row-title,
+  .orow .ttl {
+    color: #1D2A40;
+  }
+
+  .orow .row-desc {
+    color: #697B95;
+  }
+
+  .orow .row-meta {
+    color: #6F819B;
+  }
+
+  .badge,
+  .chipmini,
+  .ownchip,
+  .agechip {
+    border-color: #D5E0EC;
+  }
+
+  .datechip {
+    border: 1px solid #D9E2EE;
+  }
+
+  /* List view */
+  .searchrow {
+    padding: 5px 28px 0;
+  }
+
+  .searchrow input {
+    background: #FFFFFF;
+    border-color: #C8D5E6;
+    min-height: 46px;
+    box-shadow: 0 2px 7px rgba(42,70,110,.035);
+  }
+
+  .searchrow input:focus {
+    box-shadow: 0 0 0 3px rgba(33,103,232,.09);
+  }
+
+  .sqbtn {
+    background: #FFFFFF;
+    border-color: #C8D5E6;
+  }
+
+  .viewsel {
+    padding: 14px 28px 4px;
+  }
+
+  .vs-sel select {
+    background: #FFFFFF;
+    border-color: #C8D5E6;
+    box-shadow: 0 2px 7px rgba(42,70,110,.025);
+  }
+
+  .vs-sel select:hover {
+    border-color: #A8BCD8;
+  }
+
+  .chips {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .chip {
+    background: #FFFFFF;
+    border-color: #D2DDEB;
+    color: #526580;
+    box-shadow: 0 1px 4px rgba(42,70,110,.025);
+  }
+
+  .chip:hover {
+    border-color: #AFC4E1;
+    background: #FBFDFF;
+  }
+
+  .chip.on {
+    background: var(--acc);
+    border-color: var(--acc);
+    color: #FFFFFF;
+    box-shadow: 0 4px 10px rgba(33,103,232,.18);
+  }
+
+  .tagrow {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .tagdrop-btn {
+    background: #FFFFFF;
+    border-color: #D2DDEB;
+  }
+
+  .grp-proj {
+    margin-left: 28px;
+    margin-right: 28px;
+    padding: 12px 13px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.55);
+  }
+
+  .grp-sub {
+    margin-left: 28px;
+    margin-right: 28px;
+  }
+
+  .list {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .list .arow {
+    background: #FFFFFF;
+    border-color: #D8E2EE;
+    border-radius: 13px;
+    box-shadow: 0 3px 11px rgba(42,70,110,.04);
+  }
+
+  .list .arow:hover {
+    border-color: #B7CBE6;
+    box-shadow: 0 6px 16px rgba(42,70,110,.065);
+  }
+
+  /* Make status chips easier to scan without becoming colorful. */
+  html.light-theme .b-ip {
+    color: #1F65D8;
+    background: #EDF4FF;
+  }
+  html.light-theme .b-ar {
+    color: #986000;
+    background: #FFF5DF;
+  }
+  html.light-theme .b-asg {
+    color: #6841C6;
+    background: #F3EEFF;
+  }
+  html.light-theme .b-dn {
+    color: #16774B;
+    background: #EAF8F0;
+  }
+
+  /* Project cards / statistics */
+  .stats {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .stat {
+    background: #FFFFFF;
+    border-color: #D8E2EE;
+    box-shadow: 0 3px 10px rgba(42,70,110,.04);
+  }
+
+  /* Calendar */
+  .calhead,
+  .dow,
+  .calgrid {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  .calnav {
+    background: #FFFFFF;
+    border-color: #D2DDEB;
+  }
+
+  .cell {
+    background: #FFFFFF;
+    border-color: #D8E2EE;
+  }
+
+  .cell.today {
+    box-shadow: inset 0 0 0 1px var(--acc), 0 3px 9px rgba(33,103,232,.08);
+  }
+
+  /* Floating add button */
+  .fab {
+    background: #2167E8;
+    color: #FFFFFF;
+    border: 1px solid #1D5ED6;
+    box-shadow: 0 10px 24px rgba(33,103,232,.23);
+  }
+
+  .fab:hover {
+    background: #195CD2;
+    transform: translateY(-1px);
+  }
+
+  /* Sheets and dialogs */
+  .sheet {
+    background: #FFFFFF;
+    border-color: #D5E0EC;
+    box-shadow: 0 -12px 35px rgba(34,55,86,.12);
+  }
+
+  .shead {
+    border-bottom-color: #E1E8F1;
+  }
+
+  .sfoot {
+    background: #FFFFFF;
+    border-top-color: #E1E8F1;
+  }
+
+  .shead .x,
+  .btn.ghost {
+    background: #F4F7FB;
+    border-color: #D4DFEC;
+    color: #53647E;
+  }
+
+  .btn.pri {
+    color: #FFFFFF;
+    background: #2167E8;
+    box-shadow: 0 4px 10px rgba(33,103,232,.14);
+  }
+
+  .pane,
+  .tbl,
+  .category-section,
+  .more-nav .rowline,
+  .workload-row,
+  .brief-item {
+    background: #FFFFFF;
+    border-color: #D8E2EE;
+    box-shadow: 0 3px 11px rgba(42,70,110,.035);
+  }
+
+  .pane input,
+  .pane select,
+  .pane textarea,
+  .sbody input,
+  .sbody select,
+  .sbody textarea {
+    background: #F9FBFD;
+    border-color: #C9D6E7;
+  }
+
+  /* Keep the sidebar structure untouched; only its existing theme variables
+     inherit the refined palette. No new menu items are introduced. */
+}
+
+/* Mobile/tablet light polish */
+@media (max-width: 1023px) {
+  html.light-theme,
+  html.light-theme body {
+    background: #F6F8FC;
+  }
+
+  .topbar {
+    background: linear-gradient(#F6F8FC 82%, transparent);
+  }
+
+  .selfrow .quickadd,
+  .searchrow input,
+  .sqbtn,
+  .vs-sel select,
+  .list .arow,
+  .brows .orow,
+  .stat,
+  .cell {
+    background: #FFFFFF;
+    border-color: #D8E2EE;
+  }
+
+  .list .arow,
+  .brows .orow {
+    box-shadow: 0 3px 10px rgba(42,70,110,.04);
+  }
+
+  .chip,
+  .sumpill {
+    background: #FFFFFF;
+    border-color: #D2DDEB;
+  }
+}
