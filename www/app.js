@@ -1575,6 +1575,37 @@ function syncSchedule(){try{if(A&&A.scheduleDaily)A.scheduleDaily(S.settings.not
 /* ============================================================
    EVENTS
    ============================================================ */
+// Comment controls use a dedicated delegated listener so they remain reliable
+// even when the detail sheet is re-rendered after each comment action.
+document.addEventListener('click',function(e){
+  var btn=e.target.closest?e.target.closest('.cmt-ic,[data-act=\"d-cmt-editcancel\"],[data-act=\"d-cmt-editsave\"],[data-act=\"d-cmt-del\"]'):null;
+  if(!btn)return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  var rec=sheetFor('detail');
+  if(!rec)return;
+  var a=actById(rec.data.id);
+  if(!a)return;
+  var act=btn.getAttribute('data-act');
+  var i=parseInt(btn.getAttribute('data-i'),10);
+  if(act==='d-cmt-edit' && !isNaN(i) && a.comments[i]){ rec.data.editCmt=i; renderDetail(rec); return; }
+  if(act==='d-cmt-editcancel'){ delete rec.data.editCmt; renderDetail(rec); return; }
+  if(act==='d-cmt-editsave' && !isNaN(i) && a.comments[i]){
+    var ta=$('#cmtEdit',rec.sheet),txt=ta?(ta.value||'').trim():'';
+    if(!txt){toast('Comment cannot be empty');return;}
+    a.comments[i].text=cap(txt,4000); a.comments[i].ts=Date.now(); a.comments[i].edited=true;
+    logAct(a,'Comment edited'); a.updatedAt=Date.now(); saveState(); delete rec.data.editCmt;
+    renderDetail(rec); render(); toast('Comment updated'); return;
+  }
+  if(act==='d-cmt-del' && !isNaN(i) && a.comments[i]){
+    if(window.confirm('Delete this comment?')){
+      a.comments.splice(i,1); logAct(a,'Comment deleted'); a.updatedAt=Date.now(); saveState();
+      delete rec.data.editCmt; renderDetail(rec); render(); toast('Comment deleted');
+    }
+    return;
+  }
+},true);
+
 document.addEventListener('click',function(e){
   var el=e.target.closest?e.target.closest('[data-act]'):null;
   if(!el)return;if(el.tagName==='A')return;
@@ -1709,6 +1740,61 @@ document.addEventListener('click',function(e){
     case 'confirm-ok':{var cs=sheetFor('confirm');if(cs){var cb=cs.onOk;closeSheet(cs);if(cb)cb();}break;}
     case 'input-ok':{var isRec=sheetFor('input');if(isRec){var val=($('#inpS',isRec.sheet)||{}).value||'';val=val.trim();if(!val){toast('Enter a value');break;}var cb2=isRec.onOk;closeSheet(isRec);if(cb2)cb2(val);}break;}
     /* Detail sheet */
+    case 'd-delete':{
+      var drDel=sheetFor('detail');
+      if(drDel){
+        var delA=actById(drDel.data.id);
+        if(delA){
+          confirmSheet('Delete task?','Delete “'+delA.lineItem+'”? This removes the task from the current dataset.','Delete',true,function(){
+            snapshot('Before task deletion');
+            var idx=S.actionables.findIndex(function(x){return x.id===delA.id;});
+            if(idx>=0){S.actionables.splice(idx,1);saveState();closeSheet(drDel);render();toast('Task deleted');}
+          });
+        }
+      }
+      break;
+    }
+    case 'd-comment':{
+      var drC=sheetFor('detail');
+      if(drC){
+        var ci=$('#cmtIn',drC.sheet),txt=ci?(ci.value||'').trim():'';
+        if(!txt){toast('Write a comment first');break;}
+        addComment(drC.data.id,cap(txt,4000));
+        renderDetail(drC);render();toast('Comment added');
+      }
+      break;
+    }
+    case 'd-cmt-rephrase':{
+      var drR=sheetFor('detail');
+      if(drR)aiRephraseComment(drR);
+      break;
+    }
+    case 'd-cmt-edit':{
+      var drE=sheetFor('detail'),ei=parseInt(el.getAttribute('data-i'),10);
+      if(drE&&!isNaN(ei)){drE.data.editCmt=ei;renderDetail(drE);}
+      break;
+    }
+    case 'd-cmt-editcancel':{
+      var drEC=sheetFor('detail');if(drEC){delete drEC.data.editCmt;renderDetail(drEC);}
+      break;
+    }
+    case 'd-cmt-editsave':{
+      var drES=sheetFor('detail'),esi=parseInt(el.getAttribute('data-i'),10);
+      if(drES&&!isNaN(esi)){
+        var ae=actById(drES.data.id),ta=$('#cmtEdit',drES.sheet),nt=ta?(ta.value||'').trim():'';
+        if(ae&&ae.comments[esi]&&nt){ae.comments[esi].text=cap(nt,4000);ae.comments[esi].ts=Date.now();ae.comments[esi].edited=true;logAct(ae,'Comment edited');ae.updatedAt=Date.now();saveState();delete drES.data.editCmt;renderDetail(drES);render();toast('Comment updated');}
+        else toast('Comment cannot be empty');
+      }
+      break;
+    }
+    case 'd-cmt-del':{
+      var drCD=sheetFor('detail'),di=parseInt(el.getAttribute('data-i'),10);
+      if(drCD&&!isNaN(di)){
+        var ad=actById(drCD.data.id);
+        if(ad&&ad.comments[di])confirmSheet('Delete comment?','Remove this comment?','Delete',true,function(){ad.comments.splice(di,1);logAct(ad,'Comment deleted');ad.updatedAt=Date.now();saveState();renderDetail(drCD);render();toast('Comment deleted');});
+      }
+      break;
+    }
     case 'd-spoc':{var dr0=sheetFor('detail');if(dr0){var a0=actById(dr0.data.id);if(a0){var arr0=a0.spocIds.slice();var ix0=arr0.indexOf(id);if(ix0>=0)arr0.splice(ix0,1);else arr0.push(id);updateAct(dr0.data.id,{spocIds:arr0});renderDetail(dr0);render();}}break;}
     case 'd-spoc-new':{var drn=sheetFor('detail');if(drn){var an=actById(drn.data.id);if(an)personSheet(function(u){updateAct(drn.data.id,{spocIds:an.spocIds.concat([u.id])});renderDetail(drn);render();});}break;}
     case 'd-complete':{var dr=sheetFor('detail');if(dr){updateAct(dr.data.id,{status:'Completed'});var a2=actById(dr.data.id);if(a2){logAct(a2,'Completed');saveState();}renderDetail(dr);render();toast('Completed');}break;}
@@ -1830,6 +1916,7 @@ document.addEventListener('change',function(e){
       case 'f-recur':f.recurrence.enabled=v!=='none';f.recurrence.freq=v==='none'?'weekly':v;if(v==='custom'&&!f.recurrence.unit)f.recurrence.unit='week';if(f.recurrence.enabled&&!f.eta)f.eta=addDaysISO(todayISO(),1),f.etaKind='date';renderForm(fr);break;
       case 'f-recur-int':f.recurrence.interval=Math.max(1,parseInt(v,10)||1);break;case 'f-recur-unit':f.recurrence.unit=v;break;case 'f-recur-end':f.recurrence.endDate=v;break;
       case 'f-status':f.status=v;break;case 'f-notes':f.notes=v;break;
+      case 'f-spoc-select':f.spocIds=v?[v]:[];break;
       case 'f-type':if(v==='__newtype'){inputSheet('New type','Type name',function(name){name=(name||'').trim();if(name){if(S.taskTypes.indexOf(name)<0)S.taskTypes.push(name);f.type=name;saveState();renderForm(fr);}});}else{f.type=v;renderForm(fr);}break;
       case 'f-tag-add-dd':if(v){f.tags=f.tags||[];addTagTo(f.tags,v);renderForm(fr);}break;
     }
@@ -2207,14 +2294,12 @@ function statusPickHtml(f,allowCompleted){
   }).join('')+'</div>';
 }
 function ownerSelHtml(f){
-  var sel=f.spocIds.length
-    ? f.spocIds.map(function(id){return '<button class="ownchip sel" data-act="f-spoc" data-id="'+id+'">'+I('check')+'<span>'+esc(personName(id))+'</span><b>\u00d7</b></button>';}).join('')
-    : '<span class="ownchip tbc">'+I('person')+'<span>To be assigned</span></span>';
-  var opts=ownersByRecent().map(function(u){var on=f.spocIds.indexOf(u.id)>=0;return '<button class="own-opt'+(on?' on':'')+'" data-act="f-spoc" data-id="'+u.id+'" data-name="'+esc(u.name.toLowerCase())+'">'+esc(u.name)+(on?'<span class="ok">'+I('check')+'</span>':'')+'</button>';}).join('');
-  return '<div class="ownsel"><div class="ownchips">'+sel+'</div>'+
-    '<input id="fOwnerSearch" class="ownsearch" placeholder="Search people to assign\u2026" autocomplete="off">'+
-    '<div class="ownopts">'+opts+'<button class="own-opt add" data-act="f-spoc-new" data-name="new person">'+I('plus')+'New person</button></div></div>';
+  var cur=f.spocIds.length?f.spocIds[0]:'';
+  var opts='<option value=""'+(!cur?' selected':'')+'>Unassigned</option>'+
+    peopleSorted().map(function(u){return '<option value="'+esc(u.id)+'"'+(cur===u.id?' selected':'')+'>'+esc(u.name)+'</option>';}).join('');
+  return '<div class="ownsel"><select data-chg="f-spoc-select">'+opts+'</select>'+    '<div class="hint">Select one SPOC for this task.</div></div>';
 }
+
 function formValid(f){return !!(f.lineItem&&f.lineItem.trim())&&(f.quick||!!(f.task&&f.task.trim()));}
 function updateSaveBtn(rec,f){var sv=$('.sfoot .btn.pri',rec.sheet);if(sv){var ok=formValid(f);sv.disabled=!ok;if(ok)sv.classList.add('ready');else sv.classList.remove('ready');}}
 function wireOwnerSearch(rec){var os=$('#fOwnerSearch',rec.sheet);if(!os)return;os.addEventListener('input',function(){var q=this.value.toLowerCase(),opts=rec.sheet.querySelectorAll('.own-opt');for(var i=0;i<opts.length;i++){if(opts[i].classList.contains('add'))continue;var nm=opts[i].getAttribute('data-name')||'';opts[i].style.display=(!q||nm.indexOf(q)>=0)?'':'none';}});}
