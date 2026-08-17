@@ -1,9 +1,0 @@
-{
-	"appId": "com.fable.actionables",
-	"appName": "Actionables",
-	"webDir": "www",
-	"bundledWebRuntime": false,
-	"android": {
-		"allowMixedContent": true
-	}
-}
