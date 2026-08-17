@@ -10,10 +10,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: ./Android
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,29 +28,38 @@ jobs:
           java-version: '17'
 
       - name: Install npm dependencies
+        working-directory: ./Android
         run: npm ci
 
       - name: Sync Capacitor
+        working-directory: ./Android
         run: npx cap sync android
 
       - name: Prepare Gradle wrapper
+        working-directory: ./Android/android
         run: |
-          sed -i 's/\r$//' android/gradlew
-          chmod +x android/gradlew
+          sed -i 's/\r$//' gradlew
+          chmod +x gradlew
 
-      - name: Verify Gradle wrapper
+      - name: Verify Android Gradle project
+        working-directory: ./Android/android
         run: |
-          ls -la android/
-          test -f android/gradlew
-          head -n 1 android/gradlew
+          echo "Current directory:"
+          pwd
+          echo "Gradle files:"
+          ls -la
+          test -f settings.gradle || test -f settings.gradle.kts
+          test -f gradlew
 
       - name: Build debug APK
-        run: bash android/gradlew assembleDebug
+        working-directory: ./Android/android
+        run: ./gradlew assembleDebug
 
       - name: Verify APK
+        working-directory: ./Android/android
         run: |
-          ls -lh android/app/build/outputs/apk/debug/
-          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/
+          test -f app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK as build artifact
         uses: actions/upload-artifact@v4
