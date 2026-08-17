@@ -1634,6 +1634,7 @@ document.addEventListener('click',function(e){
     case 'cloud-signout':{if(window.Cloud&&window.Cloud.signOut){confirmSheet('Sign out of sync?','This device will stop syncing until you sign in again. Your data stays saved locally.','Sign out',false,function(){window.Cloud.signOut();render();toast('Signed out of sync');});}break;}
     /* Actionables */
     case 'open':openDetail(id);break;
+    case 'd-delete':{var drd=sheetFor('detail');if(!drd)break;var da=actById(drd.data.id);if(!da){toast('Task no longer exists');closeSheet(drd);break;}confirmSheet('Delete this actionable?','Delete “'+(da.lineItem||'Untitled')+'”. A restore point will be created first.','Delete',true,function(){snapshot('Before delete');S.actionables=S.actionables.filter(function(x){return x.id!==da.id;});saveState();closeSheet(drd);render();toast('Deleted “'+(da.lineItem||'Untitled')+'”',{label:'Undo',fn:function(){restoreVersion(0);}});});break;}
     case 'bulk-select':{var bid=el.getAttribute('data-id')||id;if(bid){if(el.checked)bulkSel[bid]=true;else delete bulkSel[bid];render();}break;}
     case 'bulk-clear':bulkSel={};render();break;
     case 'bulk-open':openBulkActions();break;
