@@ -895,40 +895,97 @@ html.light-theme .cloudgate { background: rgba(210,222,240,.9); }
 .cloudcard .cg-skip:active { color: var(--tx2); }
 
 /* ============================================================
-   ACTIONABLES LOCK SCREEN — Mac-inspired, not a replica.
-   The app remains hidden until Firebase authentication succeeds.
+   ACTIONABLES LOCK SCREEN — simple Material-style workspace unlock
+   Theme-aware, compact, readable, no decorative gradients/cards.
    ============================================================ */
 body.auth-locked #app,
 body.auth-locked #sheets,
 body.auth-locked #toastwrap { visibility: hidden !important; }
-.cloudgate { overflow: auto; flex-direction: column; justify-content: center; text-align: center; }
-.cloudgate .lock-bg { position:absolute; inset:0; pointer-events:none; background:
-  radial-gradient(circle at 50% 18%, rgba(74,120,255,.18), transparent 34%),
-  radial-gradient(circle at 20% 85%, rgba(0,196,140,.10), transparent 28%),
-  linear-gradient(145deg, rgba(4,8,15,.98), rgba(10,15,24,.94)); }
-html.light-theme .cloudgate .lock-bg { background:
-  radial-gradient(circle at 50% 18%, rgba(70,110,220,.12), transparent 34%),
-  linear-gradient(145deg, rgba(238,244,252,.98), rgba(216,226,240,.96)); }
-.lock-top { position:relative; z-index:1; margin-bottom:18px; color:var(--tx); }
-.lock-clock { font-size:clamp(3rem,8vw,5.5rem); line-height:1; font-weight:300; letter-spacing:-.055em; }
-.lock-date { margin-top:8px; font-size:1rem; color:var(--tx2); font-weight:500; }
-.lock-card { position:relative; z-index:1; max-width:390px; padding:26px 26px 20px; background:color-mix(in srgb,var(--sur) 88%, transparent); border-color:color-mix(in srgb,var(--line) 92%, transparent); border-radius:22px; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
-.lock-avatar { width:72px; height:72px; margin:0 auto 12px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.65rem; font-weight:700; background:linear-gradient(145deg,var(--acc),#6d7cff); color:#fff; border:2px solid rgba(255,255,255,.25); box-shadow:0 10px 30px rgba(0,0,0,.28); }
-.lock-card .cg-h { font-size:1.45rem; }
-.lock-user { margin-top:4px; font-size:.82rem; color:var(--tx2); }
-.lock-card .cg-s { margin-bottom:12px; }
-.lock-card .cg-btns { margin-top:18px; }
-.lock-unlock { width:100%; font-size:.92rem; font-weight:700; }
-.lock-links { display:flex; justify-content:center; gap:10px; margin-top:8px; }
-.lock-links .cg-skip { width:auto; margin-top:0; padding:6px 8px; }
-.lock-secure { margin-top:13px; font-size:.68rem; color:var(--tx3); }
-.lock-card input { border-width:1.5px; }
-.lock-card input:focus { border-width:2px; }
-.lock-card .cg-err { text-align:left; }
+
+.cloudgate{
+  position:fixed; inset:0; z-index:9999;
+  overflow:auto; display:flex; flex-direction:column;
+  align-items:center; justify-content:flex-start;
+  text-align:center; padding:34px 18px 22px;
+  background:var(--bg);
+  color:var(--tx);
+}
+.cloudgate .lock-bg{position:absolute;inset:0;pointer-events:none;background:var(--bg);}
+.lock-top{position:relative;z-index:1;color:var(--tx);margin:0 0 34px;}
+.lock-clock{font-size:clamp(3.4rem,7vw,5.1rem);line-height:1;font-weight:300;letter-spacing:-.055em;}
+.lock-date{margin-top:8px;font-size:.98rem;color:var(--tx2);font-weight:500;}
+.lock-card{
+  position:relative;z-index:1;width:min(410px,100%);
+  padding:28px 30px 22px;
+  background:var(--sur);
+  border:1px solid var(--line);
+  border-radius:16px;
+  box-shadow:0 8px 28px rgba(0,0,0,.10);
+}
+.lock-icon{
+  width:52px;height:52px;margin:0 auto 16px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--acc);background:var(--acc-dim);
+  border:1px solid color-mix(in srgb,var(--acc) 35%,var(--line));
+}
+.lock-icon svg{width:25px;height:25px;}
+.lock-card .cg-h{font-size:1.65rem;font-weight:750;line-height:1.2;color:var(--tx);}
+.lock-user{margin-top:5px;font-size:.84rem;color:var(--tx2);}
+.lock-card .cg-s{margin:20px 0 14px;font-size:.92rem;color:var(--tx2);}
+.lock-card .cg-l{
+  display:block;text-align:left;margin:14px 0 6px;
+  color:var(--tx2);font-size:.68rem;font-weight:750;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.lock-field{position:relative;}
+.lock-card input{
+  width:100%;height:50px;padding:0 44px 0 14px;
+  background:var(--sur2);color:var(--tx);
+  border:1px solid var(--line);border-radius:10px;
+  font-size:.92rem;box-shadow:none;
+}
+.lock-card input::placeholder{color:var(--tx3);}
+.lock-card input:hover{border-color:var(--tx3);}
+.lock-card input:focus{
+  border-color:var(--acc);border-width:1.5px;
+  box-shadow:0 0 0 3px var(--acc-dim);outline:none;
+}
+.lock-pass-toggle{
+  position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  width:32px;height:32px;border:0;background:transparent;
+  color:var(--tx2);display:grid;place-items:center;border-radius:7px;cursor:pointer;
+}
+.lock-pass-toggle:hover{background:var(--sur);color:var(--tx);}
+.lock-pass-toggle svg{width:18px;height:18px;}
+.lock-card .cg-btns{margin-top:16px;}
+.lock-unlock{
+  width:100%;height:50px;font-size:.92rem;font-weight:750;
+  border-radius:10px;
+}
+.lock-links{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:15px;}
+.lock-links .cg-skip{
+  width:auto;margin-top:0;padding:5px 7px;
+  color:var(--tx2);font-size:.78rem;
+}
+.lock-links .cg-skip:hover{color:var(--acc);}
+.lock-create{display:none;}
+.lock-secure{
+  margin-top:18px;font-size:.68rem;color:var(--tx3);
+}
+.lock-footer{
+  position:relative;z-index:1;margin-top:24px;
+  color:var(--tx3);font-size:.72rem;
+}
+.lock-footer b{color:var(--tx2);}
+.lock-card .cg-err{
+  text-align:left;margin-top:10px;
+  color:var(--red);font-size:.78rem;
+}
 @media(max-width:520px){
-  .cloudgate{padding:16px;}
-  .lock-clock{font-size:3.4rem;}
-  .lock-card{max-width:100%; padding:22px 18px 17px;}
+  .cloudgate{padding:24px 14px 18px;}
+  .lock-top{margin-bottom:26px;}
+  .lock-clock{font-size:3.5rem;}
+  .lock-card{padding:24px 20px 20px;border-radius:14px;}
 }
 
 /* ============================================================
