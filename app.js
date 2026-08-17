@@ -608,7 +608,7 @@ function vHome(){
   if(m.remDueL.length) pills.push('<button class="sumpill sp-fu"    data-act="kpi" data-q="followup">'+m.remDueL.length+' follow-ups due</button>');
   var _theme=S.settings.theme||'dark';
   var themeBtn='<button class="iconbtn" data-act="theme-toggle" title="Switch theme · current: '+themeLabel(_theme)+'">'+I(_theme==='dark'?'sun':'moon')+'</button>';
-  var bell='<button class="iconbtn" data-act="go-notif">'+I('bell')+(notifBadgeOn(m)?'<span class="dot"></span>':'')+' </button>';
+  var bell='<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(m)?'<span class="dot"></span>':'')+' </button>';
   var search='<button class="search-pill" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search anything…</span><kbd>Ctrl K</kbd></button>';
   var h=topbar('Actionables',esc(dateLine),false,cloudSyncBtnHtml()+cloudBadgeHtml()+themeBtn+search+bell);
   h+='<div class="sumstrip">'+pills.join('')+'</div>';

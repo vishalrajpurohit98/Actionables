@@ -2578,3 +2578,451 @@ html.light-theme body {
     border-color: #D2DDEB;
   }
 }
+
+/* ============================================================
+   V8.2 — Unified theme tokens + dark/AMOLED/high-contrast polish
+   No navigation/menu changes.
+   ============================================================ */
+
+/* Theme-aware elevation and controls */
+:root {
+  --page-bg: var(--bg);
+  --surface: var(--sur);
+  --surface-alt: var(--sur2);
+  --field: var(--sur2);
+  --text-primary: var(--tx);
+  --text-secondary: var(--tx2);
+  --text-muted: var(--tx3);
+  --border-soft: var(--line);
+  --border-strong: var(--line2);
+  --focus: var(--acc);
+  --focus-bg: var(--acc-dim);
+  --shadow-card: 0 3px 14px rgba(0,0,0,.12);
+}
+
+html, body { background: var(--page-bg); color: var(--text-primary); }
+
+/* Every common surface consumes theme tokens. */
+.topbar,
+.selfrow .quickadd,
+.searchrow input,
+.sqbtn,
+.viewsel .vs-sel select,
+.chip,
+.sumpill,
+.arow,
+.orow,
+.list,
+.brows,
+.pane,
+.tbl,
+.stat,
+.workload-row,
+.brief-item,
+.intel-card,
+.category-section,
+.more-nav .rowline,
+.global-result,
+.ai-pchg-btn,
+.ai-item-btn,
+.sheet,
+.theme-preview-row,
+.cmt,
+.notif,
+.cell,
+.kpi {
+  color: var(--text-primary);
+}
+
+input, select, textarea,
+.searchrow input,
+.viewsel .vs-sel select,
+.pane input, .pane select, .pane textarea,
+.sbody input, .sbody select, .sbody textarea,
+.cloudcard input {
+  color: var(--text-primary);
+  background: var(--field);
+  border-color: var(--border-strong);
+}
+
+input::placeholder, textarea::placeholder,
+.searchrow input::placeholder { color: var(--text-muted); opacity: 1; }
+
+/* Main page spacing: bring actionable information upward without crowding. */
+@media (min-width: 1024px) {
+  .topbar { padding-top: 15px; padding-bottom: 7px; }
+  .selfrow { margin-bottom: 8px; }
+  .searchrow { padding-top: 2px; }
+  .viewsel { padding-top: 9px; }
+  .chips { padding-top: 5px; padding-bottom: 8px; }
+}
+
+/* Header controls: clear icons + accessible hover/focus states. */
+.topbar .iconbtn {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+  box-shadow: 0 2px 8px rgba(0,0,0,.07);
+}
+.topbar .iconbtn:hover,
+.topbar .iconbtn:focus-visible {
+  color: var(--focus);
+  border-color: var(--focus);
+  background: var(--surface-alt);
+  outline: none;
+}
+.topbar .iconbtn .dot {
+  background: var(--red);
+  border-color: var(--surface);
+}
+
+/* Native title tooltip replacement for header controls. */
+.topbar .iconbtn[title]::after {
+  content: attr(title);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  display: none;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--text-primary);
+  color: var(--page-bg);
+  font-size: .66rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 5px 15px rgba(0,0,0,.22);
+  pointer-events: none;
+}
+.topbar .iconbtn[title]:hover::after,
+.topbar .iconbtn[title]:focus-visible::after { display: block; }
+
+/* Quick actions */
+.selfrow .quickadd {
+  min-height: 48px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-primary);
+  border-radius: 12px;
+}
+.selfrow .quickadd:hover,
+.selfrow .quickadd:focus-visible {
+  border-color: var(--focus);
+  background: var(--surface-alt);
+  outline: none;
+}
+.selfrow .viewself {
+  background: var(--grn);
+  color: #fff;
+  border-color: var(--grn);
+  box-shadow: 0 4px 12px rgba(0,0,0,.10);
+}
+.selfrow .viewself svg { color: #fff; }
+.selfrow .viewself:hover,
+.selfrow .viewself:focus-visible { background: var(--grn); filter: brightness(1.05); }
+
+/* Search / selects */
+.searchrow input,
+.sqbtn,
+.viewsel .vs-sel select {
+  border-color: var(--border-strong);
+  background: var(--field);
+}
+.searchrow input:focus,
+.viewsel .vs-sel select:focus { border-color: var(--focus); }
+
+/* Filter strip: never wrap/cut off; horizontal scrolling is intentional. */
+.chips {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  padding-right: 24px;
+}
+.chips::-webkit-scrollbar { display: block; height: 4px; }
+.chips::-webkit-scrollbar-track { background: transparent; }
+.chips::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+.chip {
+  flex: 0 0 auto;
+  min-height: 36px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border-color: var(--border-soft);
+  white-space: nowrap;
+}
+.chip .n {
+  color: var(--text-primary);
+  font-weight: 800;
+  opacity: 1;
+  min-width: 1.05em;
+  text-align: center;
+}
+.chip.on { color: #fff; background: var(--acc); border-color: var(--acc); }
+.chip.on .n { color: #fff; opacity: 1; }
+
+/* Task due hierarchy */
+.row-side .datechip,
+.row-side .eta-l { font-weight: 700; }
+.row-side .eta-sub,
+.row-side .eta-r { color: var(--text-muted); font-size: .66rem; }
+
+/* ============================================================
+   DARK AMOLED — all surfaces remain dark, no white-card leakage
+   ============================================================ */
+html:not(.light-theme):not(.high-contrast-theme) {
+  --bg: #000000;
+  --sur: #090D12;
+  --sur2: #0F151D;
+  --line: #242E39;
+  --line2: #344252;
+  --tx: #F4F7FA;
+  --tx2: #B0BBC8;
+  --tx3: #7E8B9A;
+  --acc: #72A7FF;
+  --acc-dim: rgba(114,167,255,.14);
+  --red: #FF6262;
+  --red-dim: rgba(255,98,98,.15);
+  --amb: #FFC15A;
+  --amb-dim: rgba(255,193,90,.14);
+  --grn: #43D69A;
+  --grn-dim: rgba(67,214,154,.14);
+  --pur: #B895FF;
+  --pur-dim: rgba(184,149,255,.14);
+  --tea: #45D0CA;
+  --tea-dim: rgba(69,208,202,.14);
+  --page-bg: #000000;
+  --surface: #090D12;
+  --surface-alt: #0F151D;
+  --field: #0B1118;
+  --text-primary: #F4F7FA;
+  --text-secondary: #B0BBC8;
+  --text-muted: #7E8B9A;
+  --border-soft: #242E39;
+  --border-strong: #344252;
+}
+
+html:not(.light-theme):not(.high-contrast-theme) .tabbar,
+html:not(.light-theme):not(.high-contrast-theme) .topbar,
+html:not(.light-theme):not(.high-contrast-theme) .sheet,
+html:not(.light-theme):not(.high-contrast-theme) .pane,
+html:not(.light-theme):not(.high-contrast-theme) .tbl,
+html:not(.light-theme):not(.high-contrast-theme) .stat,
+html:not(.light-theme):not(.high-contrast-theme) .list,
+html:not(.light-theme):not(.high-contrast-theme) .brows,
+html:not(.light-theme):not(.high-contrast-theme) .arow,
+html:not(.light-theme):not(.high-contrast-theme) .orow,
+html:not(.light-theme):not(.high-contrast-theme) .kpi,
+html:not(.light-theme):not(.high-contrast-theme) .sumpill,
+html:not(.light-theme):not(.high-contrast-theme) .chip,
+html:not(.light-theme):not(.high-contrast-theme) .notif,
+html:not(.light-theme):not(.high-contrast-theme) .workload-row,
+html:not(.light-theme):not(.high-contrast-theme) .brief-item,
+html:not(.light-theme):not(.high-contrast-theme) .intel-card,
+html:not(.light-theme):not(.high-contrast-theme) .category-section,
+html:not(.light-theme):not(.high-contrast-theme) .more-nav .rowline,
+html:not(.light-theme):not(.high-contrast-theme) .theme-preview-row {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border-soft);
+}
+
+html:not(.light-theme):not(.high-contrast-theme) .pane input,
+html:not(.light-theme):not(.high-contrast-theme) .pane select,
+html:not(.light-theme):not(.high-contrast-theme) .pane textarea,
+html:not(.light-theme):not(.high-contrast-theme) .sbody input,
+html:not(.light-theme):not(.high-contrast-theme) .sbody select,
+html:not(.light-theme):not(.high-contrast-theme) .sbody textarea,
+html:not(.light-theme):not(.high-contrast-theme) .cloudcard input,
+html:not(.light-theme):not(.high-contrast-theme) input,
+html:not(.light-theme):not(.high-contrast-theme) select,
+html:not(.light-theme):not(.high-contrast-theme) textarea {
+  background: var(--field);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+html:not(.light-theme):not(.high-contrast-theme) .grp,
+html:not(.light-theme):not(.high-contrast-theme) .grp-proj,
+html:not(.light-theme):not(.high-contrast-theme) .grp-sub,
+html:not(.light-theme):not(.high-contrast-theme) .ownhead:hover,
+html:not(.light-theme):not(.high-contrast-theme) .quickadd:hover,
+html:not(.light-theme):not(.high-contrast-theme) .chip:hover {
+  background: var(--surface-alt);
+}
+
+html:not(.light-theme):not(.high-contrast-theme) .topbar {
+  background: linear-gradient(var(--page-bg) 82%, transparent);
+}
+html:not(.light-theme):not(.high-contrast-theme) .topbar .iconbtn {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-color: var(--border-soft);
+}
+
+/* ============================================================
+   HIGH CONTRAST — strong surfaces, borders and readable controls
+   ============================================================ */
+html.high-contrast-theme {
+  --bg: #000000;
+  --sur: #080808;
+  --sur2: #161616;
+  --line: #777777;
+  --line2: #FFFFFF;
+  --tx: #FFFFFF;
+  --tx2: #FFFFFF;
+  --tx3: #D9D9D9;
+  --acc: #FFD400;
+  --acc-dim: rgba(255,212,0,.18);
+  --red: #FF6B6B;
+  --red-dim: rgba(255,107,107,.20);
+  --amb: #FFD000;
+  --amb-dim: rgba(255,208,0,.20);
+  --grn: #00F084;
+  --grn-dim: rgba(0,240,132,.20);
+  --pur: #D7B7FF;
+  --pur-dim: rgba(215,183,255,.20);
+  --tea: #4FF5EF;
+  --tea-dim: rgba(79,245,239,.20);
+  --page-bg: #000;
+  --surface: #080808;
+  --surface-alt: #161616;
+  --field: #000;
+  --text-primary: #fff;
+  --text-secondary: #fff;
+  --text-muted: #D9D9D9;
+  --border-soft: #777;
+  --border-strong: #fff;
+}
+html.high-contrast-theme .tabbar,
+html.high-contrast-theme .topbar,
+html.high-contrast-theme .sheet,
+html.high-contrast-theme .pane,
+html.high-contrast-theme .tbl,
+html.high-contrast-theme .stat,
+html.high-contrast-theme .list,
+html.high-contrast-theme .brows,
+html.high-contrast-theme .arow,
+html.high-contrast-theme .orow,
+html.high-contrast-theme .kpi,
+html.high-contrast-theme .sumpill,
+html.high-contrast-theme .chip,
+html.high-contrast-theme .notif,
+html.high-contrast-theme .workload-row,
+html.high-contrast-theme .brief-item,
+html.high-contrast-theme .intel-card,
+html.high-contrast-theme .category-section,
+html.high-contrast-theme .more-nav .rowline,
+html.high-contrast-theme .theme-preview-row {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border-soft);
+}
+html.high-contrast-theme input,
+html.high-contrast-theme select,
+html.high-contrast-theme textarea,
+html.high-contrast-theme .pane input,
+html.high-contrast-theme .pane select,
+html.high-contrast-theme .pane textarea,
+html.high-contrast-theme .sbody input,
+html.high-contrast-theme .sbody select,
+html.high-contrast-theme .sbody textarea {
+  background: var(--field);
+  color: #fff;
+  border: 2px solid var(--border-strong);
+}
+html.high-contrast-theme .chip .n,
+html.high-contrast-theme .chip.on .n { color: #fff; }
+html.high-contrast-theme .topbar .iconbtn { border: 2px solid var(--border-soft); color: #fff; }
+html.high-contrast-theme .topbar .iconbtn:hover,
+html.high-contrast-theme .topbar .iconbtn:focus-visible { border-color: var(--acc); color: var(--acc); }
+html.high-contrast-theme .selfrow .quickadd { border: 2px solid var(--border-strong); background: var(--surface); color: #fff; }
+html.high-contrast-theme .selfrow .viewself { background: var(--grn); color: #000; border-color: var(--grn); }
+html.high-contrast-theme .topbar { background: linear-gradient(#000 82%, transparent); }
+
+/* ============================================================
+   LIGHT — same component structure, light surfaces and stronger text
+   ============================================================ */
+html.light-theme {
+  --page-bg: #F5F7FB;
+  --surface: #FFFFFF;
+  --surface-alt: #F2F6FB;
+  --field: #FFFFFF;
+  --text-primary: #172238;
+  --text-secondary: #53647D;
+  --text-muted: #74849C;
+  --border-soft: #D7E1EE;
+  --border-strong: #B9C8DB;
+  --focus: #2167E8;
+  --focus-bg: rgba(33,103,232,.10);
+}
+html.light-theme .tabbar { background: var(--surface); color: var(--text-primary); }
+html.light-theme .topbar { background: linear-gradient(var(--page-bg) 82%, transparent); }
+html.light-theme .topbar .iconbtn { background: var(--surface); border-color: var(--border-soft); color: var(--text-secondary); }
+html.light-theme .selfrow .viewself { background: var(--grn); color: #fff; }
+html.light-theme .chip .n { color: var(--text-primary); }
+html.light-theme .chip.on .n { color: #fff; }
+
+/* Login / lock screen: same tokens as the selected application theme. */
+html.light-theme .cloudgate {
+  background: var(--page-bg);
+  color: var(--text-primary);
+}
+html.light-theme .lock-minimal .cg-h { color: var(--text-primary); }
+html.light-theme .lock-subtitle,
+html.light-theme .lock-field .cg-l,
+html.light-theme .lock-footer,
+html.light-theme .lock-links .cg-skip { color: var(--text-secondary); }
+html.light-theme .lock-quote { color: var(--text-secondary); }
+html.light-theme .lock-icon { background: var(--surface); color: var(--acc); border-color: var(--border-soft); }
+html.light-theme .lock-input-wrap input { background: var(--field); color: var(--text-primary); border-color: var(--border-strong); }
+html.light-theme .lock-input-icon,
+html.light-theme .lock-eye { color: var(--text-secondary); }
+html.light-theme .lock-eye:hover { background: var(--surface-alt); color: var(--acc); }
+html.light-theme .lock-developed strong { color: var(--acc); }
+
+html:not(.light-theme):not(.high-contrast-theme) .cloudgate {
+  background: var(--page-bg);
+  color: var(--text-primary);
+}
+html:not(.light-theme):not(.high-contrast-theme) .lock-minimal .cg-h { color: var(--text-primary); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-subtitle,
+html:not(.light-theme):not(.high-contrast-theme) .lock-field .cg-l,
+html:not(.light-theme):not(.high-contrast-theme) .lock-footer,
+html:not(.light-theme):not(.high-contrast-theme) .lock-links .cg-skip { color: var(--text-secondary); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-quote { color: var(--text-secondary); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-icon { background: var(--surface); color: var(--acc); border-color: var(--border-soft); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-input-wrap input { background: var(--field); color: var(--text-primary); border-color: var(--border-strong); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-input-wrap input::placeholder { color: var(--text-muted); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-input-icon,
+html:not(.light-theme):not(.high-contrast-theme) .lock-eye { color: var(--text-secondary); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-eye:hover { background: var(--surface-alt); color: var(--acc); }
+html:not(.light-theme):not(.high-contrast-theme) .lock-developed strong { color: var(--acc); }
+
+html.high-contrast-theme .cloudgate { background: #000; color: #fff; }
+html.high-contrast-theme .lock-minimal .cg-h,
+html.high-contrast-theme .lock-subtitle,
+html.high-contrast-theme .lock-quote,
+html.high-contrast-theme .lock-field .cg-l,
+html.high-contrast-theme .lock-footer,
+html.high-contrast-theme .lock-links .cg-skip { color: #fff; }
+html.high-contrast-theme .lock-icon { background:#000; color:var(--acc); border:2px solid #fff; }
+html.high-contrast-theme .lock-input-wrap input { background:#000; color:#fff; border:2px solid #fff; }
+html.high-contrast-theme .lock-input-wrap input::placeholder { color:#D9D9D9; }
+html.high-contrast-theme .lock-input-icon,
+html.high-contrast-theme .lock-eye { color:#fff; }
+html.high-contrast-theme .lock-eye:hover { background:#161616; color:var(--acc); }
+html.high-contrast-theme .lock-developed strong { color:var(--acc); }
+
+/* Compact login spacing */
+.lock-icon { margin-bottom: 16px; }
+.lock-quote { margin-top: 18px; margin-bottom: 20px; }
+.lock-field { margin-top: 11px; }
+.lock-unlock { margin-top: 16px; }
+.lock-footer { margin-top: 24px; }
+
+/* Avoid visual clipping at the right edge on desktop filters. */
+@media (min-width: 1024px) {
+  .chips { padding-left: 2px; }
+}
