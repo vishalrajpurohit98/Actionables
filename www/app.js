@@ -426,7 +426,7 @@ var FIELD_LABEL={status:'Status',projectId:'Project',ticket:'Ticket ID',ticketUr
 function fieldVal(f,v){if(f==='projectId')return projName(v);if(f==='categoryId')return categoryName(v===undefined?'':v, '');return v||'None';}
 function updateAct(id,patch){
   var a=actById(id);if(!a)return false;
-  var changed=false,completedTransition=false;
+  var changed=false,completedTransition=false,etaResetByAssigned=false,preAssignedEtaKind=a.etaKind,preAssignedEta=a.eta,preAssignedEtaEnd=a.etaEnd;
   ['projectId','categoryId','ticket','ticketUrl','lineItem','task','status','notes','type'].forEach(function(f){
     if(patch[f]===undefined||patch[f]===a[f])return;
     var lbl=FIELD_LABEL[f];
@@ -445,8 +445,12 @@ function updateAct(id,patch){
     var oldK=a.spocIds.slice().sort().join(','),newK=patch.spocIds.slice().sort().join(',');
     if(oldK!==newK){logAct(a,'Owner/SPOC changed',spocLabel(a),patch.spocIds.length?patch.spocIds.map(function(i2){return personName(i2);}).join(' & '):'To be assigned');a.spocIds=patch.spocIds.slice();if(patch.spocIds.length&&!a.assignedAt)a.assignedAt=Date.now();changed=true;}
   }
-  if(patch.assignedAt!==undefined){var nad=patch.assignedAt||null;if(nad!==a.assignedAt){var ab=assignedDateISO(a)||createdDateISO(a)||'N/A',an=nad?isoFromMs(nad):'N/A';a.assignedAt=nad;logAct(a,'Assigned date changed',ab,an);changed=true;}}
+  if(patch.assignedAt!==undefined){var nad=patch.assignedAt||null;if(nad!==a.assignedAt){var ab=assignedDateISO(a)||createdDateISO(a)||'N/A',an=nad?isoFromMs(nad):'N/A';a.assignedAt=nad;logAct(a,'Assigned date changed',ab,an);changed=true;
+    var currentEta=endEta(a);
+    if(nad&&currentEta&&currentEta<nad){var oldEta=fmtEta(a);a.etaKind='none';a.eta='';a.etaEnd='';etaResetByAssigned=true;logAct(a,'ETA reset after assigned date change',oldEta,'No ETA');addSystemComment(a,'Assigned date changed from '+ab+' to '+an+'. ETA was reset because it was earlier than the new assigned date.');}
+  }}
   var ek=patch.etaKind!==undefined?patch.etaKind:a.etaKind,ev=patch.eta!==undefined?patch.eta:a.eta,ee=patch.etaEnd!==undefined?patch.etaEnd:a.etaEnd;
+  if(etaResetByAssigned && ek===preAssignedEtaKind && ev===preAssignedEta && ee===preAssignedEtaEnd){ek='none';ev='';ee='';}
   if(ek!=='range')ee='';if(ek==='none'||ek==='tbd'){ev='';ee='';}
   if(ek!==a.etaKind||ev!==a.eta||ee!==a.etaEnd){var before=fmtEta(a);a.etaKind=ek;a.eta=ev;a.etaEnd=ee;logAct(a,'ETA changed',before,fmtEta(a));changed=true;}
   if(changed){a.updatedAt=Date.now();if(completedTransition)scheduleNextOccurrence(a);saveState();}
@@ -464,6 +468,30 @@ function addComment(id,text){
   var a=actById(id);if(!a)return;
   a.comments.push({ts:Date.now(),user:S.settings.userName||'You',text:text});
   logAct(a,'Comment added');a.updatedAt=Date.now();saveState();
+}
+function addSystemComment(a,text){
+  if(!a)return;
+  a.comments=a.comments||[];
+  a.comments.push({ts:Date.now(),user:'System',text:text,system:true});
+  logAct(a,'System comment added','',text);a.updatedAt=Date.now();
+}
+function dataQualityCheck(scopeProject){
+  var issues=[],seen={};
+  var items=S.actionables.filter(function(a){return !a.archived&&(!scopeProject||a.projectId===scopeProject);});
+  items.forEach(function(a){
+    var label=(a.ticket?a.ticket+' — ':'')+(a.lineItem||'Untitled');
+    var assigned=assignedDateISO(a),end=endEta(a),open=a.status!=='Completed';
+    if(a.etaKind==='range'&&a.eta&&a.etaEnd&&a.etaEnd<a.eta)issues.push({sev:'high',id:a.id,title:label,reason:'ETA range ends before it starts.',field:'ETA'});
+    if(assigned&&end&&end<assigned)issues.push({sev:'high',id:a.id,title:label,reason:'ETA is earlier than the assigned date.',field:'Assigned date / ETA'});
+    if(open&&!a.spocIds.length)issues.push({sev:'medium',id:a.id,title:label,reason:'No SPOC/owner is assigned.',field:'SPOC'});
+    if(open&&(a.etaKind==='none'||a.etaKind==='tbd'||!a.eta))issues.push({sev:'medium',id:a.id,title:label,reason:'No specific ETA is set.',field:'ETA'});
+    if(open&&a.rem&&a.rem.on&&!a.rem.date)issues.push({sev:'medium',id:a.id,title:label,reason:'Follow-up reminder is enabled but has no date.',field:'Follow-up'});
+    if(a.status==='Completed'&&!a.completedAt)issues.push({sev:'medium',id:a.id,title:label,reason:'Task is marked Completed but has no completion timestamp.',field:'Status'});
+    var key=(a.projectId||'')+'|'+String(a.lineItem||'').trim().toLowerCase();
+    if(a.lineItem&&open){if(seen[key])issues.push({sev:'medium',id:a.id,title:label,reason:'Possible duplicate open task with “'+seen[key]+'”.',field:'Line item'});else seen[key]=label;}
+  });
+  var order={high:0,medium:1,low:2};issues.sort(function(a,b){return order[a.sev]-order[b.sev]||a.title.localeCompare(b.title);});
+  return {items:items.length,issues:issues};
 }
 
 /* ---- HTML HELPERS ---- */
@@ -1800,9 +1828,20 @@ document.addEventListener('click',function(e){
     case 'd-complete':{var dr=sheetFor('detail');if(dr){updateAct(dr.data.id,{status:'Completed'});var a2=actById(dr.data.id);if(a2){logAct(a2,'Completed');saveState();}renderDetail(dr);render();toast('Completed');}break;}
     case 'd-reopen':{var dr2=sheetFor('detail');if(dr2){updateAct(dr2.data.id,{status:'In Progress'});var a3=actById(dr2.data.id);if(a3){logAct(a3,'Reopened');saveState();}renderDetail(dr2);render();toast('Reopened');}break;}
     case 'd-edit':{var dr3=sheetFor('detail');if(dr3)openForm(dr3.data.id);break;}
+    case 'd-act-toggle':{var drAct=sheetFor('detail');if(drAct){drAct.data.actOpen=!drAct.data.actOpen;renderDetail(drAct);}break;}
+    case 'd-restore-point':{var drSnap=sheetFor('detail');if(drSnap){snapshot('Manual restore point');toast('Restore point saved');}break;}
+    case 'rem-add':{var drRem=sheetFor('detail');if(drRem){var arRem=actById(drRem.data.id);if(arRem){var next=addDaysISO(todayISO(),1);remPatch(arRem.id,{on:true,date:next,time:'',note:'',done:false,waitingFor:'',requestedOn:todayISO(),expectedBy:''},{e:'Follow-up set',t:fmtDY(next)});renderDetail(drRem);render();toast('Follow-up reminder added');}}break;}
+    case 'rem-done':{var drDone=sheetFor('detail');if(drDone){var arDone=actById(drDone.data.id);if(arDone&&arDone.rem&&arDone.rem.on){remPatch(arDone.id,{done:true},{e:'Follow-up completed'});renderDetail(drDone);render();toast('Follow-up completed');}}break;}
+    case 'rem-react':{var drReact=sheetFor('detail');if(drReact){var arReact=actById(drReact.data.id);if(arReact&&arReact.rem){var rd=arReact.rem.date&&arReact.rem.date>todayISO()?arReact.rem.date:todayISO();remPatch(arReact.id,{on:true,done:false,date:rd},{e:'Follow-up reactivated',t:fmtDY(rd)});renderDetail(drReact);render();toast('Follow-up reactivated');}}break;}
+    case 'rem-remove':{var drRem=sheetFor('detail');if(drRem){var arRemove=actById(drRem.data.id);if(arRemove&&arRemove.rem){remPatch(arRemove.id,{on:false,done:false},{e:'Follow-up removed'});renderDetail(drRem);render();toast('Follow-up removed');}}break;}
+    case 'rem-snooze':{var drSnooze=sheetFor('detail');if(drSnooze){var arSnooze=actById(drSnooze.data.id);var days=Math.max(1,parseInt(el.getAttribute('data-n'),10)||1);if(arSnooze&&arSnooze.rem&&arSnooze.rem.on){var base=arSnooze.rem.date&&arSnooze.rem.date>todayISO()?arSnooze.rem.date:todayISO();var nd=addDaysISO(base,days);remPatch(arSnooze.id,{date:nd,done:false},{e:'Follow-up snoozed',f:arSnooze.rem.date||'',t:nd?fmtDY(nd):''});renderDetail(drSnooze);render();toast('Follow-up moved to '+fmtDY(nd));}}break;}
     case 'do-export-pdf':{
       var pid2=exportSel.projId||null,lbl2=pid2?projName(pid2):'All Projects';
-      exportPdf(pid2,lbl2,exportSel);break;
+      exportPdf(pid2,lbl2,exportRangeFilter(exportSel));break;
+    }
+    case 'do-export-xlsx':{
+      var xpid=exportSel.projId||null,xlbl=xpid?projName(xpid):'All Projects';
+      exportExcel(xpid,xlbl,null,exportRangeFilter(exportSel));break;
     }
     case 'export-list-excel':exportExcel(null,'All_Projects');break;
     /* Settings */
@@ -2617,7 +2656,7 @@ function vAI(){
   if(aiState.err)h+='<div class="ai-err" style="margin:0 16px 10px">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
   if(!aiChat.length){
     h+='<div class="ai-hello">'+I('spark')+'<div class="ai-hello-t">Universal AI Assistant</div><div class="ai-hello-s">Type anything \u2014 add, update, find, remove or report on tasks. I\u2019ll understand it, validate the change, ask for confirmation, then apply it.</div></div>';
-    var sugg=['Show me all overdue tasks','Add a task to follow up with John tomorrow','Report of this month\u2019s completed tasks','What\u2019s assigned to me?','Change the ICICI task priority to high'];
+    var sugg=['Check data quality and consistency','Show me all overdue tasks','Add a task to follow up with John tomorrow','Report of this month\u2019s completed tasks','What\u2019s assigned to me?','Change the ICICI task priority to high'];
     h+='<div class="ai-sugg">'+sugg.map(function(sg){return '<button class="ai-sg" data-act="ai-suggest" data-q="'+esc(sg)+'">'+esc(sg)+'</button>';}).join('')+'</div>';
     return h;
   }
@@ -3017,6 +3056,11 @@ function aiExec(o){
     var fmt=((o.report&&o.report.format)||'pdf').toLowerCase(),label=(o.report&&o.report.label)||'AI report';
     if(fmt==='excel'||fmt==='xlsx')exportExcel(null,label,rlist);else aiReportPdf(rlist,label);
     aiChatPush('ai',(o&&o.reply)||('Downloaded a '+((fmt==='excel'||fmt==='xlsx')?'spreadsheet':'PDF')+' report of '+rlist.length+' task'+(rlist.length===1?'':'s')+'.'));
+  } else if(act==='quality'){
+    var qproj='';
+    if(o&&o.project){var qn=String(o.project).toLowerCase();var qp=S.projects.filter(function(p){return p.id!=='__personal';});for(var qi=0;qi<qp.length;qi++){if(qp[qi].name.toLowerCase().indexOf(qn)>=0||String(qp[qi].code||'').toLowerCase()===qn){qproj=qp[qi].id;break;}}}
+    var qr=dataQualityCheck(qproj), high=qr.issues.filter(function(x){return x.sev==='high';}).length, med=qr.issues.length-high;
+    aiChatPush('ai',(o&&o.reply)||('Found '+qr.issues.length+' data-quality issue'+(qr.issues.length===1?'':'s')+' across '+qr.items+' task'+(qr.items===1?'':'s')+'.'),{type:'quality',issues:qr.issues,items:qr.items});
   } else if(act==='clarify'){
     aiChatPush('ai',(o&&o.reply)||'Could you clarify which task you mean?');
   } else {
@@ -3044,6 +3088,11 @@ function aiCard(c,idx){
   }
   if(c.type==='deleted'){
     return '<div class="ai-rescard">'+(c.rows||[]).map(function(r){return '<div class="ai-del-row">'+esc(r.title)+'</div>';}).join('')+undoBtn+'</div>';
+  }
+  if(c.type==='quality'){
+    var qis=c.issues||[];
+    if(!qis.length)return '<div class="ai-rescard"><div class="ai-chg"><b>✓ No data-quality issues found</b><span class="ai-dl2"><i>Checked '+esc(String(c.items||0))+' task'+((c.items||0)===1?'':'s')+'.</i></span></div></div>';
+    return '<div class="ai-rescard">'+qis.slice(0,30).map(function(q){var badge=q.sev==='high'?'HIGH':'CHECK';return '<button class="ai-resrow" data-act="ai-open" data-id="'+esc(q.id)+'"><span class="ai-rr-t"><b>'+esc(badge)+'</b> '+esc(q.title)+'</span><span class="ai-rr-m">'+esc(q.field+' · '+q.reason)+'</span></button>';}).join('')+(qis.length>30?'<div class="ai-rr-more">+'+(qis.length-30)+' more</div>':'')+'</div>';
   }
   if(c.type==='answer'){
     return '<div class="ai-bubacts"><button class="ai-mini-btn" data-act="ai-copy-b" data-i="'+idx+'">Copy</button><button class="ai-mini-btn" data-act="ai-pdf-b" data-i="'+idx+'">Export PDF</button></div>';
@@ -3108,3 +3157,25 @@ async function aiRephraseComment(rec){
   }catch(e){toast('Rephrase failed \u2014 '+((e&&e.message)||'try again'));}
   var b2=$('[data-act=d-cmt-rephrase]',rec.sheet); if(b2){b2.disabled=false;b2.innerHTML=I('spark')+'Rephrase';}
 }
+
+/* Reading modes: persistent low-glare themes for long reading sessions. */
+(function initReadingModes(){
+  function applyReadingMode(mode){
+    var body=document.body;
+    if(!body) return;
+    body.classList.remove("reading-warm","reading-sepia","reading-sage","reading-slate");
+    if(mode && mode!=="default") body.classList.add("reading-"+mode);
+    try{ localStorage.setItem("actionables-reading-mode", mode || "default"); }catch(e){}
+  }
+  function bind(){
+    var select=document.getElementById("readingModeSelect");
+    if(!select) return;
+    var saved="default";
+    try{ saved=localStorage.getItem("actionables-reading-mode") || "default"; }catch(e){}
+    select.value=saved;
+    applyReadingMode(saved);
+    select.addEventListener("change",function(){ applyReadingMode(this.value); });
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",bind);
+  else bind();
+})();
