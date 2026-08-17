@@ -3157,25 +3157,3 @@ async function aiRephraseComment(rec){
   }catch(e){toast('Rephrase failed \u2014 '+((e&&e.message)||'try again'));}
   var b2=$('[data-act=d-cmt-rephrase]',rec.sheet); if(b2){b2.disabled=false;b2.innerHTML=I('spark')+'Rephrase';}
 }
-
-/* Reading modes: persistent low-glare themes for long reading sessions. */
-(function initReadingModes(){
-  function applyReadingMode(mode){
-    var body=document.body;
-    if(!body) return;
-    body.classList.remove("reading-warm","reading-sepia","reading-sage","reading-slate");
-    if(mode && mode!=="default") body.classList.add("reading-"+mode);
-    try{ localStorage.setItem("actionables-reading-mode", mode || "default"); }catch(e){}
-  }
-  function bind(){
-    var select=document.getElementById("readingModeSelect");
-    if(!select) return;
-    var saved="default";
-    try{ saved=localStorage.getItem("actionables-reading-mode") || "default"; }catch(e){}
-    select.value=saved;
-    applyReadingMode(saved);
-    select.addEventListener("change",function(){ applyReadingMode(this.value); });
-  }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",bind);
-  else bind();
-})();
