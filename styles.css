@@ -2385,3 +2385,18 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
     right:auto;
   }
 }
+
+
+/* V6.12 — unified mobile Add + Focus dock */
+.mobile-action-dock{display:none;}
+.focus-fab{display:none!important;}
+@media (max-width:1023px){
+  .fab{display:none!important;}
+  .mobile-action-dock{position:fixed;left:50%;bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 12px);transform:translateX(-50%);z-index:36;display:flex;align-items:stretch;padding:4px;border:1px solid var(--line2);border-radius:18px;background:var(--sur);box-shadow:0 8px 28px rgba(0,0,0,.28);backdrop-filter:blur(14px);}
+  .mobile-action-dock button{min-width:116px;height:44px;padding:0 15px;border:0;border-radius:14px;background:transparent;color:var(--tx);font:inherit;font-size:.76rem;font-weight:750;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;}
+  .mobile-action-dock button+button{border-left:1px solid var(--line);border-radius:0 14px 14px 0;}
+  .mobile-action-dock button:first-child{border-radius:14px 0 0 14px;color:var(--acc);}
+  .mobile-action-dock button:active{background:var(--acc-dim);}
+  .mobile-action-dock svg{width:18px;height:18px;flex:none;}
+}
+@media (max-width:390px){.mobile-action-dock button{min-width:104px;padding:0 12px;font-size:.72rem;}}

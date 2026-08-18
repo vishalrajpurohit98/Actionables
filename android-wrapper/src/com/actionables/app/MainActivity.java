@@ -13,7 +13,6 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
 import android.util.Base64;
@@ -25,6 +24,11 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.os.Bundle;
+import java.util.ArrayList;
 import android.widget.Toast;
 
 import java.io.File;
@@ -39,6 +43,9 @@ public class MainActivity extends Activity {
     private static final String KEY_DATA = "act_data";
     public static final String CHANNEL_ID = "actionables_daily";
     private static final int REQ_NOTIF = 1001;
+    private static final int REQ_MIC = 1002;
+    private SpeechRecognizer speechRecognizer;
+    private boolean voicePending = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,9 +98,102 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onDestroy() {
+        stopNativeVoice(false);
+        super.onDestroy();
+    }
+
+    @Override
     public void onBackPressed() {
         if (web != null && web.canGoBack()) web.goBack();
         else super.onBackPressed();
+    }
+
+    private void jsCall(String script) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                try { if (web != null) web.evaluateJavascript(script, null); } catch (Exception ignored) {}
+            }
+        });
+    }
+
+    private String jsQuote(String value) {
+        if (value == null) return "\"\"";
+        return org.json.JSONObject.quote(value);
+    }
+
+    private void startNativeVoice() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            jsCall("window.__nativeVoiceError&&window.__nativeVoiceError('unsupported')");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            voicePending = true;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+            return;
+        }
+        stopNativeVoice(false);
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override public void onReadyForSpeech(Bundle params) { jsCall("window.__nativeVoiceReady&&window.__nativeVoiceReady()"); }
+            @Override public void onBeginningOfSpeech() { jsCall("window.__nativeVoiceBeginning&&window.__nativeVoiceBeginning()"); }
+            @Override public void onRmsChanged(float rmsdB) {}
+            @Override public void onBufferReceived(byte[] buffer) {}
+            @Override public void onEndOfSpeech() {}
+            @Override public void onError(int error) {
+                String code;
+                if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) code = "not-allowed";
+                else if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) code = "no-speech";
+                else code = "voice-error";
+                jsCall("window.__nativeVoiceError&&window.__nativeVoiceError(" + jsQuote(code) + ")");
+            }
+            @Override public void onResults(Bundle results) {
+                ArrayList<String> matches = results == null ? null : results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                String text = (matches != null && !matches.isEmpty()) ? matches.get(0) : "";
+                jsCall("window.__nativeVoiceResult&&window.__nativeVoiceResult(" + jsQuote(text) + ",true)");
+            }
+            @Override public void onPartialResults(Bundle partialResults) {
+                ArrayList<String> matches = partialResults == null ? null : partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                String text = (matches != null && !matches.isEmpty()) ? matches.get(0) : "";
+                if (!text.isEmpty()) jsCall("window.__nativeVoiceResult&&window.__nativeVoiceResult(" + jsQuote(text) + ",false)");
+            }
+            @Override public void onEvent(int eventType, Bundle params) {}
+        });
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-IN");
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+        try {
+            speechRecognizer.startListening(intent);
+        } catch (Exception e) {
+            jsCall("window.__nativeVoiceError&&window.__nativeVoiceError('voice-error')");
+        }
+    }
+
+    private void stopNativeVoice(boolean notifyJs) {
+        try { if (speechRecognizer != null) speechRecognizer.stopListening(); } catch (Exception ignored) {}
+        try { if (speechRecognizer != null) speechRecognizer.cancel(); } catch (Exception ignored) {}
+        try { if (speechRecognizer != null) speechRecognizer.destroy(); } catch (Exception ignored) {}
+        speechRecognizer = null;
+        voicePending = false;
+        if (notifyJs) jsCall("window.__nativeVoiceEnd&&window.__nativeVoiceEnd()");
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_MIC) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                voicePending = false;
+                startNativeVoice();
+            } else {
+                voicePending = false;
+                jsCall("window.__nativeVoiceError&&window.__nativeVoiceError('not-allowed')");
+            }
+        }
     }
 
     private void createChannel() {
@@ -112,7 +212,22 @@ public class MainActivity extends Activity {
     private class Bridge {
 
         @JavascriptInterface
-        public String version() { return "6.11"; }
+        public String version() { return "6.12"; }
+
+        @JavascriptInterface
+        public boolean isVoiceSupported() {
+            return SpeechRecognizer.isRecognitionAvailable(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void startVoice() {
+            runOnUiThread(new Runnable() { @Override public void run() { startNativeVoice(); } });
+        }
+
+        @JavascriptInterface
+        public void stopVoice() {
+            runOnUiThread(new Runnable() { @Override public void run() { stopNativeVoice(true); } });
+        }
 
         @JavascriptInterface
         public String loadData() {
@@ -262,9 +377,4 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override
-    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
-        super.onRequestPermissionsResult(req, perms, res);
-        if (web != null) web.evaluateJavascript("void 0", null);
-    }
 }

@@ -599,7 +599,8 @@ function render(){
   }
   var fabViews=['home','list','calendar','projects','projectDetail','people','personDetail','workload'];
   app.innerHTML='<div class="screen '+(view.name==='focus'?'focus-view':'')+'">'+html+'</div>'+tabbar()+
-    (fabViews.indexOf(view.name)>=0?'<button class="fab" data-act="add">'+I('plus')+'Add</button>':'');
+    (fabViews.indexOf(view.name)>=0?'<button class="fab" data-act="add">'+I('plus')+'Add</button>':'')+
+    (fabViews.indexOf(view.name)>=0?'<div class="mobile-action-dock"><button data-act="add">'+I('plus')+'<span>Add task</span></button><button data-act="focus-menu">'+I('star')+'<span>Focus</span></button></div>':'');
   bindViewInputs();
 }
 function nav(name,params,noHist){
@@ -623,7 +624,7 @@ function tabbar(){
     focusRow('important','star','Important',false)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
     '<div class="railtip">'+railTipHtml()+'</div>'+
     '<div class="railcredit">Developed by <b>Vishal</b> · personal use only</div>'+
-    '<button class="focus-fab" data-act="focus-menu" title="Focus">'+I('star')+'<span>Focus</span></button>'+
+
   '</nav>';
 }
 function notifBadgeOn(m){var n=m.overdue.length+m.today.length+m.remDueL.length;return n>0&&S.settings.notifSeenDate!==todayISO();}
@@ -1052,7 +1053,7 @@ function vSettings(){
     h+='<div class="eyebrow">Permissions</div><div class="pane">'+
       '<div class="togglerow"><span class="t" style="display:flex;align-items:center;gap:7px">'+I('bell')+'Notifications \u00b7 <b style="color:'+nsC+'">'+nsL+'</b></span>'+
       (ns==='denied'?'<button class="btn pri mini" data-act="perm-notif">Allow</button>':'')+'</div>'+
-      '<div class="note" style="padding:9px 0 2px;line-height:1.55">Actionables only needs <b>notification</b> access \u2014 for the daily brief and follow-up reminders. It does <b>not</b> use microphone, camera, location, contacts or accessibility. Internet access (for sync &amp; AI) is a normal permission Android doesn\u2019t list separately.</div>'+
+      '<div class="note" style="padding:9px 0 2px;line-height:1.55">Actionables only needs <b>notification</b> access \u2014 for the daily brief and follow-up reminders. It uses the <b>microphone only when you tap Speak to AI</b> for voice input. It does <b>not</b> use camera, location, contacts or accessibility. Internet access (for sync &amp; AI) is a normal permission Android doesn\u2019t list separately.</div>'+
       '<div class="btnrow" style="margin-top:8px"><button class="btn ghost" data-act="perm-test">'+I('bell')+'Send test notification</button>'+
       '<button class="btn ghost" data-act="perm-appinfo">'+I('sliders')+'Open app info</button></div>'+
       '</div>';
@@ -2696,51 +2697,50 @@ function aiResultBlock(){
   if(aiState.out)return '<div class="ai-out ai-md">'+aiMd(aiState.out)+'</div><div class="ai-actions ai-outacts"><button class="btn ghost" data-act="ai-copy">'+I('copy')+'Copy</button><button class="btn ghost" data-act="ai-pdf">'+I('dl')+'Export PDF</button></div>';
   return '';
 }
-function aiVoiceSupported(){
-  return !!(window.SpeechRecognition||window.webkitSpeechRecognition);
+function aiNativeVoiceSupported(){
+  try{return !!(window.Android&&typeof window.Android.isVoiceSupported==='function'&&window.Android.isVoiceSupported());}catch(e){return false;}
 }
+function aiVoiceSupported(){return aiNativeVoiceSupported()||!!(window.SpeechRecognition||window.webkitSpeechRecognition);}
 function aiStopVoice(){
+  try{if(window.Android&&typeof window.Android.stopVoice==='function')window.Android.stopVoice();}catch(e){}
   try{if(window.__aiRecognition){window.__aiRecognition.onend=null;window.__aiRecognition.stop();}}catch(e){}
-  window.__aiRecognition=null;
-  aiState.voiceListening=false;
+  window.__aiRecognition=null;aiState.voiceListening=false;
 }
+function aiApplyVoiceText(text,isFinal){
+  text=String(text||'').replace(/\s+/g,' ').trim();if(!text)return;
+  var finalText=window.__nativeVoiceFinal||window.__nativeVoiceBase||'';
+  if(isFinal){finalText+=(finalText&&finalText.slice(-1)!==' ' ? ' ':'')+text+' ';window.__nativeVoiceFinal=finalText;}
+  var shown=(isFinal?finalText:(finalText+(finalText&&finalText.slice(-1)!==' ' ? ' ':'')+text)).replace(/\s+/g,' ').trim();
+  aiState.input=shown;var inp=$('#aiInput');if(inp){inp.value=shown;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
+}
+window.__nativeVoiceReady=function(){aiState.voiceListening=true;render();};
+window.__nativeVoiceBeginning=function(){};
+window.__nativeVoiceResult=function(text,isFinal){aiApplyVoiceText(text,!!isFinal);};
+window.__nativeVoiceError=function(code){
+  aiState.voiceListening=false;
+  var msg=code==='not-allowed'?'Microphone permission was denied.':(code==='no-speech'?'No speech detected. Try again.':(code==='unsupported'?'Voice input is not available on this Android device.':'Voice input failed. Try again.'));
+  aiState.err=msg;render();
+};
+window.__nativeVoiceEnd=function(){aiState.voiceListening=false;var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';render();};
 function aiStartVoice(){
   if(aiState.busy){toast('Wait for the current AI request to finish');return;}
+  if(aiNativeVoiceSupported()){
+    if(aiState.voiceListening){aiStopVoice();render();return;}
+    aiState.voiceSupported=true;aiState.voiceListening=true;aiState.err='';
+    var base=(aiState.input||'').trim();window.__nativeVoiceBase=base;window.__nativeVoiceFinal=base?(base+' '):'';
+    render();setTimeout(function(){var inp=$('#aiInput');if(inp)inp.focus();},30);
+    try{window.Android.startVoice();}catch(e){aiState.voiceListening=false;render();toast('Could not start microphone');}
+    return;
+  }
   var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){aiState.voiceSupported=false;render();toast('Voice input is not supported in this browser');return;}
   if(aiState.voiceListening){aiStopVoice();render();return;}
-  aiState.voiceSupported=true;
-  var base=(aiState.input||'').trim();
-  var finalText=base?base+' ':'',rec;
+  aiState.voiceSupported=true;var base=(aiState.input||'').trim(),finalText=base?base+' ':'',rec;
   try{rec=new SR();}catch(e){toast('Could not start voice input');return;}
-  rec.lang='en-IN';
-  rec.continuous=false;
-  rec.interimResults=true;
-  window.__aiRecognition=rec;
-  aiState.voiceListening=true;
-  aiState.err='';
-  render();
-  setTimeout(function(){var inp=$('#aiInput');if(inp){inp.focus();}},30);
-  rec.onresult=function(ev){
-    var interim='';
-    for(var i=ev.resultIndex;i<ev.results.length;i++){
-      var txt=ev.results[i][0]&&ev.results[i][0].transcript||'';
-      if(ev.results[i].isFinal)finalText+=txt+' ';else interim+=txt;
-    }
-    aiState.input=(finalText+interim).replace(/\s+/g,' ').trim();
-    var inp=$('#aiInput');
-    if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
-  };
-  rec.onerror=function(ev){
-    aiState.voiceListening=false;window.__aiRecognition=null;
-    var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech'?'No speech detected. Try again.':'Voice input failed. Try again.');
-    aiState.err=msg;render();
-  };
-  rec.onend=function(){
-    aiState.voiceListening=false;window.__aiRecognition=null;
-    var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';
-    render();
-  };
+  rec.lang='en-IN';rec.continuous=false;rec.interimResults=true;window.__aiRecognition=rec;aiState.voiceListening=true;aiState.err='';render();setTimeout(function(){var inp=$('#aiInput');if(inp)inp.focus();},30);
+  rec.onresult=function(ev){var interim='';for(var i=ev.resultIndex;i<ev.results.length;i++){var txt=ev.results[i][0]&&ev.results[i][0].transcript||'';if(ev.results[i].isFinal)finalText+=txt+' ';else interim+=txt;}aiState.input=(finalText+interim).replace(/\s+/g,' ').trim();var inp=$('#aiInput');if(inp){inp.value=aiState.input;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}};
+  rec.onerror=function(ev){aiState.voiceListening=false;window.__aiRecognition=null;var msg=(ev&&ev.error==='not-allowed')?'Microphone permission was denied.':(ev&&ev.error==='no-speech')?'No speech detected. Try again.':'Voice input failed. Try again.';aiState.err=msg;render();};
+  rec.onend=function(){aiState.voiceListening=false;window.__aiRecognition=null;var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';render();};
   try{rec.start();}catch(e){aiStopVoice();render();toast('Could not start microphone');}
 }
 function aiClearChat(){
