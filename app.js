@@ -92,6 +92,7 @@ var IC={
   plus:'<path d="M12 5.5v13M5.5 12h13"/>',
   search:'<circle cx="11" cy="11" r="6.6"/><path d="M20.2 20.2l-3.5-3.5"/>',
   bell:'<path d="M6.2 9.2a5.8 5.8 0 0 1 11.6 0c0 4.6 1.9 5.7 1.9 5.7H4.3s1.9-1.1 1.9-5.7"/><path d="M10.6 19.3a1.7 1.7 0 0 0 2.8 0"/>',
+  mail:'<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4.5 7l7.5 6 7.5-6"/>',
   filter:'<path d="M4.5 5.5h15l-5.6 6.6v4.9l-3.8 2v-6.9z"/>',
   dl:'<path d="M12 4v10M7.8 10.2 12 14.4l4.2-4.2M4.8 19.5h14.4"/>',
   back:'<path d="M14.8 5.8 8.6 12l6.2 6.2"/>',
@@ -127,6 +128,10 @@ var calState=null;
 var exportSel={projId:'',from:'',to:'',preset:'all'};
 var globalSearchState={q:''};
 var bulkSel={};
+var sidebarCollapsed=false;
+try{sidebarCollapsed=localStorage.getItem('actionables_sidebar_collapsed')==='1';}catch(e){}
+function applySidebarState(){if(document.body)document.body.classList.toggle('sidebar-collapsed',!!sidebarCollapsed);}
+function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;try{localStorage.setItem('actionables_sidebar_collapsed',sidebarCollapsed?'1':'0');}catch(e){}applySidebarState();render();}
 
 function defaultFilters(){
   return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],etaStatus:'',priority:'',type:'',assigned:'',aging:'',updated:'',dependency:'',followup:'',from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
@@ -573,6 +578,7 @@ function grouped(list){
 
 /* ---- RENDER ROOT ---- */
 function render(){
+  applySidebarState();
   var app=$('#app');
   var html='';
   switch(view.name){
@@ -610,8 +616,8 @@ function tabbar(){
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';
   }
   function focusRow(kind,ic,label,red){var on=view.name==='focus'&&view.params.kind===kind;return '<button class="railrow focus-desktop '+(on?'on':'')+'" data-act="focus-nav" data-kind="'+kind+'">'+I(ic)+'<span class="rr-l">'+label+'</span><span class="rr-n '+(red?'r':'')+'">'+focusCounts[kind]+'</span></button>';}
-  return '<nav class="tabbar tabbar-3">'+
-    '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
+  return '<nav class="tabbar tabbar-3 '+(sidebarCollapsed?'is-collapsed':'')+'">'+
+    '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span><button class="rail-collapse" data-act="sidebar-toggle" title="'+(sidebarCollapsed?'Show sidebar':'Hide sidebar')+'">'+I(sidebarCollapsed?'chevR':'back')+'</button></div>'+
     tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
     '<div class="railsec focus-desktop">FOCUS</div>'+
     focusRow('important','star','Important',false)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
@@ -748,8 +754,9 @@ function vList(){
     '<button class="iconbtn" data-act="go-calendar" title="Calendar">'+I('cal')+'</button>'+
     '<button class="iconbtn" data-act="go-people" title="Owners / SPOCs">'+I('people')+'</button>'+
     '<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(metrics())?'<span class="dot"></span>':'')+'</button>'+
+    '<button class="iconbtn" data-act="open-email" title="Email SPOC">'+I('mail')+'</button>'+
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
-  h+='<div class="selfrow"><button class="quickadd" data-act="quick-new">'+I('plus')+'Add my task</button><button class="quickadd viewself" data-act="view-personal">'+I('person')+'View my tasks</button></div>';
+  h+='<div class="action-toolbar"><div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div><div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'"><button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div></div>';
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
@@ -1380,6 +1387,17 @@ function saveForm(rec){
   if(_goPersonal)nav('projectDetail',{id:'__personal',seg:'open'});
 }
 
+/* ---- EMAIL ASSISTANT ---- */
+var emailState={type:'reminder',spocId:'',taskIds:[],to:'',subject:'',body:'',busy:false,err:''};
+function emailTasksForSpoc(pid){return pid?mainActs().filter(function(a){return isOpen(a)&&a.spocIds.indexOf(pid)>=0;}):mainActs().filter(function(a){return isOpen(a);});}
+function emailLatestComment(a){var cs=a.comments||[];return cs.length?cs[cs.length-1].text:'';}
+function emailDraftFallback(pid,ids,type){var u=personById(pid),name=u?u.name:'there',acts=emailTasksForSpoc(pid).filter(function(a){return ids.indexOf(a.id)>=0;}),rem=type==='reminder';var subject=(rem?'Follow-up reminder: ':'Action required: ')+(acts.length===1?acts[0].lineItem:'Actionables');var body='Hi '+name+',\n\n'+(rem?'Just following up on the below action item(s). Could you please share the latest status and revised ETA?':'Please review the below action item(s) and share the current status, next steps and expected completion date.')+'\n\n';acts.forEach(function(a,i){body+=(i+1)+'. '+a.lineItem+'\n';if(a.task)body+='Description: '+a.task+'\n';if(a.eta)body+='ETA: '+fmtEta(a)+'\n';if(a.status)body+='Status: '+a.status+'\n';var c=emailLatestComment(a);if(c)body+='Latest comment: '+c+'\n';body+='\n';});return{subject:subject,body:body+'Thanks,\n'+(S.settings.userName||'Vishal')};}
+async function emailGenerateAi(rec){var pid=emailState.spocId,ids=emailState.taskIds.slice(),acts=emailTasksForSpoc(pid).filter(function(a){return ids.indexOf(a.id)>=0;}),u=personById(pid),name=u?u.name:'the SPOC';if(!acts.length){toast('Select at least one actionable');return;}emailState.busy=true;emailState.err='';renderEmailComposer(rec);try{var payload=acts.map(function(a){return{id:a.id,project:projName(a.projectId),lineItem:a.lineItem,description:a.task||'',status:a.status,eta:fmtEta(a),comments:(a.comments||[]).slice(-5).map(function(c){return c.text;})};});var type=emailState.type==='initial'?'initial action request':'follow-up reminder';var sys='Write a professional project-management email using ONLY the provided Actionables data. Output ONLY JSON: {"subject":string,"body":string}. Do not invent facts. Analyze line item, description, status, ETA and recent comments. For an initial request, state the action and ask for acknowledgement/status/ETA. For a reminder, refer to existing context/comments and ask for an update or revised ETA. Keep it concise and ready to send.';var out=aiJSON(await aiCall('Email type: '+type+'\nRecipient: '+name+'\nSender: '+(S.settings.userName||'Vishal')+'\nActionables: '+JSON.stringify(payload),sys));if(!out||!out.subject||!out.body)throw new Error('AI returned an incomplete email draft.');emailState.subject=String(out.subject).trim();emailState.body=String(out.body).trim();emailState.busy=false;renderEmailComposer(rec);toast('AI email draft ready');}catch(e){emailState.busy=false;emailState.err=((e&&e.message)||'AI draft failed');var fb=emailDraftFallback(pid,ids,emailState.type);emailState.subject=fb.subject;emailState.body=fb.body;renderEmailComposer(rec);toast('AI draft unavailable — prepared a standard draft');}}
+function pplEmailOptions(pid){return peopleSorted().map(function(u){return '<option value="'+esc(u.id)+'"'+(u.id===pid?' selected':'')+'>'+esc(u.name)+'</option>';}).join('');}
+function openEmailComposer(){var ppl=peopleSorted(),pid=emailState.spocId;if(!pid&&ppl.length){pid=ppl[0].id;emailState.spocId=pid;emailState.taskIds=emailTasksForSpoc(pid).map(function(a){return a.id;});emailState.to=(personById(pid)||{}).email||'';}var rec=openSheet('<div class="shead"><h2>Email SPOC</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody email-compose"></div><div class="sfoot"><button class="btn ghost" data-act="email-reset">Reset</button><button class="btn pri" data-act="email-open">'+I('mail')+' Open in email</button></div>',{tag:'email'});renderEmailComposer(rec);}
+function renderEmailComposer(rec){var b='',pid=emailState.spocId||'',u=pid?personById(pid):null,acts=emailTasksForSpoc(pid),sel=emailState.taskIds||[];if(!sel.length&&acts.length){emailState.taskIds=acts.map(function(a){return a.id;});sel=emailState.taskIds;}if(u&&!emailState.to)emailState.to=u.email||'';b+='<div class="fld wide"><label>Email type</label><div class="email-type"><button class="chip '+(emailState.type==='initial'?'on':'')+'" data-act="email-type" data-k="initial">Initial email</button><button class="chip '+(emailState.type==='reminder'?'on':'')+'" data-act="email-type" data-k="reminder">Reminder / follow-up</button></div></div>';b+='<div class="fld wide"><label>SPOC / Owner</label><select data-chg="email-spoc"><option value="">Select SPOC</option>'+pplEmailOptions(pid)+'</select></div>';b+='<div class="fld wide"><label>Recipient email</label><input type="email" data-chg="email-to" value="'+esc(emailState.to)+'" placeholder="spoc@example.com"><div class="hint">Enter the SPOC email if it is not stored yet. It will be remembered for this SPOC.</div></div>';b+='<div class="email-task-head"><label>Actionables for this SPOC</label><button class="btn ghost mini" data-act="email-select-all">'+(sel.length===acts.length&&acts.length?'Clear all':'Select all')+'</button></div>';b+='<div class="email-task-list">'+(acts.length?acts.map(function(a){var on=sel.indexOf(a.id)>=0;return '<label class="email-task"><input type="checkbox" data-email-task="'+esc(a.id)+'" '+(on?'checked':'')+'><span><b>'+esc(a.lineItem)+'</b><small>'+esc(projName(a.projectId))+' · '+esc(a.status)+' · '+esc(fmtEta(a))+(emailLatestComment(a)?' · Latest comment: '+esc(emailLatestComment(a)):'')+'</small></span></label>';}).join(''):'<div class="note">No open actionables are assigned to this SPOC.</div>')+'</div>';b+='<div class="email-ai-row"><button class="btn ghost" data-act="email-ai-draft" '+(emailState.busy?'disabled':'')+'>'+I('spark')+(emailState.busy?'Analysing…':'Generate AI draft')+'</button><span class="hint">AI analyses line item, description, ETA, status and recent comments.</span></div>';b+='<div class="fld wide"><label>Subject</label><input data-chg="email-subject" value="'+esc(emailState.subject)+'" placeholder="Email subject"></div>';b+='<div class="fld wide"><label>Message</label><textarea rows="10" data-chg="email-body" placeholder="Generate an AI draft or write your message…">'+esc(emailState.body)+'</textarea></div>';if(emailState.err)b+='<div class="ai-err">'+I('alert')+'<span>'+esc(emailState.err)+'</span></div>';rec.sheet.querySelector('.email-compose').innerHTML=b;}
+function openEmailClient(){var pid=emailState.spocId,u=pid?personById(pid):null,to=(emailState.to||'').trim(),ids=emailState.taskIds||[];if(!pid){toast('Select a SPOC');return;}if(!to){toast('Enter the SPOC email address');return;}if(!ids.length){toast('Select at least one actionable');return;}if(u){u.email=to;saveState();}var fb=(!emailState.subject||!emailState.body)?emailDraftFallback(pid,ids,emailState.type):null;var subj=(emailState.subject||'').trim()||(fb?fb.subject:'Actionables follow-up'),body=(emailState.body||'').trim()||(fb?fb.body:'');window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);toast('Opening your email app');}
+
 /* ---- FILTERS ---- */
 var filterDrop={kind:'',q:''};
 function filterDropLabel(kind){
@@ -1734,6 +1752,13 @@ document.addEventListener('click',function(e){
     case 'back':goBack();break;
     case 'kpi':{filters=defaultFilters();filters.quick=el.getAttribute('data-q');nav('list',{});break;}
     case 'quick':filters.quick=el.getAttribute('data-q');render();break;
+    case 'sidebar-toggle':toggleSidebar();break;
+    case 'open-email':openEmailComposer();break;
+    case 'email-type':{emailState.type=el.getAttribute('data-k')||'reminder';emailState.subject='';emailState.body='';var er=sheetFor('email');if(er)renderEmailComposer(er);break;}
+    case 'email-ai-draft':{var er2=sheetFor('email');if(er2)emailGenerateAi(er2);break;}
+    case 'email-open':openEmailClient();break;
+    case 'email-reset':{emailState={type:'reminder',spocId:emailState.spocId||'',taskIds:[],to:'',subject:'',body:'',busy:false,err:''};var er3=sheetFor('email');if(er3)renderEmailComposer(er3);break;}
+    case 'email-select-all':{var er4=sheetFor('email'),aa4=emailTasksForSpoc(emailState.spocId);if(emailState.taskIds.length===aa4.length)emailState.taskIds=[];else emailState.taskIds=aa4.map(function(a){return a.id;});if(er4)renderEmailComposer(er4);break;}
     case 'view-personal':closeTop();filters=defaultFilters();nav('projectDetail',{id:'__personal',seg:'open'});break;
     case 'f-tag-del':{var fr1=sheetFor('form');if(fr1){var td=(el.getAttribute('data-tag')||'').toLowerCase();fr1.data.f.tags=(fr1.data.f.tags||[]).filter(function(x){return x.toLowerCase()!==td;});renderForm(fr1);}break;}
     case 'f-tag-add':{var fr2=sheetFor('form');if(fr2){fr2.data.f.tags=fr2.data.f.tags||[];addTagTo(fr2.data.f.tags,el.getAttribute('data-tag'));renderForm(fr2);}break;}
@@ -2018,9 +2043,14 @@ document.addEventListener('click',function(e){
 
 document.addEventListener('change',function(e){
   var el=e.target,chg=el.getAttribute&&el.getAttribute('data-chg');
+  if(el&&el.hasAttribute&&el.hasAttribute('data-email-task')){var eid=el.getAttribute('data-email-task'),ei=emailState.taskIds.indexOf(eid);if(el.checked&&ei<0)emailState.taskIds.push(eid);if(!el.checked&&ei>=0)emailState.taskIds.splice(ei,1);var er=sheetFor('email');if(er)renderEmailComposer(er);return;}
   if(!chg)return;var v=el.value;
   if(chg==='bulk-select'){var bid=el.getAttribute('data-id');if(bid){if(el.checked)bulkSel[bid]=true;else delete bulkSel[bid];render();}return;}
-  if(chg.indexOf('d-')===0||chg.indexOf('rem-')===0){
+  if(chg==='email-spoc'){emailState.spocId=v;var eu=personById(v);emailState.taskIds=emailTasksForSpoc(v).map(function(a){return a.id;});emailState.to=eu&&eu.email?eu.email:'';emailState.subject='';emailState.body='';var er6=sheetFor('email');if(er6)renderEmailComposer(er6);return;}
+   if(chg==='email-to'){emailState.to=v;var eu2=personById(emailState.spocId);if(eu2){eu2.email=v;saveState();}return;}
+   if(chg==='email-subject'){emailState.subject=v;return;}
+   if(chg==='email-body'){emailState.body=v;return;}
+   if(chg.indexOf('d-')===0||chg.indexOf('rem-')===0){
     var dr=sheetFor('detail');if(!dr)return;var aid=dr.data.id;
     if(chg==='d-type'){if(v==='__newtype'){inputSheet('New type','Type name',function(name){name=(name||'').trim();if(name){if(S.taskTypes.indexOf(name)<0)S.taskTypes.push(name);updateAct(aid,{type:name});saveState();renderDetail(dr);render();}});return;}updateAct(aid,{type:v});renderDetail(dr);render();return;}
     if(chg==='d-spoc-add'){var aSp=actById(aid);if(v==='__new'){personSheet(function(u){var a2=actById(aid);if(a2)updateAct(aid,{spocIds:a2.spocIds.concat([u.id])});renderDetail(dr);render();});return;}if(v&&aSp&&aSp.spocIds.indexOf(v)<0)updateAct(aid,{spocIds:aSp.spocIds.concat([v])});renderDetail(dr);render();return;}
@@ -2130,6 +2160,7 @@ window.__cloudStatusChanged=function(){if(view.name==='settings')render();};
 
 /* ---- BOOT ---- */
 loadState();
+applySidebarState();
 applyTheme();
 syncSchedule();
 render();

@@ -2165,3 +2165,68 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
   .focus-view .focus-head,.focus-view .focus-ai,.focus-view .focus-note,.focus-view .searchrow,.focus-view .focus-list{width:calc(100% - 24px);}
   .filter-dd{left:8px;right:8px;top:58px;max-height:calc(100% - 68px);}
 }
+
+/* v6.7 — My Tasks + Search toolbar */
+.action-toolbar{display:flex;align-items:stretch;gap:12px;margin:0 16px 10px;}
+.mytasks-group{display:flex;flex:0 0 auto;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sur);min-height:46px;}
+.mytasks-group button{border:0;background:transparent;color:var(--tx);display:flex;align-items:center;justify-content:center;gap:7px;font:inherit;font-size:.82rem;font-weight:650;padding:0 15px;cursor:pointer;}
+.mytasks-group svg{width:16px;height:16px;flex:none;}
+.mytasks-view{color:var(--grn)!important;min-width:150px;}
+.mytasks-view:hover{background:var(--sur2);}
+.mytasks-add{border-left:1px solid var(--line)!important;color:var(--acc)!important;min-width:125px;}
+.mytasks-add:hover{background:var(--acc-dim);}
+.toolbar-search{display:flex;gap:8px;flex:1;min-width:0;}
+.toolbar-search input{flex:1;min-width:0;background:var(--sur);border:1px solid var(--line);border-radius:10px;padding:0 13px;color:var(--tx);font:inherit;}
+.toolbar-search input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px var(--acc-dim);}
+.toolbar-search .sqbtn{height:46px;width:46px;}
+@media (min-width:1024px){.action-toolbar{margin:0 22px 10px;}}
+@media (max-width:700px){.action-toolbar{display:flex;flex-direction:column;gap:8px;margin:0 12px 10px;}.mytasks-group{width:100%;min-height:44px;}.mytasks-group button{flex:1;min-width:0;padding:0 10px;}.mytasks-view,.mytasks-add{min-width:0;}.toolbar-search{width:100%;}.toolbar-search input{height:44px;}.toolbar-search .sqbtn{height:44px;width:44px;}}
+
+/* v6.8 — collapsible desktop sidebar */
+.rail-collapse{display:none;background:var(--sur2);border:1px solid var(--line);color:var(--tx2);width:30px;height:30px;border-radius:9px;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+.rail-collapse svg{width:16px;height:16px;}
+@media (min-width:1024px){
+  .tabbar .railbrand{position:relative;}
+  .tabbar .rail-collapse{display:flex;margin-left:auto;}
+  body.sidebar-collapsed .tabbar{width:64px;padding-left:7px;padding-right:7px;}
+  body.sidebar-collapsed #app{left:calc(max(0px, calc(50vw - 700px)) + 64px);}
+  body.sidebar-collapsed .railbrand{justify-content:center;padding-left:0;padding-right:0;}
+  body.sidebar-collapsed .rb-tx,
+  body.sidebar-collapsed .railsec,
+  body.sidebar-collapsed .railrow .rr-l,
+  body.sidebar-collapsed .railtip,
+  body.sidebar-collapsed .railcredit{display:none;}
+  body.sidebar-collapsed .railbrand .rb-ic{margin:0;}
+  body.sidebar-collapsed .tab{justify-content:center;padding-left:8px;padding-right:8px;}
+  body.sidebar-collapsed .tab > span{display:none;}
+  body.sidebar-collapsed .tab .dot{right:4px;}
+  body.sidebar-collapsed .railrow{justify-content:center;padding-left:8px;padding-right:8px;}
+  body.sidebar-collapsed .railrow .rr-n{margin-left:0;}
+}
+
+/* v6.8 — SPOC email assistant */
+.email-compose{padding-bottom:18px;}
+.email-type{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+.email-type .chip{cursor:pointer;}
+.email-task-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 8px;}
+.email-task-head label{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--tx2);}
+.email-task-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sur2);}
+.email-task{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;}
+.email-task:last-child{border-bottom:0;}
+.email-task:hover{background:var(--sur);}
+.email-task input{margin-top:3px;accent-color:var(--acc);}
+.email-task span{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.email-task b{font-size:.82rem;color:var(--tx);line-height:1.3;}
+.email-task small{font-size:.68rem;color:var(--tx3);line-height:1.4;}
+.email-ai-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 4px;padding:10px;border:1px dashed var(--line2);border-radius:11px;background:var(--sur2);}
+.email-ai-row .hint{flex:1;min-width:180px;margin:0;}
+.email-compose textarea{min-height:180px;resize:vertical;line-height:1.5;}
+@media (min-width:1024px){
+  .email-compose{max-height:calc(100vh - 150px);overflow-y:auto;}
+}
+@media (max-width:700px){
+  .email-compose{padding:0 2px 16px;}
+  .email-type .chip{flex:1;min-width:145px;justify-content:center;}
+  .email-task small{font-size:.66rem;}
+  .email-ai-row{align-items:flex-start;}
+}
