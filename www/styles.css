@@ -2088,3 +2088,48 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
   .focus-fab{position:fixed;display:flex;right:14px;bottom:calc(var(--tabh) + 14px);z-index:36;align-items:center;gap:6px;padding:10px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--sur);color:var(--acc);font:inherit;font-size:.72rem;font-weight:750;box-shadow:0 7px 24px rgba(0,0,0,.28);}
   .focus-fab svg{width:17px;height:17px;}
 }
+
+/* V6.4 — Focus cleanup + responsive spacing */
+.focus-list{
+  width:min(1180px,calc(100% - 36px));
+  margin:20px auto 28px;
+}
+.focus-list .arow{
+  width:100%;
+  box-sizing:border-box;
+  margin:0 0 10px;
+  border:1px solid var(--line2);
+  border-radius:14px;
+}
+.focus-list .arow:last-child{margin-bottom:0;}
+.focus-list .arow:hover{border-color:var(--line2);}
+.focus-list .row-main{min-width:0;}
+.focus-list .row-side{min-width:150px;}
+.focus-ai + .focus-note + .searchrow,
+.focus-ai + .searchrow{margin-top:18px;}
+.focus-list + *{margin-top:0;}
+.focus-menu-body{display:flex;flex-direction:column;gap:8px;padding:12px 16px 18px;}
+.focus-menu-row{display:flex;align-items:center;gap:11px;width:100%;padding:13px 12px;border:1px solid var(--line2);border-radius:12px;background:var(--sur2);color:var(--tx);font:inherit;text-align:left;cursor:pointer;}
+.focus-menu-row svg{width:18px;height:18px;color:var(--acc);flex:none;}
+.focus-menu-row span{flex:1;font-weight:700;}
+.focus-menu-row b{font-family:var(--mono);color:var(--tx2);}
+@media (min-width:1024px){
+  .focus-head,.focus-ai,.focus-note,.focus-view .searchrow{max-width:1180px;margin-left:auto;margin-right:auto;}
+  .focus-head{margin-top:6px;}
+  .focus-ai{margin-top:0;}
+  .focus-note{margin-bottom:12px;}
+  .focus-view .searchrow{padding-left:0;padding-right:0;}
+}
+@media (max-width:1023px){
+  .focus-list{width:calc(100% - 24px);margin:18px 12px 24px;}
+  .focus-list .arow{border-radius:13px;margin-bottom:9px;}
+  .focus-list .row-side{min-width:96px;}
+  .fab{left:16px;right:auto;}
+  .focus-fab{right:14px;left:auto;bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 14px);}
+}
+@media (max-width:560px){
+  .focus-ai{margin-bottom:10px;}
+  .focus-list{margin-top:16px;}
+  .focus-list .arow{padding:13px 12px;}
+  .focus-list .row-side{min-width:82px;}
+}

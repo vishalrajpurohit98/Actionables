@@ -596,7 +596,7 @@ function nav(name,params,noHist){
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
   var moreViews=['projects','projectDetail','reports','notifications','settings','brief','workload'];
-  var focusCounts={important:m.open.filter(function(a){return a.important;}).length,overdue:m.overdue.length,eta:m.overdue.length,upcoming:focusItems('upcoming').length};
+  var focusCounts={important:m.open.filter(function(a){return a.important;}).length,eta:focusItems('eta').length,upcoming:focusItems('upcoming').length};
   function tab(k,ic,lbl){
     var on=(k==='more')?(moreViews.indexOf(view.name)>=0):(k==='ai')?(view.name==='ai'):(view.name!=='ai'&&moreViews.indexOf(view.name)<0&&view.name!=='focus');
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';
@@ -606,20 +606,28 @@ function tabbar(){
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
     tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
     '<div class="railsec focus-desktop">FOCUS</div>'+
-    focusRow('important','star','Important',false)+focusRow('overdue','alert','Overdue',true)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
+    focusRow('important','star','Important',false)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
     '<div class="railtip">'+railTipHtml()+'</div>'+
     '<div class="railcredit">Developed by <b>Vishal</b> · personal use only</div>'+
-    '<button class="focus-fab" data-act="focus-nav" data-kind="important" title="Focus">'+I('star')+'<span>Focus</span></button>'+
+    '<button class="focus-fab" data-act="focus-menu" title="Focus">'+I('star')+'<span>Focus</span></button>'+
   '</nav>';
 }
 function notifBadgeOn(m){var n=m.overdue.length+m.today.length+m.remDueL.length;return n>0&&S.settings.notifSeenDate!==todayISO();}
+function openFocusMenu(){
+  var m=metrics(),counts={important:m.open.filter(function(a){return !!a.important;}).length,eta:focusItems('eta').length,upcoming:focusItems('upcoming').length};
+  openSheet('<div class="shead"><h2>Focus</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
+    '<div class="sbody focus-menu-body">'+
+      '<button class="focus-menu-row" data-act="focus-nav" data-kind="important">'+I('star')+'<span>Important</span><b>'+counts.important+'</b></button>'+
+      '<button class="focus-menu-row" data-act="focus-nav" data-kind="eta">'+I('clock')+'<span>ETA Breached</span><b>'+counts.eta+'</b></button>'+
+      '<button class="focus-menu-row" data-act="focus-nav" data-kind="upcoming">'+I('cal')+'<span>Upcoming</span><b>'+counts.upcoming+'</b></button>'+
+    '</div>',{tag:'focus-menu'});
+}
 
 /* ====== VIEWS ====== */
 
 /* ---- FOCUS VIEWS ---- */
 var FOCUS_META={
   important:{label:'Important',icon:'star',desc:'Important open tasks that need deliberate attention.',cls:'focus-important'},
-  overdue:{label:'Overdue',icon:'alert',desc:'Open tasks whose current ETA has already passed.',cls:'focus-overdue'},
   eta:{label:'ETA Breached',icon:'clock',desc:'Open tasks that have crossed their committed ETA.',cls:'focus-eta'},
   upcoming:{label:'Upcoming',icon:'cal',desc:'Open tasks due within the next 7 days.',cls:'focus-upcoming'}
 };
@@ -627,7 +635,7 @@ function focusLabel(kind){return(FOCUS_META[kind]||FOCUS_META.important).label;}
 function focusItems(kind){
   var t=todayISO(),all=mainActs().filter(isOpen);
   if(kind==='important')return sortActs(all.filter(function(a){return !!a.important;}),'smart');
-  if(kind==='overdue'||kind==='eta')return sortActs(all.filter(function(a){return isOver(a,t);}), 'smart');
+  if(kind==='eta')return sortActs(all.filter(function(a){return isOver(a,t);}), 'smart');
   return sortActs(all.filter(function(a){var e=endEta(a),k=e?diffDays(e,t):9999;return e&&k>=0&&k<=7;}),'eta');
 }
 function focusOverview(kind,items){
@@ -1815,7 +1823,8 @@ document.addEventListener('click',function(e){
     case 'filters-clear':{var qk=filters.quick;filters=defaultFilters();filters.quick=qk;var fr=sheetFor('filters');if(fr)renderFilters(fr);render();break;}
     case 'flt-toggle':{var kind=el.getAttribute('data-kind'),v=el.getAttribute('data-v');var arr=filters[kind];var ix=arr.indexOf(v);if(ix>=0)arr.splice(ix,1);else arr.push(v);var fr2=sheetFor('filters');if(fr2)renderFilters(fr2);render();break;}
     case 'flt-flag':{var fk=el.getAttribute('data-f');filters[fk]=!filters[fk];var fr3=sheetFor('filters');if(fr3)renderFilters(fr3);render();break;}
-    case 'focus-nav':{nav('focus',{kind:el.getAttribute('data-kind')||'important'});break;}
+    case 'focus-menu':{openFocusMenu();break;}
+    case 'focus-nav':{closeTop();nav('focus',{kind:el.getAttribute('data-kind')||'important'});break;}
     case 'focus-ai':{var fk2=el.getAttribute('data-kind')||'important';var fl=focusItems(fk2);aiState.input='Give me a concise PM overview of the '+focusLabel(fk2)+' view. Summarize the current tasks, key risks, owners/projects needing attention, and the top 3 recommended actions. Use only the Actionables data provided.';aiChat=[];nav('ai',{});setTimeout(function(){aiSend();},40);break;}
     /* Projects */
     case 'proj-filter':{filters=defaultFilters();filters.project=[id];nav('list',{});break;}
