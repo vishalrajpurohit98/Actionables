@@ -2230,3 +2230,144 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
   .email-task small{font-size:.66rem;}
   .email-ai-row{align-items:flex-start;}
 }
+
+
+/* v6.9 — Material-style collapsible sidebar */
+@media (min-width:1024px){
+  :root{--sidebar:232px;}
+  .tabbar{
+    padding:20px 12px 16px;
+    gap:4px;
+    background:var(--sur)!important;
+    border-right:1px solid var(--line);
+  }
+  .railbrand{
+    min-height:56px;
+    padding:8px 10px!important;
+    margin-bottom:8px;
+    border-radius:18px;
+    background:var(--sur2);
+  }
+  .railbrand .rb-ic{
+    width:40px;height:40px;
+    border-radius:12px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--acc-dim);
+    color:var(--acc);
+    flex:none;
+  }
+  .railbrand .rb-ic svg{width:20px;height:20px;}
+  .railbrand .rb-tx b{font-size:.88rem;letter-spacing:.08em;}
+  .railbrand .rb-tx i{font-size:.68rem;color:var(--tx3);}
+  .rail-collapse{
+    width:36px;height:36px;border-radius:50%;
+    background:var(--sur)!important;
+    border:1px solid var(--line2)!important;
+    color:var(--tx)!important;
+    box-shadow:0 1px 2px rgba(0,0,0,.18);
+  }
+  .rail-collapse:hover{background:var(--sur2)!important;border-color:var(--acc)!important;}
+  .tab{
+    min-height:48px;
+    padding:0 14px;
+    border-radius:14px;
+    color:var(--tx2);
+    transition:background .16s ease,color .16s ease,transform .16s ease;
+  }
+  .tab:hover{background:var(--sur2);color:var(--tx);}
+  .tab.on{background:var(--acc-dim);color:var(--acc);font-weight:700;}
+  .tab svg{width:20px;height:20px;}
+  .railsec{
+    margin:16px 8px 4px;
+    padding:0;
+    font-size:.68rem;
+    letter-spacing:.12em;
+    color:var(--tx3);
+  }
+  .railrow{
+    min-height:46px;
+    margin:1px 0;
+    padding:0 10px!important;
+    border-radius:14px;
+    color:var(--tx2);
+    background:transparent;
+    transition:background .16s ease,color .16s ease;
+  }
+  .railrow:hover{background:var(--sur2);color:var(--tx);}
+  .railrow.on{background:var(--acc-dim);color:var(--acc);}
+  .railrow svg{width:20px;height:20px;flex:none;}
+  .railrow .rr-l{font-size:.8rem;font-weight:650;}
+  .railrow .rr-n{
+    min-width:24px;height:24px;padding:0 7px;
+    display:inline-flex;align-items:center;justify-content:center;
+    border-radius:999px;
+    background:var(--sur2);
+    border:1px solid var(--line2);
+    color:var(--tx2);font-size:.7rem;font-weight:800;
+  }
+  .railrow.on .rr-n{background:var(--acc);color:#fff;border-color:var(--acc);}
+  .railrow .rr-n.r{color:var(--red);border-color:color-mix(in srgb,var(--red) 55%,var(--line2));}
+  .railrow.on .rr-n.r{color:#fff;background:var(--red);border-color:var(--red);}
+  .railtip{border-radius:16px!important;background:var(--sur2)!important;}
+  .railcredit{font-size:.68rem!important;}
+
+  /* Collapsed material navigation rail */
+  body.sidebar-collapsed .tabbar{
+    width:80px;
+    padding:18px 8px 14px;
+    align-items:stretch;
+    gap:4px;
+    background:var(--sur)!important;
+  }
+  body.sidebar-collapsed #app{left:calc(max(0px, calc(50vw - 700px)) + 80px);}
+  body.sidebar-collapsed .railbrand{
+    min-height:48px;
+    padding:6px!important;
+    justify-content:center;
+    border-radius:16px;
+    background:transparent;
+    margin-bottom:8px;
+  }
+  body.sidebar-collapsed .railbrand .rb-ic{width:42px;height:42px;border-radius:13px;}
+  body.sidebar-collapsed .rail-collapse{
+    position:absolute;
+    top:62px;right:-8px;
+    width:32px;height:32px;
+    background:var(--sur)!important;
+    z-index:4;
+  }
+  body.sidebar-collapsed .tab{
+    width:100%;height:48px;min-height:48px;
+    padding:0!important;
+    margin:0;
+    justify-content:center;
+    border-radius:14px;
+    position:relative;
+  }
+  body.sidebar-collapsed .tab svg{width:21px;height:21px;}
+  body.sidebar-collapsed .tab .dot{right:11px;top:9px;}
+  body.sidebar-collapsed .railsec{
+    display:block;
+    height:1px;width:42px;
+    margin:10px auto 6px;
+    padding:0;overflow:hidden;
+    background:var(--line);
+    font-size:0;
+  }
+  body.sidebar-collapsed .railrow{
+    width:100%;height:48px;min-height:48px;
+    padding:0!important;margin:0;
+    justify-content:center;
+    border-radius:14px;
+    position:relative;
+  }
+  body.sidebar-collapsed .railrow svg{width:21px;height:21px;}
+  body.sidebar-collapsed .railrow .rr-n{
+    position:absolute;right:5px;top:3px;
+    min-width:18px;height:18px;padding:0 4px;
+    font-size:.58rem;
+    border:2px solid var(--sur);
+    background:var(--acc);color:#fff;
+  }
+  body.sidebar-collapsed .railrow .rr-n.r{background:var(--red);color:#fff;}
+}
