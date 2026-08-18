@@ -1,7 +1,6 @@
 name: Build Android APK
 
-# Rebuild the APK whenever the app code changes on main.
-# Skips runs that only touch docs so you don't burn minutes needlessly.
+# Rebuilds the APK whenever the app code changes on main.
 on:
   push:
     branches: [ main ]
@@ -13,10 +12,10 @@ on:
       - 'widgets/**'
       - 'android-wrapper/**'
       - '.github/workflows/build-apk.yml'
-  workflow_dispatch:   # lets you trigger a build manually from the Actions tab
+  workflow_dispatch:
 
 permissions:
-  contents: write      # needed to create Releases
+  contents: write
 
 jobs:
   build:
@@ -35,14 +34,26 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install SDK packages
-        run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;35.0.0"
 
-      - name: Decode signing keystore
-        env:
-          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+      - name: Decode keystore from committed file
         run: |
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          if [ ! -f android-wrapper/keystore.b64 ]; then
+            echo "ERROR: android-wrapper/keystore.b64 not found."
+            echo "Run the '(One-time) Generate signing keystore' workflow first."
+            exit 1
+          fi
+          base64 -d android-wrapper/keystore.b64 > "$RUNNER_TEMP/release.keystore"
+          echo "Decoded keystore: $(stat -c%s "$RUNNER_TEMP/release.keystore") bytes"
+
+      - name: Read key alias
+        id: alias
+        run: |
+          if [ -f android-wrapper/keystore.alias ]; then
+            echo "value=$(cat android-wrapper/keystore.alias | tr -d '\n\r ')" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=actionables" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build APK
         working-directory: android-wrapper
@@ -53,8 +64,8 @@ jobs:
           WEB_DIR: ..
           KEYSTORE: ${{ runner.temp }}/release.keystore
           KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ steps.alias.outputs.value }}
+          KEY_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
           OUT_APK: ${{ github.workspace }}/Actionables.apk
         run: |
           chmod +x build-apk.sh
@@ -67,8 +78,6 @@ jobs:
           path: Actionables.apk
           if-no-files-found: error
 
-      # Optional: also publish a Release with a stable download URL.
-      # Every push to main updates the "latest" release in place.
       - name: Publish to Release (latest)
         uses: softprops/action-gh-release@v2
         with:
