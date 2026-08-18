@@ -757,8 +757,7 @@ function vList(){
     '<button class="iconbtn" data-act="open-email" title="Email SPOC">'+I('mail')+'</button>'+
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
   h+='<div class="action-toolbar"><div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div><div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'"><button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div></div>';
-  h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
-    '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
+      '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
     var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
@@ -1581,6 +1580,7 @@ function vBrief(){
 
 /* ---- MORE MENU ---- */
 function openMore(){
+  if(sheetFor('more')){ var existing=sheetFor('more'); if(existing.sheet) existing.sheet.classList.add('pulse'); return existing; }
   openSheet('<div class="shead"><h2>More</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody more-nav" style="padding-top:6px">'+
     '<div class="nav-group-label">WORK</div>'+
