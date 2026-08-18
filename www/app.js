@@ -129,7 +129,7 @@ var globalSearchState={q:''};
 var bulkSel={};
 
 function defaultFilters(){
-  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
+  return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],etaStatus:'',priority:'',type:'',assigned:'',aging:'',updated:'',dependency:'',followup:'',from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
 }
 
 function loadState(){
@@ -365,12 +365,29 @@ function filteredActs(){
     if(filters.project.length&&filters.project.indexOf(a.projectId)<0)return false;
     if(filters.spoc.length){var hit=false;for(var i=0;i<filters.spoc.length;i++){var sid=filters.spoc[i];if(sid==='__tbc'?a.spocIds.length===0:a.spocIds.indexOf(sid)>=0){hit=true;break;}}if(!hit)return false;}
     if(filters.status.length&&filters.status.indexOf(a.status)<0)return false;
+    if(filters.etaStatus){var e=endEta(a),k=e?diffDays(e,t):9999;
+      if(filters.etaStatus==='breached'&&!isOver(a,t))return false;
+      if(filters.etaStatus==='today'&&!(isOpen(a)&&e===t))return false;
+      if(filters.etaStatus==='upcoming'&&!(isOpen(a)&&e&&k>=0&&k<=7))return false;
+      if(filters.etaStatus==='noeta'&&!(isOpen(a)&&!e))return false;
+    }
+    if(filters.priority==='important'&&!a.important)return false;
+    if(filters.priority==='normal'&&a.important)return false;
+    if(filters.type&&a.type!==filters.type)return false;
+    if(filters.assigned){var ad=assignedDateISO(a),ak=ad?diffDays(t,ad):9999;if(filters.assigned==='today'&&ad!==t)return false;if(filters.assigned==='7'&&!(ad&&ak>=0&&ak<=7))return false;if(filters.assigned==='30'&&!(ad&&ak>=0&&ak<=30))return false;if(filters.assigned==='older'&&!(ad&&ak>30))return false;}
+    if(filters.aging){var ag=agingDays(a,t);if(filters.aging==='0-3'&&ag>3)return false;if(filters.aging==='4-7'&&(ag<4||ag>7))return false;if(filters.aging==='8-14'&&(ag<8||ag>14))return false;if(filters.aging==='15+'&&ag<15)return false;}
+    if(filters.updated){var sd=staleDays(a,t);if(filters.updated==='today'&&sd!==0)return false;if(filters.updated==='3'&&sd<=3)return false;if(filters.updated==='7'&&sd<=7)return false;if(filters.updated==='14'&&sd<=14)return false;}
+    if(filters.dependency==='has'&&a.status!=='Dependency')return false;
+    if(filters.dependency==='none'&&a.status==='Dependency')return false;
+    if(filters.followup==='due'&&!remDue(a,t))return false;
+    if(filters.followup==='overdue'&&!(a.rem&&a.rem.on&&!a.rem.done&&a.rem.date&&a.rem.date<t))return false;
+    if(filters.followup==='none'&&a.rem&&a.rem.on&&!a.rem.done)return false;
     if(filters.tags&&filters.tags.length){var _at=(a.tags||[]).map(function(x){return x.toLowerCase();}),_hit=false;for(var _fi=0;_fi<filters.tags.length;_fi++){if(_at.indexOf(filters.tags[_fi].toLowerCase())>=0){_hit=true;break;}}if(!_hit)return false;}
     if(filters.fOd&&!isOver(a,t))return false;
     if(filters.fFu&&!remDue(a,t))return false;
     if(filters.fTk&&!a.ticket)return false;
-    if(filters.from||filters.to){var e=endEta(a);if(!e)return false;if(filters.from&&e<filters.from)return false;if(filters.to&&e>filters.to)return false;}
-    if(q){var hay=(a.ticket+' '+a.lineItem+' '+a.task+' '+a.notes+' '+projName(a.projectId)+' '+categoryName(a.projectId,a.categoryId)+' '+spocLabel(a)+' '+a.status).toLowerCase();if(hay.indexOf(q)<0)return false;}
+    if(filters.from||filters.to){var e2=endEta(a);if(!e2)return false;if(filters.from&&e2<filters.from)return false;if(filters.to&&e2>filters.to)return false;}
+    if(q){var hay=(a.ticket+' '+a.lineItem+' '+a.task+' '+a.notes+' '+projName(a.projectId)+' '+categoryName(a.projectId,a.categoryId)+' '+spocLabel(a)+' '+a.status+' '+a.type).toLowerCase();if(hay.indexOf(q)<0)return false;}
     return true;
   });
   if(filters.quick==='completed')return list.sort(function(a,b){return(b.completedAt||0)-(a.completedAt||0);});
@@ -378,7 +395,7 @@ function filteredActs(){
   return sortActs(list);
 }
 function advCount(){
-  return filters.project.length+filters.spoc.length+filters.status.length+
+  return filters.project.length+filters.spoc.length+filters.status.length+(filters.etaStatus?1:0)+(filters.priority?1:0)+(filters.type?1:0)+(filters.assigned?1:0)+(filters.aging?1:0)+(filters.updated?1:0)+(filters.dependency?1:0)+(filters.followup?1:0)+
     (filters.from?1:0)+(filters.to?1:0)+(filters.fOd?1:0)+(filters.fFu?1:0)+(filters.fTk?1:0)+((filters.tags&&filters.tags.length)?1:0)+(filters.sort!=='smart'?1:0);
 }
 
@@ -564,6 +581,7 @@ function render(){
     case 'settings':html=vSettings();break;
     case 'brief':html=vBrief();break;
     case 'ai':html=vAI();break;
+    case 'focus':html=vFocus(view.params.kind||'important');break;
   }
   var fabViews=['home','list','calendar','projects','projectDetail','people','personDetail','workload'];
   app.innerHTML='<div class="screen">'+html+'</div>'+tabbar()+
@@ -578,20 +596,70 @@ function nav(name,params,noHist){
 function tabbar(){
   var m=metrics(),badge=notifBadgeOn(m);
   var moreViews=['projects','projectDetail','reports','notifications','settings','brief','workload'];
+  var focusCounts={important:m.open.filter(function(a){return a.important;}).length,overdue:m.overdue.length,eta:m.overdue.length,upcoming:focusItems('upcoming').length};
   function tab(k,ic,lbl){
-    var on=(k==='more')?(moreViews.indexOf(view.name)>=0):(k==='ai')?(view.name==='ai'):(view.name!=='ai'&&moreViews.indexOf(view.name)<0);
+    var on=(k==='more')?(moreViews.indexOf(view.name)>=0):(k==='ai')?(view.name==='ai'):(view.name!=='ai'&&moreViews.indexOf(view.name)<0&&view.name!=='focus');
     return '<button class="tab'+(on?' on':'')+'" data-act="tab" data-tab="'+k+'">'+I(ic)+'<span>'+lbl+'</span>'+(k==='more'&&badge?'<span class="dot"></span>':'')+'</button>';
   }
+  function focusRow(kind,ic,label,red){var on=view.name==='focus'&&view.params.kind===kind;return '<button class="railrow focus-desktop '+(on?'on':'')+'" data-act="focus-nav" data-kind="'+kind+'">'+I(ic)+'<span class="rr-l">'+label+'</span><span class="rr-n '+(red?'r':'')+'">'+focusCounts[kind]+'</span></button>';}
   return '<nav class="tabbar tabbar-3">'+
     '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span></div>'+
     tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
+    '<div class="railsec focus-desktop">FOCUS</div>'+
+    focusRow('important','star','Important',false)+focusRow('overdue','alert','Overdue',true)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
     '<div class="railtip">'+railTipHtml()+'</div>'+
-    '<div class="railcredit">Developed by <b>Vishal</b> \u00b7 personal use only</div>'+
+    '<div class="railcredit">Developed by <b>Vishal</b> · personal use only</div>'+
+    '<button class="focus-fab" data-act="focus-nav" data-kind="important" title="Focus">'+I('star')+'<span>Focus</span></button>'+
   '</nav>';
 }
 function notifBadgeOn(m){var n=m.overdue.length+m.today.length+m.remDueL.length;return n>0&&S.settings.notifSeenDate!==todayISO();}
 
 /* ====== VIEWS ====== */
+
+/* ---- FOCUS VIEWS ---- */
+var FOCUS_META={
+  important:{label:'Important',icon:'star',desc:'Important open tasks that need deliberate attention.',cls:'focus-important'},
+  overdue:{label:'Overdue',icon:'alert',desc:'Open tasks whose current ETA has already passed.',cls:'focus-overdue'},
+  eta:{label:'ETA Breached',icon:'clock',desc:'Open tasks that have crossed their committed ETA.',cls:'focus-eta'},
+  upcoming:{label:'Upcoming',icon:'cal',desc:'Open tasks due within the next 7 days.',cls:'focus-upcoming'}
+};
+function focusLabel(kind){return(FOCUS_META[kind]||FOCUS_META.important).label;}
+function focusItems(kind){
+  var t=todayISO(),all=mainActs().filter(isOpen);
+  if(kind==='important')return sortActs(all.filter(function(a){return !!a.important;}),'smart');
+  if(kind==='overdue'||kind==='eta')return sortActs(all.filter(function(a){return isOver(a,t);}), 'smart');
+  return sortActs(all.filter(function(a){var e=endEta(a),k=e?diffDays(e,t):9999;return e&&k>=0&&k<=7;}),'eta');
+}
+function focusOverview(kind,items){
+  var t=todayISO(),od=items.filter(function(a){return isOver(a,t);}).length;
+  var due2=items.filter(function(a){var e=endEta(a),k=e?diffDays(e,t):9999;return k>=0&&k<=2;}).length;
+  var stale=items.filter(function(a){return staleDays(a,t)>=7;}).length;
+  var imp=items.filter(function(a){return a.important;}).length;
+  var byP={},byO={};items.forEach(function(a){byP[projName(a.projectId)]=(byP[projName(a.projectId)]||0)+1;(a.spocIds||[]).forEach(function(id){byO[personName(id)]=(byO[personName(id)]||0)+1;});});
+  var topP=Object.keys(byP).sort(function(a,b){return byP[b]-byP[a];})[0],topO=Object.keys(byO).sort(function(a,b){return byO[b]-byO[a];})[0];
+  var lines=[];
+  if(kind==='important')lines.push(items.length+' important task'+(items.length===1?' is':'s are')+' open.');
+  else if(kind==='upcoming')lines.push(items.length+' task'+(items.length===1?' is':'s are')+' due within the next 7 days.');
+  else lines.push(items.length+' open task'+(items.length===1?' has':'s have')+' crossed the current ETA.');
+  if(od)lines.push(od+' of these '+(od===1?'is':'are')+' already overdue.');
+  if(due2&&kind==='upcoming')lines.push(due2+' '+(due2===1?'is':'are')+' due within the next 2 days.');
+  if(stale)lines.push(stale+' '+(stale===1?'has':'have')+' had no update for 7+ days.');
+  if(topP)lines.push(topP+' has the largest share of this view ('+byP[topP]+').');
+  if(topO)lines.push(topO+' owns '+byO[topO]+' task'+(byO[topO]===1?'':'s')+' here.');
+  if(imp&&kind!=='important')lines.push(imp+' '+(imp===1?'is':'are')+' marked important.');
+  return lines.slice(0,4);
+}
+function vFocus(kind){
+  var meta=FOCUS_META[kind]||FOCUS_META.important,items=focusItems(kind),overview=focusOverview(kind,items);
+  var h=topbar(meta.label,items.length+' task'+(items.length===1?'':'s'),true,'<button class="iconbtn" data-act="focus-ai" data-kind="'+kind+'" title="Ask AI for a deeper overview">'+I('spark')+'</button>');
+  h+='<section class="focus-head '+meta.cls+'"><div class="focus-title"><span class="focus-icon">'+I(meta.icon)+'</span><div><h1>'+esc(meta.label)+'</h1><p>'+esc(meta.desc)+'</p></div></div></section>';
+  h+='<section class="focus-ai"><div class="focus-ai-title">'+I('spark')+'<span>AI Overview</span><button class="btn ghost mini" data-act="focus-ai" data-kind="'+kind+'">Ask AI</button></div>';
+  h+='<div class="focus-ai-copy">'+overview.map(function(x){return '<div>• '+esc(x)+'</div>';}).join('')+'</div></section>';
+  if(kind==='eta')h+='<div class="focus-note">ETA Breached is based on the task\'s current ETA. It can overlap with Overdue until a separate business due-date field is introduced.</div>';
+  h+='<div class="searchrow"><input id="focusSearch" type="search" placeholder="Search this view…"><button class="sqbtn" data-act="open-filters" title="More filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+'</button></div>';
+  h+='<div class="focus-list">'+(items.length?items.map(function(a){return actRow(a);}).join('<div style="height:8px"></div>'):emptyBox('Nothing here','No tasks match this focus view.'))+'</div>';
+  return h;
+}
 
 /* ---- HOME (board) ---- */
 function vHome(){
@@ -668,16 +736,7 @@ function vList(){
   h+='<div class="selfrow"><button class="quickadd" data-act="quick-new">'+I('plus')+'Add my task</button><button class="quickadd viewself" data-act="view-personal">'+I('person')+'View my tasks</button></div>';
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
-  var _cp=filters.project.length===1?filters.project[0]:'__all';
-  var _cs=filters.spoc.length===1?filters.spoc[0]:'__all';
-  var _projs=S.projects.filter(function(o){return o.id!=='__personal';});
-  var _seen={},_sids=[];mainActs().forEach(function(a){if(_cp!=='__all'&&a.projectId!==_cp)return;(a.spocIds||[]).forEach(function(id){if(!_seen[id]){_seen[id]=1;_sids.push(id);}});});
-  _sids.sort(function(x,y){return personName(x).toLowerCase()<personName(y).toLowerCase()?-1:1;});
-  if(_cs!=='__all'&&_cs!=='__tbc'&&_sids.indexOf(_cs)<0)_cs='__all';
-  h+='<div class="viewsel">'+
-     '<div class="vs-field"><span class="vs-l">Project</span><div class="vs-sel"><select data-chg="lst-proj"><option value="__all"'+(_cp==='__all'?' selected':'')+'>All projects</option>'+_projs.map(function(o){return '<option value="'+o.id+'"'+(_cp===o.id?' selected':'')+'>'+esc(o.name)+'</option>';}).join('')+'</select>'+I('chevR')+'</div></div>'+
-     '<div class="vs-field"><span class="vs-l">SPOC / Owner</span><div class="vs-sel"><select data-chg="lst-spoc"><option value="__all"'+(_cs==='__all'?' selected':'')+'>All SPOCs</option>'+_sids.map(function(id){return '<option value="'+id+'"'+(_cs===id?' selected':'')+'>'+esc(personName(id))+'</option>';}).join('')+'<option value="__none"'+(_cs==='__tbc'?' selected':'')+'>Unassigned</option></select>'+I('chevR')+'</div></div>'+
-     '</div>';
+  h+='<div class="filterhint"><span>'+I('filter')+' More Filters</span><span class="filterhint-count">'+(advCount()?advCount()+' active':'Project, SPOC, status, ETA & more')+'</span></div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
     var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
@@ -1010,7 +1069,7 @@ function openSheet(html,opts){
   opts=opts||{};
   var wrap=$('#sheets');
   var scrim=document.createElement('div');scrim.className='scrim';
-  var sh=document.createElement('div');sh.className='sheet'+(opts.full?' full':'');
+  var sh=document.createElement('div');sh.className='sheet'+(opts.full?' full':'')+(opts.tag==='filters'?' filter-sheet':'');
   sh.innerHTML=(opts.full?'':'<div class="grab"></div>')+html;
   wrap.appendChild(scrim);wrap.appendChild(sh);
   requestAnimationFrame(function(){scrim.classList.add('in');sh.classList.add('in');});
@@ -1308,9 +1367,9 @@ function saveForm(rec){
 
 /* ---- FILTERS ---- */
 function openFilters(){
-  var rec=openSheet('<div class="shead"><h2>Filter &amp; sort</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
+  var rec=openSheet('<div class="shead"><h2>Filters</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
     '<div class="sbody"></div>'+
-    '<div class="sfoot"><button class="btn ghost" data-act="filters-clear">Clear all</button><button class="btn pri" data-act="close-sheet">Done</button></div>',
+    '<div class="sfoot"><button class="btn ghost" data-act="filters-clear">Reset</button><button class="btn pri" data-act="close-sheet">Apply filters</button></div>',
     {tag:'filters'});
   renderFilters(rec);
 }
@@ -1321,23 +1380,42 @@ function chipGroup(label,items,sel,kind){
       return '<button class="chip'+(on?' on':'')+'" data-act="flt-toggle" data-kind="'+kind+'" data-v="'+esc(it[0])+'">'+esc(it[1])+'</button>';
     }).join('')+'</div></div>';
 }
+function filterSelect(label,key,options){
+  return '<div class="fld"><label>'+label+'</label><select data-chg="flt-'+key+'">'+
+    options.map(function(o){return '<option value="'+esc(o[0])+'"'+(filters[key]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+
+    '</select></div>';
+}
 function renderFilters(rec){
-  var b='<div class="fld wide" style="margin-bottom:14px"><label>Sort by</label><select data-chg="flt-sort">'+
-    [['smart','Smart \u00b7 overdue \u2192 ETA \u2192 follow-up'],['eta','ETA'],['ticket','Ticket / Ref ID'],['project','Project'],['updated','Recently updated']]
-      .map(function(s){return '<option value="'+s[0]+'"'+(filters.sort===s[0]?' selected':'')+'>'+s[1]+'</option>';}).join('')+
-    '</select></div>'+
-    chipGroup('Project',S.projects.map(function(o){return[o.id,o.name];}),filters.project,'project')+
-    chipGroup('Owner / SPOC',peopleSorted().map(function(u){return[u.id,u.name];}).concat([['__tbc','To be assigned']]),filters.spoc,'spoc')+
-    chipGroup('Status',STATUSES.map(function(s){return[s,s];}),filters.status,'status')+
-    (allTags().length?'<div class="fld wide" style="margin-bottom:14px"><label>Tag</label><select class="tagdd" data-chg="flt-tag"><option value="">All tags</option>'+allTags().map(function(t){return '<option value="'+esc(t)+'"'+(filters.tags.indexOf(t)>=0?' selected':'')+'>'+esc(t)+'</option>';}).join('')+'</select></div>':'')+
-    '<div class="fld wide" style="margin-bottom:14px"><label>Flags</label>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:2px">'+
-    '<button class="chip'+(filters.fOd?' on':'')+'" data-act="flt-flag" data-f="fOd">Overdue only</button>'+
-    '<button class="chip'+(filters.fFu?' on':'')+'" data-act="flt-flag" data-f="fFu">Follow-up due</button>'+
-    '<button class="chip'+(filters.fTk?' on':'')+'" data-act="flt-flag" data-f="fTk">Has ticket ID</button>'+
+  var t=todayISO();
+  var b='<div class="filter-section"><div class="filter-section-title">Primary filters</div>'+
+    chipGroup('Project',S.projects.filter(function(o){return o.id!=='__personal';}).map(function(o){return[o.id,o.name];}),filters.project,'project')+
+    chipGroup('SPOC / Owner',peopleSorted().map(function(u){return[u.id,u.name];}).concat([['__tbc','To be assigned']]),filters.spoc,'spoc')+
+    chipGroup('Status',STATUSES.map(function(st){return[st,st];}),filters.status,'status')+
+    filterSelect('ETA Status','etaStatus',[['','All ETA statuses'],['breached','ETA breached'],['today','Due today'],['upcoming','Due within 7 days'],['noeta','No ETA']])+
+    '</div>'+
+    '<div class="filter-section"><div class="filter-section-title">More filters</div>'+
+    '<div class="meta">'+
+      filterSelect('Priority','priority',[['','All priorities'],['important','Important'],['normal','Not important']])+
+      filterSelect('Task Type','type',[['','All types']].concat(S.taskTypes.map(function(tp){return[tp,tp];})))+
+    '</div>'+
+    '<div class="meta">'+
+      filterSelect('Assignment Date','assigned',[['','All dates'],['today','Assigned today'],['7','Last 7 days'],['30','Last 30 days'],['older','Older than 30 days']])+
+      filterSelect('Aging','aging',[['','All aging'],['0-3','0–3 days'],['4-7','4–7 days'],['8-14','8–14 days'],['15+','15+ days']])+
+    '</div>'+
+    '<div class="meta">'+
+      filterSelect('Last Updated','updated',[['','Any update'],['today','Updated today'],['3','No update > 3 days'],['7','No update > 7 days'],['14','No update > 14 days']])+
+      filterSelect('Dependency','dependency',[['','All'],['has','Has dependency'],['none','No dependency']])+
+    '</div>'+
+    filterSelect('Follow-up','followup',[['','All follow-ups'],['due','Follow-up due'],['overdue','Follow-up overdue'],['none','No follow-up']])+
+    '</div>'+
+    '<div class="filter-section"><div class="filter-section-title">ETA range</div><div class="meta">'+
+      '<div class="fld"><label>ETA from</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-from" value="'+esc(filters.from)+'"></div>'+
+      '<div class="fld"><label>ETA to</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-to" value="'+esc(filters.to)+'"></div>'+
     '</div></div>'+
-    '<div class="meta"><div class="fld"><label>ETA from</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-from" value="'+esc(filters.from)+'"></div>'+
-    '<div class="fld"><label>ETA to</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-to" value="'+esc(filters.to)+'"></div></div>';
+    '<div class="filter-section"><div class="filter-section-title">Other</div><div style="display:flex;flex-wrap:wrap;gap:7px">'+
+      '<button class="chip'+(filters.fTk?' on':'')+'" data-act="flt-flag" data-f="fTk">Has ticket ID</button>'+
+      (allTags().length?'<select class="tagdd" data-chg="flt-tag"><option value="">All tags</option>'+allTags().map(function(tg){return '<option value="'+esc(tg)+'"'+(filters.tags.indexOf(tg)>=0?' selected':'')+'>'+esc(tg)+'</option>';}).join('')+'</select>':'')+
+    '</div></div>';
   $('.sbody',rec.sheet).innerHTML=b;
 }
 
@@ -1737,6 +1815,8 @@ document.addEventListener('click',function(e){
     case 'filters-clear':{var qk=filters.quick;filters=defaultFilters();filters.quick=qk;var fr=sheetFor('filters');if(fr)renderFilters(fr);render();break;}
     case 'flt-toggle':{var kind=el.getAttribute('data-kind'),v=el.getAttribute('data-v');var arr=filters[kind];var ix=arr.indexOf(v);if(ix>=0)arr.splice(ix,1);else arr.push(v);var fr2=sheetFor('filters');if(fr2)renderFilters(fr2);render();break;}
     case 'flt-flag':{var fk=el.getAttribute('data-f');filters[fk]=!filters[fk];var fr3=sheetFor('filters');if(fr3)renderFilters(fr3);render();break;}
+    case 'focus-nav':{nav('focus',{kind:el.getAttribute('data-kind')||'important'});break;}
+    case 'focus-ai':{var fk2=el.getAttribute('data-kind')||'important';var fl=focusItems(fk2);aiState.input='Give me a concise PM overview of the '+focusLabel(fk2)+' view. Summarize the current tasks, key risks, owners/projects needing attention, and the top 3 recommended actions. Use only the Actionables data provided.';aiChat=[];nav('ai',{});setTimeout(function(){aiSend();},40);break;}
     /* Projects */
     case 'proj-filter':{filters=defaultFilters();filters.project=[id];nav('list',{});break;}
     case 'proj-nav':nav('projectDetail',{id:id,seg:'open'});break;
@@ -1977,6 +2057,7 @@ document.addEventListener('change',function(e){
   if(chg==='psort'){peopleView.sort=v;render();return;}
   if(chg==='flt-tag'){filters.tags=v?[v]:[];var frt=sheetFor('filters');if(frt)renderFilters(frt);render();return;}
   if(chg==='flt-sort'){filters.sort=v;render();return;}
+  if(chg.indexOf('flt-')===0){var fk3=chg.slice(4);if(fk3==='tag'){filters.tags=v?[v]:[];}else if(Object.prototype.hasOwnProperty.call(filters,fk3)){filters[fk3]=v;}var fr4=sheetFor('filters');if(fr4)renderFilters(fr4);render();return;}
   if(chg==='flt-from'){filters.from=v;render();return;}
   if(chg==='flt-to'){filters.to=v;render();return;}
   if(chg==='rep-proj'){exportSel.projId=v;render();return;}
@@ -1993,6 +2074,8 @@ var _srchTimer=null;
 function bindViewInputs(){
   var s=$('#srch');
   if(s){s.addEventListener('input',function(){filters.q=s.value;var val=s.value,sel=s.selectionStart;clearTimeout(_srchTimer);_srchTimer=setTimeout(function(){var scroll=window.scrollY;render();var s2=$('#srch');if(s2){s2.value=val;s2.focus();try{s2.setSelectionRange(sel,sel);}catch(e){}}window.scrollTo(0,scroll);},150);});}
+  var fs=$('#focusSearch');
+  if(fs){fs.addEventListener('input',function(){var val=fs.value.toLowerCase().trim(),kind=view.params.kind||'important';var items=focusItems(kind).filter(function(a){var hay=(a.lineItem+' '+a.task+' '+projName(a.projectId)+' '+spocLabel(a)+' '+a.status).toLowerCase();return !val||hay.indexOf(val)>=0;});var box=$('.focus-list');if(box)box.innerHTML=items.length?items.map(function(a){return actRow(a);}).join('<div style="height:8px"></div>'):emptyBox('Nothing here','No tasks match this search.');});}
 }
 
 document.addEventListener('input',function(e){
