@@ -592,7 +592,7 @@ function render(){
     case 'focus':html=vFocus(view.params.kind||'important');break;
   }
   var fabViews=['home','list','calendar','projects','projectDetail','people','personDetail','workload'];
-  app.innerHTML='<div class="screen">'+html+'</div>'+tabbar()+
+  app.innerHTML='<div class="screen '+(view.name==='focus'?'focus-view':'')+'">'+html+'</div>'+tabbar()+
     (fabViews.indexOf(view.name)>=0?'<button class="fab" data-act="add">'+I('plus')+'Add</button>':'');
   bindViewInputs();
 }
@@ -752,7 +752,6 @@ function vList(){
   h+='<div class="selfrow"><button class="quickadd" data-act="quick-new">'+I('plus')+'Add my task</button><button class="quickadd viewself" data-act="view-personal">'+I('person')+'View my tasks</button></div>';
   h+='<div class="searchrow"><input id="srch" type="search" placeholder="Search project, line item, owner\u2026" value="'+esc(filters.q)+'">'+
     '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
-  h+='<div class="filterhint"><span>'+I('filter')+' More Filters</span><span class="filterhint-count">'+(advCount()?advCount()+' active':'Project, SPOC, status, ETA & more')+'</span></div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
     var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
@@ -1382,57 +1381,53 @@ function saveForm(rec){
 }
 
 /* ---- FILTERS ---- */
+var filterDrop={kind:'',q:''};
+function filterDropLabel(kind){
+  if(kind==='project'){var p=filters.project&&filters.project.length?S.projects.find(function(x){return x.id===filters.project[0];}):null;return p?p.name:'All Projects';}
+  if(kind==='spoc'){var a=filters.spoc||[];if(!a.length)return 'All Owners';var ns=a.map(function(id){var u=id==='__tbc'?{name:'To be assigned'}:personById(id);return u?u.name:'';}).filter(Boolean);return ns.length<=2?ns.join(', '):ns.slice(0,2).join(', ')+' +'+(ns.length-2);}
+  if(kind==='status')return filters.status&&filters.status.length?filters.status[0]:'All Statuses';
+  return '';
+}
+function filterDropItems(kind){
+  if(kind==='project')return S.projects.filter(function(o){return o.id!=='__personal';}).map(function(o){return[o.id,o.name];});
+  if(kind==='spoc')return peopleSorted().map(function(u){return[u.id,u.name];}).concat([['__tbc','To be assigned']]);
+  if(kind==='status')return STATUSES.map(function(st){return[st,st];});
+  return [];
+}
+function renderFilterDropdown(rec){
+  var kind=filterDrop.kind;if(!kind)return;var items=filterDropItems(kind),q=(filterDrop.q||'').toLowerCase().trim();
+  var shown=items.filter(function(it){return !q||it[1].toLowerCase().indexOf(q)>=0;});
+  var selected=kind==='spoc'?(filters.spoc||[]):(kind==='project'?(filters.project||[]):(filters.status||[]));
+  var multi=kind==='spoc';
+  var h='<div class="filter-dd-backdrop" data-act="filter-dd-close"></div><div class="filter-dd">';
+  h+='<div class="filter-dd-head"><b>'+esc(kind==='project'?'Project':kind==='spoc'?'SPOC / Owner':'Status')+'</b><button class="x" data-act="filter-dd-close">'+I('x')+'</button></div>';
+  h+='<div class="filter-dd-search"><input id="filterDropSearch" type="search" placeholder="Search '+(kind==='spoc'?'owners':kind==='project'?'projects':'statuses')+'…" value="'+esc(filterDrop.q)+'"></div>';
+  h+='<div class="filter-dd-list">';
+  if(!multi)h+='<button class="filter-dd-option" data-act="filter-dd-select" data-kind="'+kind+'" data-v=""><span class="radio '+(!selected.length?'on':'')+'"></span>'+esc(kind==='project'?'All Projects':'All Statuses')+'</button>';
+  else h+='<button class="filter-dd-option" data-act="filter-dd-all"><span class="checkbox '+(!selected.length?'on':'')+'">'+(!selected.length?I('check'):'')+'</span>All Owners</button>';
+  h+=shown.map(function(it){var on=selected.indexOf(it[0])>=0;return '<button class="filter-dd-option" data-act="filter-dd-select" data-kind="'+kind+'" data-v="'+esc(it[0])+'"><span class="'+(multi?'checkbox':'radio')+' '+(on?'on':'')+'">'+(multi&&on?I('check'):'')+'</span>'+esc(it[1])+'</button>';}).join('');
+  if(!shown.length)h+='<div class="filter-dd-empty">No matches</div>';
+  h+='</div>'+(multi?'<div class="filter-dd-foot"><button class="btn ghost mini" data-act="filter-dd-clear">Clear owners</button><button class="btn pri mini" data-act="filter-dd-close">Done</button></div>':'')+'</div>';
+  var old=rec.sheet.querySelector('.filter-dd-wrap');if(old)old.remove();var wrap=document.createElement('div');wrap.className='filter-dd-wrap';wrap.innerHTML=h;rec.sheet.appendChild(wrap);
+  var inp=wrap.querySelector('#filterDropSearch');if(inp){inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
+}
 function openFilters(){
-  var rec=openSheet('<div class="shead"><h2>Filters</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div>'+
-    '<div class="sbody"></div>'+
-    '<div class="sfoot"><button class="btn ghost" data-act="filters-clear">Reset</button><button class="btn pri" data-act="close-sheet">Apply filters</button></div>',
-    {tag:'filters'});
+  filterDrop={kind:'',q:''};
+  var rec=openSheet('<div class="shead"><h2>Filters</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody"></div><div class="sfoot"><button class="btn ghost" data-act="filters-clear">Reset</button><button class="btn pri" data-act="close-sheet">Apply Filters</button></div>',{tag:'filters'});
   renderFilters(rec);
 }
-function chipGroup(label,items,sel,kind){
-  return '<div class="fld wide" style="margin-bottom:14px"><label>'+label+'</label>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:2px">'+
-    items.map(function(it){var on=sel.indexOf(it[0])>=0;
-      return '<button class="chip'+(on?' on':'')+'" data-act="flt-toggle" data-kind="'+kind+'" data-v="'+esc(it[0])+'">'+esc(it[1])+'</button>';
-    }).join('')+'</div></div>';
+function filterDropdown(label,kind,desc){
+  return '<div class="fld wide filter-dd-field"><label>'+label+'</label><button class="filter-dd-trigger" data-act="filter-dd-open" data-kind="'+kind+'"><span>'+esc(filterDropLabel(kind))+'</span>'+I('chev')+'</button>'+(desc?'<div class="hint">'+desc+'</div>':'')+'</div>';
 }
 function filterSelect(label,key,options){
-  return '<div class="fld"><label>'+label+'</label><select data-chg="flt-'+key+'">'+
-    options.map(function(o){return '<option value="'+esc(o[0])+'"'+(filters[key]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+
-    '</select></div>';
+  return '<div class="fld"><label>'+label+'</label><select data-chg="flt-'+key+'">'+options.map(function(o){return '<option value="'+esc(o[0])+'"'+(filters[key]===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select></div>';
 }
 function renderFilters(rec){
-  var t=todayISO();
-  var b='<div class="filter-section"><div class="filter-section-title">Primary filters</div>'+
-    chipGroup('Project',S.projects.filter(function(o){return o.id!=='__personal';}).map(function(o){return[o.id,o.name];}),filters.project,'project')+
-    chipGroup('SPOC / Owner',peopleSorted().map(function(u){return[u.id,u.name];}).concat([['__tbc','To be assigned']]),filters.spoc,'spoc')+
-    chipGroup('Status',STATUSES.map(function(st){return[st,st];}),filters.status,'status')+
-    filterSelect('ETA Status','etaStatus',[['','All ETA statuses'],['breached','ETA breached'],['today','Due today'],['upcoming','Due within 7 days'],['noeta','No ETA']])+
-    '</div>'+
-    '<div class="filter-section"><div class="filter-section-title">More filters</div>'+
-    '<div class="meta">'+
-      filterSelect('Priority','priority',[['','All priorities'],['important','Important'],['normal','Not important']])+
-      filterSelect('Task Type','type',[['','All types']].concat(S.taskTypes.map(function(tp){return[tp,tp];})))+
-    '</div>'+
-    '<div class="meta">'+
-      filterSelect('Assignment Date','assigned',[['','All dates'],['today','Assigned today'],['7','Last 7 days'],['30','Last 30 days'],['older','Older than 30 days']])+
-      filterSelect('Aging','aging',[['','All aging'],['0-3','0–3 days'],['4-7','4–7 days'],['8-14','8–14 days'],['15+','15+ days']])+
-    '</div>'+
-    '<div class="meta">'+
-      filterSelect('Last Updated','updated',[['','Any update'],['today','Updated today'],['3','No update > 3 days'],['7','No update > 7 days'],['14','No update > 14 days']])+
-      filterSelect('Dependency','dependency',[['','All'],['has','Has dependency'],['none','No dependency']])+
-    '</div>'+
-    filterSelect('Follow-up','followup',[['','All follow-ups'],['due','Follow-up due'],['overdue','Follow-up overdue'],['none','No follow-up']])+
-    '</div>'+
-    '<div class="filter-section"><div class="filter-section-title">ETA range</div><div class="meta">'+
-      '<div class="fld"><label>ETA from</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-from" value="'+esc(filters.from)+'"></div>'+
-      '<div class="fld"><label>ETA to</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-to" value="'+esc(filters.to)+'"></div>'+
-    '</div></div>'+
-    '<div class="filter-section"><div class="filter-section-title">Other</div><div style="display:flex;flex-wrap:wrap;gap:7px">'+
-      '<button class="chip'+(filters.fTk?' on':'')+'" data-act="flt-flag" data-f="fTk">Has ticket ID</button>'+
-      (allTags().length?'<select class="tagdd" data-chg="flt-tag"><option value="">All tags</option>'+allTags().map(function(tg){return '<option value="'+esc(tg)+'"'+(filters.tags.indexOf(tg)>=0?' selected':'')+'>'+esc(tg)+'</option>';}).join('')+'</select>':'')+
-    '</div></div>';
-  $('.sbody',rec.sheet).innerHTML=b;
+  var b='<div class="filter-section"><div class="filter-section-title">Primary filters</div>'+filterDropdown('Project','project','Search and choose one project.')+filterDropdown('SPOC / Owner','spoc','Select one or more owners. Search is available when opened.')+filterDropdown('Status','status')+filterSelect('ETA Status','etaStatus',[['','All ETA statuses'],['breached','ETA breached'],['today','Due today'],['upcoming','Due within 7 days'],['noeta','No ETA']])+'</div>'+
+    '<div class="filter-section"><div class="filter-section-title">More filters</div><div class="meta">'+filterSelect('Priority','priority',[['','All priorities'],['important','Important'],['normal','Not important']])+filterSelect('Task Type','type',[['','All types']].concat(S.taskTypes.map(function(tp){return[tp,tp];})))+'</div><div class="meta">'+filterSelect('Assignment Date','assigned',[['','All dates'],['today','Assigned today'],['7','Last 7 days'],['30','Last 30 days'],['older','Older than 30 days']])+filterSelect('Aging','aging',[['','All aging'],['0-3','0–3 days'],['4-7','4–7 days'],['8-14','8–14 days'],['15+','15+ days']])+'</div><div class="meta">'+filterSelect('Last Updated','updated',[['','Any update'],['today','Updated today'],['3','No update > 3 days'],['7','No update > 7 days'],['14','No update > 14 days']])+filterSelect('Dependency','dependency',[['','All'],['has','Has dependency'],['none','No dependency']])+'</div>'+filterSelect('Follow-up','followup',[['','All follow-ups'],['due','Follow-up due'],['overdue','Follow-up overdue'],['none','No follow-up']])+'</div>'+
+    '<div class="filter-section"><div class="filter-section-title">ETA range</div><div class="meta"><div class="fld"><label>ETA from</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-from" value="'+esc(filters.from)+'"></div><div class="fld"><label>ETA to</label><input type="date" onclick="try{this.showPicker()}catch(_){}" data-chg="flt-to" value="'+esc(filters.to)+'"></div></div></div>'+
+    '<div class="filter-section"><div class="filter-section-title">Other</div><div style="display:flex;flex-wrap:wrap;gap:7px"><button class="chip'+(filters.fTk?' on':'')+'" data-act="flt-flag" data-f="fTk">Has ticket ID</button>'+(allTags().length?'<select class="tagdd" data-chg="flt-tag"><option value="">All tags</option>'+allTags().map(function(tg){return '<option value="'+esc(tg)+'"'+(filters.tags.indexOf(tg)>=0?' selected':'')+'>'+esc(tg)+'</option>';}).join('')+'</select>':'')+'</div></div>';
+  $('.sbody',rec.sheet).innerHTML=b;if(filterDrop.kind)renderFilterDropdown(rec);
 }
 
 /* ---- DAY SHEET ---- */
@@ -1828,6 +1823,11 @@ document.addEventListener('click',function(e){
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
     case 'open-filters':openFilters();break;
+    case 'filter-dd-open':{filterDrop.kind=el.getAttribute('data-kind')||'';filterDrop.q='';var frd=sheetFor('filters');if(frd)renderFilterDropdown(frd);break;}
+    case 'filter-dd-close':{filterDrop.kind='';filterDrop.q='';var frc=sheetFor('filters');if(frc){var dd=frc.sheet.querySelector('.filter-dd-wrap');if(dd)dd.remove();}break;}
+    case 'filter-dd-clear':{filters.spoc=[];var frc=sheetFor('filters');if(frc){renderFilters(frc);filterDrop.kind='spoc';renderFilterDropdown(frc);}render();break;}
+    case 'filter-dd-all':{filters.spoc=[];var fra=sheetFor('filters');if(fra){renderFilters(fra);filterDrop.kind='spoc';renderFilterDropdown(fra);}render();break;}
+    case 'filter-dd-select':{var dk=el.getAttribute('data-kind'),dv=el.getAttribute('data-v')||'',arr=dk==='spoc'?(filters.spoc||[]):(dk==='project'?(filters.project||[]):(filters.status||[]));if(dk==='spoc'){var ix=arr.indexOf(dv);if(ix>=0)arr.splice(ix,1);else arr.push(dv);filters.spoc=arr;}else{filters[dk]=dv?[dv]:[];filterDrop.kind='';filterDrop.q='';}var frs=sheetFor('filters');if(frs){renderFilters(frs);if(dk==='spoc'){filterDrop.kind='spoc';renderFilterDropdown(frs);}}render();break;}
     case 'filters-clear':{var qk=filters.quick;filters=defaultFilters();filters.quick=qk;var fr=sheetFor('filters');if(fr)renderFilters(fr);render();break;}
     case 'flt-toggle':{var kind=el.getAttribute('data-kind'),v=el.getAttribute('data-v');var arr=filters[kind];var ix=arr.indexOf(v);if(ix>=0)arr.splice(ix,1);else arr.push(v);var fr2=sheetFor('filters');if(fr2)renderFilters(fr2);render();break;}
     case 'flt-flag':{var fk=el.getAttribute('data-f');filters[fk]=!filters[fk];var fr3=sheetFor('filters');if(fr3)renderFilters(fr3);render();break;}
@@ -2097,6 +2097,7 @@ function bindViewInputs(){
 
 document.addEventListener('input',function(e){
   var el=e.target;
+  if(el&&el.id==='filterDropSearch'){filterDrop.q=el.value;var frd=sheetFor('filters');if(frd)renderFilterDropdown(frd);return;}
   if(el&&el.id==='globalSearchInput'){globalSearchState.q=el.value;var gs=sheetFor('globalsearch');if(gs){clearTimeout(window.__gsTimer);window.__gsTimer=setTimeout(function(){renderGlobalSearch(gs);},90);}}
 });
 
