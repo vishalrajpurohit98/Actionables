@@ -162,7 +162,7 @@ function ensureDefaults(){
   S.version=Math.max(S.version,9);
   S.exportPrefs=S.exportPrefs||{projId:'',from:'',to:'',preset:'all'};
   S.settings=S.settings||{};
-  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default',density:'comfortable'};
+  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default',density:'comfortable',taskView:'comfortable'};
   for(var k in d)if(S.settings[k]===undefined)S.settings[k]=d[k];
   if(!Array.isArray(S.taskTypes)||!S.taskTypes.length)S.taskTypes=['Activity','Development','Testing','Deployment','Meeting','Follow-up','Documentation'];
   if(S.taskTypes.indexOf('Activity')<0)S.taskTypes.unshift('Activity');
@@ -201,7 +201,7 @@ function applyTheme(){
   var s=(S&&S.settings)?S.settings:{};
   var root=document.documentElement;
   var _theme=s.theme||'dark';
-  root.className=(_theme==='light'?'light-theme ':(_theme==='high-contrast'?'high-contrast-theme ':''))+((s.density||'comfortable')==='compact'?'density-compact':'');
+  root.className=(_theme==='light'?'light-theme ':(_theme==='high-contrast'?'high-contrast-theme ':''))+((s.density||'comfortable')==='compact'?'density-compact ':'')+'task-view-'+((s.taskView==='compact'||s.taskView==='card')?s.taskView:'comfortable');
   var acc=ACCENTS[s.accent||'orange']||ACCENTS.orange;
   root.style.setProperty('--acc',acc.c);
   root.style.setProperty('--acc-dim',acc.d);
@@ -748,6 +748,15 @@ var QUICKS=[
   ['overdue','Overdue'],['today','Due today'],['week','This week'],
   ['inprog','In progress'],['onhold','On hold'],['dep','Dependency'],['completed','Completed'],['everything','Everything']
 ];
+function taskViewControls(){
+  var mode=(S.settings&&S.settings.taskView)||'comfortable';
+  return '<div class=\"task-view-controls\" aria-label=\"Task view density\">'+
+    '<button class=\"tview-btn '+(mode==='compact'?'on':'')+'\" data-act=\"task-view\" data-k=\"compact\" title=\"Compact view\">'+I('items')+'</button>'+
+    '<button class=\"tview-btn '+(mode==='comfortable'?'on':'')+'\" data-act=\"task-view\" data-k=\"comfortable\" title=\"Comfortable view\">'+I('person')+'</button>'+
+    '<button class=\"tview-btn '+(mode==='card'?'on':'')+'\" data-act=\"task-view\" data-k=\"card\" title=\"Card view\">'+I('board')+'</button>'+
+    '</div>';
+}
+
 function vList(){
   var list=filteredActs(),t=todayISO(),mine=myIds();
   var h=topbar('Actionables',list.length+' shown',false,
@@ -759,6 +768,7 @@ function vList(){
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
   h+='<div class="action-toolbar"><div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div><div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'"><button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div></div>';
       '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
+  h+='<div class="task-view-row">'+taskViewControls()+'</div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
     var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
     return '<button class="chip'+(filters.quick===q[0]?' on':'')+(q[0]==='overdue'?' warn':'')+
@@ -854,11 +864,16 @@ function vProjectDetail(pid){
   list=seg==='done'?list.sort(function(x,y){return(y.completedAt||0)-(x.completedAt||0);}):sortActs(list,'smart');
   var h=topbar(o.name,o.code+' \u00b7 project view',true,
     '<button class="iconbtn" data-act="manage-categories" data-id="'+pid+'" title="Manage categories">'+I('tag')+'</button><button class="iconbtn" data-act="edit-proj" data-id="'+pid+'">'+I('edit')+'</button>');
-  h+='<div class="stats">'+stStat(st.open,'Open','var(--acc)')+stStat(st.od,'Overdue','var(--red)')+stStat(st.wait,'Dependency','var(--amb)')+stStat(st.week,'Due this wk','var(--amb)')+stStat(st.fu,'Follow-ups','var(--pur)')+stStat(st.done30,'Done \u00b7 30d','var(--grn)')+'</div>';
+  var _personal=pid==='__personal';
+  var _donePersonal=S.actionables.filter(function(a){return a.projectId===pid&&a.status==='Completed';}).length;
+  h+='<div class="stats'+(_personal?' personal-stats':'')+'">'+stStat(st.open,'Open','var(--acc)')+stStat(st.od,'Overdue','var(--red)')+stStat(st.wait,'Dependency','var(--amb)')+(_personal?stStat(_donePersonal,'Completed','var(--grn)'):stStat(st.week,'Due this wk','var(--amb)'))+stStat(st.fu,'Follow-ups','var(--pur)')+stStat(st.done30,'Done · 30d','var(--grn)')+'</div>';
   var segs=[['open','Open'],['awaiting','Dependency'],['overdue','Overdue'],['done','Completed']];
-  h+='<div class="chips" style="padding-top:16px">'+segs.map(function(s2){
-    return '<button class="chip'+(seg===s2[0]?' on':'')+'" data-act="proj-seg" data-id="'+pid+'" data-seg="'+s2[0]+'">'+s2[1]+'</button>';
-  }).join('')+'</div>';
+  if(_personal){
+    h+='<div class="personal-statusbar">'+segs.map(function(s2){var cnt=s2[0]==='open'?st.open:s2[0]==='awaiting'?st.wait:s2[0]==='overdue'?st.od:_donePersonal;var ic=s2[0]==='open'?'check':s2[0]==='awaiting'?'clock':s2[0]==='overdue'?'bell':'check';return '<button class="personal-status '+(seg===s2[0]?'on ':'')+(s2[0]==='overdue'?'warn':'')+'" data-act="proj-seg" data-id="'+pid+'" data-seg="'+s2[0]+'" title="'+s2[1]+'">'+I(ic)+'<span>'+s2[1]+'</span><b>'+cnt+'</b></button>';}).join('')+'</div>';
+  }else{
+    h+='<div class="chips" style="padding-top:16px">'+segs.map(function(s2){return '<button class="chip'+(seg===s2[0]?' on':'')+'" data-act="proj-seg" data-id="'+pid+'" data-seg="'+s2[0]+'">'+s2[1]+'</button>';}).join('')+'</div>';
+  }
+  h+='<div class="task-view-row">'+taskViewControls()+'</div>';
   var _ptags=(function(){var seen={},o=[];S.actionables.forEach(function(a){if(a.projectId!==pid)return;(a.tags||[]).forEach(function(t){var k=t.toLowerCase();if(!seen[k]){seen[k]=1;o.push(t);}});});return o.sort();})();  var _cats=activeCategories(pid);h+='<div class="chips tagchips"><button class="chip'+(!view.params.category?' on':'')+'" data-act="proj-category" data-id="'+pid+'" data-cat="">All categories</button>'+_cats.map(function(c){return '<button class="chip'+(view.params.category===c.id?' on':'')+'" data-act="proj-category" data-id="'+pid+'" data-cat="'+c.id+'">'+esc(c.name)+'</button>';}).join('')+'</div>';
   if(_ptags.length)h+='<div class="chips tagchips">'+_ptags.map(function(tg){var on=view.params.tag&&view.params.tag.toLowerCase()===tg.toLowerCase();return '<button class="chip tagf'+(on?' on':'')+'" data-act="proj-tag" data-id="'+pid+'" data-tag="'+esc(tg)+'">#'+esc(tg)+'</button>';}).join('')+'</div>';
   if(!list.length){h+=emptyBox('Nothing here','No actionables in this view.');}
@@ -1201,7 +1216,7 @@ function renderDetail(rec){
   b+='<div class="btnrow">'+(a.status==='Completed'?'<button class="btn ghost" data-act="d-reopen">Reopen</button>':'<button class="btn ok" data-act="d-complete">'+I('check')+'Mark completed</button>')+
     '<button class="btn ghost" data-act="d-edit">'+I('edit')+'Edit</button></div>';
   b+='<div class="eyebrow" style="margin:20px 0 8px;padding:0">Comments \u00b7 '+a.comments.length+'</div>';
-  b+='<div class="cmtcompose"><input id="cmtIn" placeholder="Add a comment\u2026"><div class="cmtbtns"><button class="btn ghost mini" data-act="d-cmt-rephrase">'+I('spark')+'Rephrase</button><button class="btn pri mini" data-act="d-comment">Add</button></div></div>';
+  b+='<div class="cmtcompose"><div class="cmt-input-wrap"><input id="cmtIn" placeholder="Add a comment\u2026"><button class="cmt-mic" data-act="d-cmt-voice" title="Speak comment" aria-label="Speak comment">'+I('mic')+'</button></div><div class="cmtbtns"><button class="btn ghost mini" data-act="d-cmt-rephrase">'+I('spark')+'Rephrase</button><button class="btn pri mini" data-act="d-comment">Add</button></div></div>';
   b+=a.comments.map(function(c,idx){return {c:c,i:idx};}).reverse().map(function(o){
     var c=o.c,ci=o.i,edt=(c.edited?' \u00b7 edited':'');
     if(rec.data.editCmt===ci){
@@ -1754,6 +1769,7 @@ document.addEventListener('click',function(e){
     case 'kpi':{filters=defaultFilters();filters.quick=el.getAttribute('data-q');nav('list',{});break;}
     case 'quick':filters.quick=el.getAttribute('data-q');render();break;
     case 'sidebar-toggle':toggleSidebar();break;
+    case 'task-view':{var tv=el.getAttribute('data-k');if(tv==='compact'||tv==='comfortable'||tv==='card'){S.settings.taskView=tv;saveState();applyTheme();render();}break;}
     case 'open-email':openEmailComposer();break;
     case 'email-type':{emailState.type=el.getAttribute('data-k')||'reminder';emailState.subject='';emailState.body='';var er=sheetFor('email');if(er)renderEmailComposer(er);break;}
     case 'email-ai-draft':{var er2=sheetFor('email');if(er2)emailGenerateAi(er2);break;}
@@ -1915,6 +1931,7 @@ document.addEventListener('click',function(e){
       }
       break;
     }
+    case 'd-cmt-voice':{commentVoiceStart();break;}
     case 'd-cmt-rephrase':{
       var drR=sheetFor('detail');
       if(drR)aiRephraseComment(drR);
@@ -2706,6 +2723,30 @@ function aiStopVoice(){
   try{if(window.__aiRecognition){window.__aiRecognition.onend=null;window.__aiRecognition.stop();}}catch(e){}
   window.__aiRecognition=null;aiState.voiceListening=false;
 }
+var commentVoice={active:false,base:'',final:'',recognition:null};
+function commentVoiceStop(){
+  try{if(window.Android&&typeof window.Android.stopVoice==='function')window.Android.stopVoice();}catch(e){}
+  try{if(commentVoice.recognition){commentVoice.recognition.onend=null;commentVoice.recognition.stop();}}catch(e){}
+  commentVoice.recognition=null;commentVoice.active=false;
+  var rec=sheetFor('detail');if(rec){var b=rec.sheet.querySelector('[data-act=d-cmt-voice]');if(b)b.classList.remove('listening');}
+}
+function commentVoiceApply(text,isFinal){
+  text=String(text||'').replace(/\s+/g,' ').trim();if(!text)return;
+  if(isFinal){commentVoice.final+=(commentVoice.final&&commentVoice.final.slice(-1)!==' '?' ':'')+text+' ';}
+  var shown=(isFinal?commentVoice.final:(commentVoice.final+(commentVoice.final&&commentVoice.final.slice(-1)!==' '?' ':'')+text)).replace(/\s+/g,' ').trim();
+  var rec=sheetFor('detail'),inp=rec?$('#cmtIn',rec.sheet):null;if(inp){inp.value=shown;inp.focus();try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(e){}}
+}
+function commentVoiceStart(){
+  var rec=sheetFor('detail');if(!rec)return;
+  var inp=$('#cmtIn',rec.sheet);if(!inp)return;
+  if(commentVoice.active){commentVoiceStop();return;}
+  commentVoice.base=(inp.value||'').trim();commentVoice.final=commentVoice.base?(commentVoice.base+' '):'';commentVoice.active=true;
+  var btn=rec.sheet.querySelector('[data-act=d-cmt-voice]');if(btn)btn.classList.add('listening');
+  if(aiNativeVoiceSupported()){window.__voiceTarget='comment';try{window.Android.startVoice();}catch(e){commentVoiceStop();toast('Could not start microphone');}return;}
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){commentVoiceStop();toast('Voice input is not supported in this browser');return;}
+  try{var r=new SR();commentVoice.recognition=r;r.lang='en-IN';r.continuous=false;r.interimResults=true;r.onresult=function(ev){var interim='';for(var i=ev.resultIndex;i<ev.results.length;i++){var tx=ev.results[i][0]&&ev.results[i][0].transcript||'';if(ev.results[i].isFinal)commentVoice.final+=tx+' ';else interim+=tx;}commentVoiceApply(interim,false);};r.onerror=function(){commentVoiceStop();toast('Voice input failed. Try again.');};r.onend=function(){commentVoiceStop();};r.start();}catch(e){commentVoiceStop();toast('Could not start microphone');}
+}
+
 function aiApplyVoiceText(text,isFinal){
   text=String(text||'').replace(/\s+/g,' ').trim();if(!text)return;
   var finalText=window.__nativeVoiceFinal||window.__nativeVoiceBase||'';
@@ -2715,18 +2756,19 @@ function aiApplyVoiceText(text,isFinal){
 }
 window.__nativeVoiceReady=function(){aiState.voiceListening=true;render();};
 window.__nativeVoiceBeginning=function(){};
-window.__nativeVoiceResult=function(text,isFinal){aiApplyVoiceText(text,!!isFinal);};
+window.__nativeVoiceResult=function(text,isFinal){if(window.__voiceTarget==='comment'&&commentVoice.active){commentVoiceApply(text,!!isFinal);return;}aiApplyVoiceText(text,!!isFinal);};
 window.__nativeVoiceError=function(code){
+  if(window.__voiceTarget==='comment'&&commentVoice.active){commentVoice.active=false;window.__voiceTarget='';var rec=sheetFor('detail');if(rec){var b=rec.sheet.querySelector('[data-act=d-cmt-voice]');if(b)b.classList.remove('listening');}toast(code==='not-allowed'?'Microphone permission was denied.':'Voice input failed. Try again.');return;}
   aiState.voiceListening=false;
   var msg=code==='not-allowed'?'Microphone permission was denied.':(code==='no-speech'?'No speech detected. Try again.':(code==='unsupported'?'Voice input is not available on this Android device.':'Voice input failed. Try again.'));
   aiState.err=msg;render();
 };
-window.__nativeVoiceEnd=function(){aiState.voiceListening=false;var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';render();};
+window.__nativeVoiceEnd=function(){if(window.__voiceTarget==='comment'&&commentVoice.active){commentVoice.active=false;window.__voiceTarget='';var rec=sheetFor('detail');if(rec){var b=rec.sheet.querySelector('[data-act=d-cmt-voice]');if(b)b.classList.remove('listening');}}aiState.voiceListening=false;var inp=$('#aiInput');if(inp)inp.value=aiState.input||'';};
 function aiStartVoice(){
   if(aiState.busy){toast('Wait for the current AI request to finish');return;}
   if(aiNativeVoiceSupported()){
     if(aiState.voiceListening){aiStopVoice();render();return;}
-    aiState.voiceSupported=true;aiState.voiceListening=true;aiState.err='';
+    aiState.voiceSupported=true;aiState.voiceListening=true;aiState.err='';window.__voiceTarget='ai';
     var base=(aiState.input||'').trim();window.__nativeVoiceBase=base;window.__nativeVoiceFinal=base?(base+' '):'';
     render();setTimeout(function(){var inp=$('#aiInput');if(inp)inp.focus();},30);
     try{window.Android.startVoice();}catch(e){aiState.voiceListening=false;render();toast('Could not start microphone');}
