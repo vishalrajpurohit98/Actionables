@@ -202,6 +202,14 @@ function applyTheme(){
   root.style.setProperty('--acc-dim',acc.d);
   root.style.setProperty('--font',FONT_STACK[s.font||'default']||FONT_STACK.default);
   try{
+    var _meta=document.querySelector('meta[name=theme-color]');
+    if(!_meta){_meta=document.createElement('meta');_meta.name='theme-color';document.head.appendChild(_meta);}
+    var _themeColor=_theme==='light'?'#E4ECF5':'#000000';
+    if(_theme==='high-contrast')_themeColor='#000000';
+    _meta.setAttribute('content',_themeColor);
+    document.documentElement.style.setProperty('color-scheme',_theme==='light'?'light':'dark');
+  }catch(e){}
+  try{
     if(A&&A.setStatusBar){
       var _lt=(s.theme||'dark')==='light';
       var _bg=(getComputedStyle(root).getPropertyValue('--bg')||'').trim()||(_lt?'#F0F4F8':'#07090D');
