@@ -11,10 +11,12 @@ import android.os.Build;
 public class NotifReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context ctx, Intent intent) {
-        showNow(ctx, "Actionables", "Your daily brief is ready. Tap to review today's actionables.");
+        showNow(ctx, intent.getStringExtra("title") != null ? intent.getStringExtra("title") : "Actionables", intent.getStringExtra("body") != null ? intent.getStringExtra("body") : "Your daily brief is ready. Tap to review today's actionables.", intent.getIntExtra("notificationId", 100));
     }
 
-    public static void showNow(Context ctx, String title, String body) {
+    public static void showNow(Context ctx, String title, String body) { showNow(ctx,title,body,100); }
+
+    public static void showNow(Context ctx, String title, String body, int notificationId) {
         Intent open = new Intent(ctx, MainActivity.class);
         open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pi = PendingIntent.getActivity(ctx, 7, open,
@@ -22,7 +24,7 @@ public class NotifReceiver extends BroadcastReceiver {
 
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            b = new Notification.Builder(ctx, MainActivity.CHANNEL_ID);
+            b = new Notification.Builder(ctx, MainActivity.FOLLOWUP_CHANNEL_ID);
         } else {
             b = new Notification.Builder(ctx);
         }
@@ -34,6 +36,6 @@ public class NotifReceiver extends BroadcastReceiver {
          .setContentIntent(pi);
 
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null) nm.notify(100, b.build());
+        if (nm != null) nm.notify(notificationId, b.build());
     }
 }

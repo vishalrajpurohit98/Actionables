@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
     private static final String PREFS = "actionables_prefs";
     private static final String KEY_DATA = "act_data";
     public static final String CHANNEL_ID = "actionables_daily";
+    public static final String FOLLOWUP_CHANNEL_ID = "actionables_followups";
     private static final int REQ_NOTIF = 1001;
     private static final int REQ_MIC = 1002;
     private SpeechRecognizer speechRecognizer;
@@ -203,6 +204,9 @@ public class MainActivity extends Activity {
             ch.setDescription("Actionables daily brief");
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(ch);
+            NotificationChannel fu = new NotificationChannel(FOLLOWUP_CHANNEL_ID, "Follow-up reminders", NotificationManager.IMPORTANCE_HIGH);
+            fu.setDescription("Actionables follow-up reminders");
+            nm.createNotificationChannel(fu);
         }
     }
 
@@ -212,7 +216,7 @@ public class MainActivity extends Activity {
     private class Bridge {
 
         @JavascriptInterface
-        public String version() { return "6.12"; }
+        public String version() { return "6.15"; }
 
         @JavascriptInterface
         public boolean isVoiceSupported() {
@@ -300,6 +304,29 @@ public class MainActivity extends Activity {
             runOnJs(new Runnable() {
                 public void run() { doSchedule(hour, minute, enabled); }
             });
+        }
+
+        @JavascriptInterface
+        public void scheduleFollowUp(final String id, final long triggerAt, final String title, final String body, final boolean enabled) {
+            runOnJs(new Runnable() { public void run() {
+                try {
+                    AlarmManager am=(AlarmManager)getSystemService(ALARM_SERVICE);
+                    Intent i=new Intent(MainActivity.this, NotifReceiver.class);
+                    i.putExtra("title", title); i.putExtra("body", body); i.putExtra("followup", true);
+                    int request=Math.abs((id==null?"followup":id).hashCode());
+                    PendingIntent pi=PendingIntent.getBroadcast(MainActivity.this,request,i,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+                    if(!enabled){if(am!=null)am.cancel(pi);return;}
+                    long when=Math.max(System.currentTimeMillis()+5000L,triggerAt);
+                    if(am!=null){
+                        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,when,pi); else am.set(AlarmManager.RTC_WAKEUP,when,pi);
+                    }
+                } catch(Exception ignored) {}
+            }});
+        }
+
+        @JavascriptInterface
+        public void cancelFollowUp(final String id) {
+            scheduleFollowUp(id,0,"","",false);
         }
 
         @JavascriptInterface

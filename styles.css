@@ -2476,3 +2476,22 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
 .chips{animation:actionablesSoftEnter .24s .02s cubic-bezier(.22,.61,.36,1) both;}
 .task-view-row{animation:actionablesSoftEnter .22s .04s cubic-bezier(.22,.61,.36,1) both;}
 @media(prefers-reduced-motion:reduce){.action-toolbar,.chips,.task-view-row{animation:none!important;}}
+\n/* v6.15 UX refinements */\n.ai-cmdbar{position:relative;min-height:72px;max-height:120px;padding:10px 12px 10px 14px;border-radius:18px;overflow:hidden;align-items:stretch;}\n.ai-cmd{min-height:48px;max-height:96px;resize:none;overflow-y:auto;padding:8px 98px 8px 2px;line-height:1.45;}\n.ai-cmd-actions{position:absolute;right:10px;bottom:10px;display:flex;gap:8px;align-items:center;}\n.ai-micbtn,.ai-sendbtn{width:42px!important;height:42px!important;min-width:42px!important;flex:0 0 42px!important;border-radius:12px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;}\n.ai-micbtn{background:var(--sur2)!important;border:1px solid var(--br)!important;color:var(--tx)!important;}\n.ai-sendbtn{background:var(--acc)!important;color:#111!important;}\n.ai-micbtn svg,.ai-sendbtn svg{width:19px;height:19px;}\n.ai-capability{font-size:.78rem;color:var(--tx2);margin:2px 16px 10px;line-height:1.4;}\n.ai-try{display:flex;align-items:center;gap:10px;margin:4px 16px 12px;min-width:0;}\n.ai-try>span{font-size:.68rem;color:var(--tx3);white-space:nowrap;}\n.ai-sugg{display:flex;flex-direction:row;gap:7px;overflow-x:auto;min-width:0;margin:0;padding:2px 2px 5px;scrollbar-width:none;}\n.ai-sugg::-webkit-scrollbar{display:none;}\n.ai-sg{white-space:nowrap;flex:0 0 auto;padding:7px 10px;border-radius:999px;font-size:.68rem;}\n.report-custom-row{align-items:center;margin-bottom:10px;}\n.report-columns .note{margin-bottom:10px;}\n.report-col-list{display:flex;flex-direction:column;gap:7px;}\n.report-col-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border:1px solid var(--br);border-radius:10px;background:var(--sur);color:var(--tx2);}\n.report-col-row.on{color:var(--tx);background:var(--sur2);}\n.report-col-row label{display:flex;align-items:center;gap:8px;min-width:0;}\n.report-col-arrows{display:flex;gap:4px;}\n.report-col-arrows .iconbtn{width:28px;height:28px;}\n.hint-inline{font-size:.65rem;color:var(--tx3);font-weight:400;}\n@media(max-width:700px){.ai-cmdbar{min-height:68px;max-height:112px;border-radius:16px;margin:10px 12px 10px;padding:9px 10px 9px 12px;}.ai-cmd{max-height:88px;padding-right:92px;}.ai-cmd-actions{right:9px;bottom:9px;gap:7px;}.ai-micbtn,.ai-sendbtn{width:40px!important;height:40px!important;min-width:40px!important;flex-basis:40px!important;border-radius:11px!important;}.ai-try{margin-left:12px;margin-right:12px;}.ai-capability{margin-left:12px;margin-right:12px;}.report-col-row{padding:8px;}.report-custom-row{flex-wrap:wrap;}}\n/* v6.15 layout alignment */
+.task-view-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:38px;margin:6px 0 10px;}
+.task-view-row .tagrow.inline{display:flex;align-items:center;gap:8px;margin:0;min-width:0;}
+.task-view-row .tagrow.inline .tagdrop{min-width:150px;}
+.task-view-controls{margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:3px;}
+.followup-simple{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;}
+.email-compose .email-ai-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.email-compose .email-ai-row .hint{flex:1;min-width:180px;}
+.email-compose textarea{max-width:100%;}
+@media(max-width:700px){
+  .task-view-row{align-items:center;gap:8px;overflow:visible;}
+  .task-view-row .tagrow.inline{flex:1 1 auto;min-width:0;}
+  .task-view-row .tagrow.inline .tagdrop{min-width:0;max-width:100%;}
+  .task-view-controls{flex:0 0 auto;}
+  .task-view-controls .tview-btn{width:32px;height:32px;}
+  .followup-simple{grid-template-columns:1fr;}
+  .email-compose .email-ai-row{align-items:flex-start;}
+  .email-compose .email-ai-row .hint{width:100%;min-width:0;}
+}
