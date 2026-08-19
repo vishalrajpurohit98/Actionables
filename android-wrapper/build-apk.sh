@@ -22,6 +22,8 @@ BUILD_TOOLS_VER="${BUILD_TOOLS_VER:-35.0.0}"
 PLATFORM_VER="${PLATFORM_VER:-android-34}"
 WEB_DIR="${WEB_DIR:-..}"                      # default: parent = repo root
 OUT_APK="${OUT_APK:-build/Actionables.apk}"
+APP_VERSION="${APP_VERSION:-6.24}"
+WEB_COMMIT="${WEB_COMMIT:-dev}"
 KEY_PASS="${KEY_PASS:-${KS_PASS:-}}"
 
 : "${ANDROID_HOME:?set ANDROID_HOME}"
@@ -58,6 +60,18 @@ echo ">> aapt2 link"
   --java build/gen \
   --auto-add-overlay \
   build/compiled/res.zip
+
+echo ">> generate build info"
+mkdir -p src/com/actionables/app
+cat > src/com/actionables/app/BuildInfo.java <<EOF
+package com.actionables.app;
+/** Generated at build time. */
+public final class BuildInfo {
+    public static final String APP_VERSION = "$APP_VERSION";
+    public static final String WEB_COMMIT = "$WEB_COMMIT";
+    private BuildInfo() {}
+}
+EOF
 
 echo ">> javac"
 javac -g:none -source 17 -target 17 -classpath "$PLAT" \
