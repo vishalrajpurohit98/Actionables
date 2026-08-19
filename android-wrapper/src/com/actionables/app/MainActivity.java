@@ -54,10 +54,8 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC = 1002;
     private SpeechRecognizer speechRecognizer;
     private boolean voicePending = false;
-    private String pendingRemoteCommit = null;
     private static final String GITHUB_REPO = "vishalrajpurohit98/actionables";
     private static final String RELEASES_URL = "https://github.com/" + GITHUB_REPO + "/releases/latest";
-    private static final String REMOTE_WEB_URL = "https://vishalrajpurohit98.github.io/actionables/";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,27 +83,6 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override
-            public void onPageFinished(WebView view, String url) {
-                if (url != null && url.startsWith(REMOTE_WEB_URL) && pendingRemoteCommit != null) {
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                            .putBoolean("use_remote_web", true)
-                            .putString("active_web_commit", pendingRemoteCommit)
-                            .remove("dismissed_web_commit")
-                            .apply();
-                    pendingRemoteCommit = null;
-                }
-            }
-
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (failingUrl != null && failingUrl.startsWith(REMOTE_WEB_URL)) {
-                    pendingRemoteCommit = null;
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("use_remote_web", false).apply();
-                    view.loadUrl("file:///android_asset/index.html");
-                }
-            }
-
-            @Override
             public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 // keep app URLs internal; open external http(s) links in browser
                 if (url.startsWith("https://api.anthropic.com")
@@ -127,13 +104,7 @@ public class MainActivity extends Activity {
         });
 
         web.addJavascriptInterface(new Bridge(), "Android");
-        SharedPreferences updatePrefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        boolean useRemoteWeb = updatePrefs.getBoolean("use_remote_web", false);
-        if (useRemoteWeb) {
-            web.loadUrl(REMOTE_WEB_URL + "?cached=" + System.currentTimeMillis());
-        } else {
-            web.loadUrl("file:///android_asset/index.html");
-        }
+        web.loadUrl("file:///android_asset/index.html");
         new Handler().postDelayed(new Runnable() {
             @Override public void run() { checkForAndroidUpdate(); }
         }, 1800);
@@ -243,7 +214,7 @@ public class MainActivity extends Activity {
             @Override public void run() {
                 HttpURLConnection conn = null;
                 try {
-                    URL url = new URL("https://api.github.com/repos/" + GITHUB_REPO + "/commits/main");
+                    URL url = new URL("https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest");
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
                     conn.setConnectTimeout(5000);
@@ -257,16 +228,15 @@ public class MainActivity extends Activity {
                     while ((line = br.readLine()) != null) body.append(line);
                     br.close();
                     String json = body.toString();
-                    String latestSha = extractJsonString(json, "sha");
-                    if (latestSha == null || latestSha.trim().isEmpty()) return;
-                    latestSha = latestSha.trim();
+                    String tag = extractJsonString(json, "tag_name");
+                    if (tag == null || tag.trim().isEmpty()) return;
+                    String latest = tag.trim().replaceFirst("^[vV]", "");
+                    String current = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                    if (!isNewerVersion(latest, current)) return;
                     SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-                    String currentSha = prefs.getString("active_web_commit", BuildInfo.WEB_COMMIT);
-                    if ("dev".equals(currentSha) || latestSha.equals(currentSha)) return;
-                    if (latestSha.equals(prefs.getString("dismissed_web_commit", ""))) return;
-                    final String detectedSha = latestSha;
+                    if (latest.equals(prefs.getString("dismissed_update_version", ""))) return;
                     runOnUiThread(new Runnable() {
-                        @Override public void run() { showWebUpdateDialog(detectedSha); }
+                        @Override public void run() { showUpdateDialog(latest); }
                     });
                 } catch (Exception ignored) {
                     // Update checks are best-effort and must never affect app startup.
@@ -290,41 +260,40 @@ public class MainActivity extends Activity {
         return json.substring(q1 + 1, q2);
     }
 
-    private void showWebUpdateDialog(final String latestSha) {
-        String shortSha = latestSha.length() > 7 ? latestSha.substring(0, 7) : latestSha;
+    private boolean isNewerVersion(String latest, String current) {
+        try {
+            String[] a = latest.split("\\.");
+            String[] b = current.split("\\.");
+            int n = Math.max(a.length, b.length);
+            for (int i = 0; i < n; i++) {
+                int av = i < a.length ? Integer.parseInt(a[i].replaceAll("[^0-9].*", "")) : 0;
+                int bv = i < b.length ? Integer.parseInt(b[i].replaceAll("[^0-9].*", "")) : 0;
+                if (av != bv) return av > bv;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private void showUpdateDialog(final String latest) {
         new AlertDialog.Builder(this)
-                .setTitle("New Actionables update available")
-                .setMessage("A newer web version is available. Update now to load the latest tasks, AI assistant and UI changes?\n\nUpdate: " + shortSha)
+                .setTitle("Actionables update available")
+                .setMessage("Version " + latest + " is available. Open the latest Android release to update Actionables?")
                 .setNegativeButton("Later", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) {
-                        rememberDismissedWebCommit(latestSha);
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("dismissed_update_version", latest).apply();
                     }
                 })
-                .setPositiveButton("Update now", new DialogInterface.OnClickListener() {
+                .setPositiveButton("Update", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) {
-                        loadRemoteWeb(latestSha);
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL))); } catch (Exception ignored) {}
                     }
                 })
                 .setOnCancelListener(new DialogInterface.OnCancelListener() {
                     @Override public void onCancel(DialogInterface dialog) {
-                        rememberDismissedWebCommit(latestSha);
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("dismissed_update_version", latest).apply();
                     }
                 })
                 .show();
-    }
-
-    private void rememberDismissedWebCommit(String sha) {
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("dismissed_web_commit", sha).apply();
-    }
-
-    private void loadRemoteWeb(String sha) {
-        try {
-            pendingRemoteCommit = sha;
-            String separator = REMOTE_WEB_URL.contains("?") ? "&" : "?";
-            web.loadUrl(REMOTE_WEB_URL + separator + "update=" + Uri.encode(sha.substring(0, Math.min(12, sha.length()))));
-        } catch (Exception ignored) {
-            web.loadUrl("file:///android_asset/index.html");
-        }
     }
 
     private void createChannel() {
@@ -346,7 +315,7 @@ public class MainActivity extends Activity {
     private class Bridge {
 
         @JavascriptInterface
-        public String version() { return BuildInfo.APP_VERSION; }
+        public String version() { return "6.22"; }
 
         @JavascriptInterface
         public boolean isVoiceSupported() {
