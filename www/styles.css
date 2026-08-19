@@ -2448,3 +2448,31 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
 @media(min-width:1024px){.task-view-row{padding-left:22px;padding-right:22px;}}
 .task-view-comfortable .screen,.task-view-card .screen,.task-view-compact .screen{padding-bottom:26px;}
 @media(max-width:700px){.task-view-row{padding:0 12px 4px;}}
+
+
+/* v6.14 — voice controls: always visible, theme-safe, touch-safe */
+.ai-micbtn,.cmt-mic{position:relative;z-index:2;flex:0 0 auto;color:var(--tx)!important;background:var(--sur2)!important;border:1px solid var(--line2)!important;opacity:1!important;visibility:visible!important;}
+.ai-micbtn svg,.cmt-mic svg{display:block!important;visibility:visible!important;opacity:1!important;stroke:currentColor;}
+.ai-micbtn:hover,.cmt-mic:hover{color:var(--acc)!important;border-color:var(--acc)!important;background:var(--acc-dim)!important;}
+.ai-micbtn.listening,.cmt-mic.listening{color:#fff!important;background:var(--red)!important;border-color:var(--red)!important;}
+.ai-micbtn:disabled{color:var(--tx2)!important;opacity:.7!important;}
+
+/* v6.14 — view chooser sits under the status/filter row, with minimal height */
+.task-view-row{display:flex;justify-content:flex-end;align-items:center;min-height:0;padding:2px 16px 5px;}
+.task-view-controls{margin:0;padding:2px;gap:2px;border-radius:9px;background:var(--sur2);border-color:var(--line);box-shadow:none;}
+.task-view-controls::before{content:'View';padding:0 5px 0 6px;font-size:.57rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--tx3);}
+.tview-btn{width:28px;height:27px;border-radius:7px;}
+.tview-btn.on{box-shadow:none;}
+@media(max-width:700px){.task-view-row{padding:1px 12px 5px;}.task-view-controls::before{font-size:.54rem;padding-left:5px;padding-right:4px;}.tview-btn{width:27px;height:26px;}}
+
+/* v6.14 — smoother, restrained motion across interactive surfaces */
+.btn,.chip,.iconbtn,.sqbtn,.mytasks-view,.mytasks-add,.tview-btn,.personal-status,.cmt-mic,.ai-micbtn,.mytasks-group,.toolbar-search,.chips,.task-view-row,.tagrow,.grp-proj,.grp-sub,.list .trow,.brows .trow,.category-section,.tagdrop-panel,.filter-dd-panel,.mobile-action-dock{transition:transform .16s cubic-bezier(.22,.61,.36,1),opacity .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .18s ease,color .16s ease;}
+.btn:active,.chip:active,.iconbtn:active,.sqbtn:active,.mytasks-view:active,.mytasks-add:active,.tview-btn:active,.personal-status:active,.cmt-mic:active,.ai-micbtn:active{transform:scale(.97);}
+.list .trow:hover,.brows .trow:hover{transform:translateY(-1px);}
+.category-section summary{transition:background-color .16s ease,color .16s ease;}
+.category-section summary:active{background:var(--sur2);}
+@keyframes actionablesSoftEnter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.action-toolbar{animation:actionablesSoftEnter .22s cubic-bezier(.22,.61,.36,1) both;}
+.chips{animation:actionablesSoftEnter .24s .02s cubic-bezier(.22,.61,.36,1) both;}
+.task-view-row{animation:actionablesSoftEnter .22s .04s cubic-bezier(.22,.61,.36,1) both;}
+@media(prefers-reduced-motion:reduce){.action-toolbar,.chips,.task-view-row{animation:none!important;}}
