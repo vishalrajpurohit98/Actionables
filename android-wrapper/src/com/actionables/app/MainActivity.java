@@ -30,6 +30,13 @@ import android.speech.SpeechRecognizer;
 import android.os.Bundle;
 import java.util.ArrayList;
 import android.widget.Toast;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.os.Handler;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -47,6 +54,8 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC = 1002;
     private SpeechRecognizer speechRecognizer;
     private boolean voicePending = false;
+    private static final String GITHUB_REPO = "vishalrajpurohit98/actionables";
+    private static final String RELEASES_URL = "https://github.com/" + GITHUB_REPO + "/releases/latest";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -96,6 +105,9 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new Bridge(), "Android");
         web.loadUrl("file:///android_asset/index.html");
+        new Handler().postDelayed(new Runnable() {
+            @Override public void run() { checkForAndroidUpdate(); }
+        }, 1800);
     }
 
     @Override
@@ -197,6 +209,93 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void checkForAndroidUpdate() {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                HttpURLConnection conn = null;
+                try {
+                    URL url = new URL("https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest");
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    conn.setRequestProperty("Accept", "application/vnd.github+json");
+                    int code = conn.getResponseCode();
+                    if (code != 200) return;
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    StringBuilder body = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) body.append(line);
+                    br.close();
+                    String json = body.toString();
+                    String tag = extractJsonString(json, "tag_name");
+                    if (tag == null || tag.trim().isEmpty()) return;
+                    String latest = tag.trim().replaceFirst("^[vV]", "");
+                    String current = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                    if (!isNewerVersion(latest, current)) return;
+                    SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                    if (latest.equals(prefs.getString("dismissed_update_version", ""))) return;
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { showUpdateDialog(latest); }
+                    });
+                } catch (Exception ignored) {
+                    // Update checks are best-effort and must never affect app startup.
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+            }
+        }).start();
+    }
+
+    private String extractJsonString(String json, String key) {
+        String needle = "\"" + key + "\"";
+        int i = json.indexOf(needle);
+        if (i < 0) return null;
+        int colon = json.indexOf(':', i + needle.length());
+        if (colon < 0) return null;
+        int q1 = json.indexOf('\"', colon + 1);
+        if (q1 < 0) return null;
+        int q2 = json.indexOf('\"', q1 + 1);
+        if (q2 < 0) return null;
+        return json.substring(q1 + 1, q2);
+    }
+
+    private boolean isNewerVersion(String latest, String current) {
+        try {
+            String[] a = latest.split("\\.");
+            String[] b = current.split("\\.");
+            int n = Math.max(a.length, b.length);
+            for (int i = 0; i < n; i++) {
+                int av = i < a.length ? Integer.parseInt(a[i].replaceAll("[^0-9].*", "")) : 0;
+                int bv = i < b.length ? Integer.parseInt(b[i].replaceAll("[^0-9].*", "")) : 0;
+                if (av != bv) return av > bv;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private void showUpdateDialog(final String latest) {
+        new AlertDialog.Builder(this)
+                .setTitle("Actionables update available")
+                .setMessage("Version " + latest + " is available. Open the latest Android release to update Actionables?")
+                .setNegativeButton("Later", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("dismissed_update_version", latest).apply();
+                    }
+                })
+                .setPositiveButton("Update", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL))); } catch (Exception ignored) {}
+                    }
+                })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    @Override public void onCancel(DialogInterface dialog) {
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("dismissed_update_version", latest).apply();
+                    }
+                })
+                .show();
+    }
+
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
@@ -216,7 +315,7 @@ public class MainActivity extends Activity {
     private class Bridge {
 
         @JavascriptInterface
-        public String version() { return "6.17"; }
+        public String version() { return "6.22"; }
 
         @JavascriptInterface
         public boolean isVoiceSupported() {

@@ -114,7 +114,7 @@ var IC={
   moon:'<path d="M21 12.8a9 9 0 1 1-9.8-9.8A7 7 0 0 0 21 12.8z"/>',
   cloud:'<path d="M7 18h9.5a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 7.2 9.5 3.75 3.75 0 0 0 7 18z"/>',
   star:'<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.6l-5.08 2.7.98-5.68L3.75 9.6l5.7-.83z"/>',
-  brand:'<rect x="4.8" y="5" width="12.5" height="15" rx="2.1"/><path d="M7.3 9.6l1.5 1.5 2.6-3"/><path d="M13.2 9.9h2.2M7.3 14.8l1.5 1.5 2.6-3"/><path d="M13.2 15.1h2.2"/><path d="M18.4 3.2l.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8z"/>',
+  brand:'<circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-dasharray="40 10"/><path d="M8.5 12l2.4 2.4 4.8-5.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.2 3.6l.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8z" fill="currentColor"/>' ,
   refresh:'<path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/>'
 };
 function I(name,cls){return '<svg class="'+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+IC[name]+'</svg>';}
