@@ -2834,7 +2834,7 @@ function vAI(){
   h+='<div class="ai-cmdbar"><textarea id="aiInput" class="ai-cmd" rows="1" maxlength="6000" placeholder="Tell Actionables what you need…" data-chg="ai-input" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();var b=document.querySelector(\'[data-act=ai-send]\');if(b)b.click();}">'+esc(aiState.input)+'</textarea><div class="ai-cmd-actions"><button class="ai-micbtn" data-act="ai-voice" title="'+(aiState.voiceListening?'Stop listening':'Speak to AI')+'"'+(aiState.busy?' disabled':'')+'>'+I('mic')+'</button><button class="ai-sendbtn" data-act="ai-send"'+(aiState.busy||aiState.voiceListening?' disabled':'')+'>'+I('spark')+'</button></div></div>'+(aiState.voiceListening?'<div class="ai-voice-status"><span class="ai-voice-dot"></span>Listening… speak naturally. Your transcription will appear above; review it before sending.</div>':'')+(aiState.voiceSupported===false?'<div class="ai-voice-note">Voice input is not supported in this browser. Try Chrome or Edge.</div>':'');
   if(aiState.err)h+='<div class="ai-err" style="margin:0 16px 10px">'+I('alert')+'<span>'+esc(aiState.err)+'</span></div>';
   if(!aiChat.length){
-    h+='<div class="ai-hello">'+I('spark')+'<div class="ai-hello-t">Universal AI Assistant</div><div class="ai-hello-s">Type anything \u2014 add, update, find, remove or report on tasks. I\u2019ll understand it, validate the change, ask for confirmation, then apply it.</div></div>';
+    h+='<div class="ai-capability">Ask me to add, update, find, remove or report on tasks.</div>';
     var sugg=['Check data quality and consistency','Show me all overdue tasks','Add a task to follow up with John tomorrow','Report of this month\u2019s completed tasks','What\u2019s assigned to me?','Change the ICICI task priority to high'];
     h+='<div class="ai-try"><span>Try asking</span><div class="ai-sugg">'+sugg.map(function(sg){return '<button class="ai-sg" data-act="ai-suggest" data-q="'+esc(sg)+'">'+esc(sg)+'</button>';}).join('')+'</div></div>';
     return h;
@@ -3199,7 +3199,7 @@ function aiExec(o){
     var errors=[];items.forEach(function(it){errors=errors.concat(aiValidateAdd(it).map(function(e){return it.lineItem+': '+e;}));});
     if(items.length===1&&!errors.length){
       var one=items[0];
-      aiChatPush('ai','I prepared this addition. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:'__new',title:one.lineItem});
+      aiChatPush('ai','I prepared this addition. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:'__new',title:one.lineItem,fields:{project:one.projectId==='__personal'?'Personal':projName(one.projectId),owner:one.owner||one.spoc||'To be assigned',eta:plainEta(one)||'No ETA',description:one.task||one.description||'',followup:(one.rem&&one.rem.date)?one.rem.date:''}});
       openForm(null,Object.assign({},one,{aiReview:true,aiReviewSource:'AI add'}));
     }else{
       aiState.pending={kind:'add',items:items,errors:errors};
@@ -3211,7 +3211,7 @@ function aiExec(o){
     if(!items2.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid change to review.');return;}
     if(items2.length===1&&!errors2.length){
       var uone=items2[0];
-      aiChatPush('ai','I prepared this update. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:uone.id,title:uone.title});
+      aiChatPush('ai','I prepared this update. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:uone.id,title:uone.title,fields:{project:projName((actById(uone.id)||{}).projectId),changes:uone.diff||[]}});
       openForm(uone.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:uone.patch});
     }else{
       aiState.pending={kind:'update',items:items2,errors:errors2};
@@ -3253,7 +3253,17 @@ function aiBubble(m,idx){
 function aiCard(c,idx){
   if(!c)return '';
   if(c.type==='pending')return aiPendingCard(c.pending||aiState.pending||{});
-  if(c.type==='edit-review')return '<div class="ai-rescard ai-review-result"><div class="ai-review-result-head">'+I('edit')+'<b>Review required</b></div><div class="ai-review-result-body">'+esc(c.title||'Actionable')+' is open in Edit mode. Review and change any field, then click <b>Save</b>.</div></div>';
+  if(c.type==='edit-review'){
+    var f=c.fields||{};
+    var rows='';
+    if(f.project)rows+='<div class="ai-prop-row"><span>Project</span><b>'+esc(f.project)+'</b></div>';
+    if(f.owner)rows+='<div class="ai-prop-row"><span>Owner / SPOC</span><b>'+esc(f.owner)+'</b></div>';
+    if(f.eta)rows+='<div class="ai-prop-row"><span>ETA</span><b>'+esc(f.eta)+'</b></div>';
+    if(f.description)rows+='<div class="ai-prop-row ai-prop-wide"><span>Description</span><b>'+esc(f.description)+'</b></div>';
+    if(f.followup)rows+='<div class="ai-prop-row"><span>Follow-up</span><b>'+esc(f.followup)+'</b></div>';
+    if(Array.isArray(f.changes)&&f.changes.length)rows+=f.changes.map(function(d){return '<div class="ai-prop-row ai-prop-change"><span>'+esc(d[0]||'Change')+'</span><b>'+(d[1]?'<s>'+esc(d[1])+'</s> → ':'')+esc(d[2]||'')+'</b></div>';}).join('');
+    return '<div class="ai-rescard ai-review-result"><div class="ai-review-result-head">'+I('edit')+'<div><b>AI Assistant</b><small>Proposed change</small></div></div><div class="ai-proposed-title">'+esc(c.title||'Actionable')+'</div>'+(rows?'<div class="ai-proposed-grid">'+rows+'</div>':'')+'<div class="ai-review-note"><span>'+I('alert')+'</span><div><b>Review required</b><small>Review the fields in Edit mode before saving.</small></div></div></div>';
+  }
   var undoBtn=(c.undo&&!c.undone)?'<button class="ai-undo" data-act="ai-undo" data-i="'+idx+'">Undo</button>':(c.undone?'<span class="ai-undone">\u2713 Undone</span>':'');
   if(c.type==='search'){
     var items=(c.ids||[]).map(actById).filter(Boolean);
