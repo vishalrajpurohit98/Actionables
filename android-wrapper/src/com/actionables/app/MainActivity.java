@@ -216,7 +216,7 @@ public class MainActivity extends Activity {
     private class Bridge {
 
         @JavascriptInterface
-        public String version() { return "6.15"; }
+        public String version() { return "6.17"; }
 
         @JavascriptInterface
         public boolean isVoiceSupported() {
