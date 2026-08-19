@@ -114,7 +114,6 @@ var IC={
   moon:'<path d="M21 12.8a9 9 0 1 1-9.8-9.8A7 7 0 0 0 21 12.8z"/>',
   cloud:'<path d="M7 18h9.5a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 7.2 9.5 3.75 3.75 0 0 0 7 18z"/>',
   star:'<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.6l-5.08 2.7.98-5.68L3.75 9.6l5.7-.83z"/>',
-  brand:'<circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-dasharray="40 10"/><path d="M8.5 12l2.4 2.4 4.8-5.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.2 3.6l.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8z" fill="currentColor"/>' ,
   refresh:'<path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/>'
 };
 function I(name,cls){return '<svg class="'+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+IC[name]+'</svg>';}
@@ -624,7 +623,7 @@ function tabbar(){
   }
   function focusRow(kind,ic,label,red){var on=view.name==='focus'&&view.params.kind===kind;return '<button class="railrow focus-desktop '+(on?'on':'')+'" data-act="focus-nav" data-kind="'+kind+'">'+I(ic)+'<span class="rr-l">'+label+'</span><span class="rr-n '+(red?'r':'')+'">'+focusCounts[kind]+'</span></button>';}
   return '<nav class="tabbar tabbar-3 '+(sidebarCollapsed?'is-collapsed':'')+'">'+
-    '<div class="railbrand"><span class="rb-ic">'+I('brand')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span><button class="rail-collapse" data-act="sidebar-toggle" title="'+(sidebarCollapsed?'Show sidebar':'Hide sidebar')+'">'+I(sidebarCollapsed?'chevR':'back')+'</button></div>'+
+    '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span><button class="rail-collapse" data-act="sidebar-toggle" title="'+(sidebarCollapsed?'Show sidebar':'Hide sidebar')+'">'+I(sidebarCollapsed?'chevR':'back')+'</button></div>'+
     tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
     '<div class="railsec focus-desktop">FOCUS</div>'+
     focusRow('important','star','Important',false)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
