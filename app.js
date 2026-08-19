@@ -1,3 +1,4 @@
+/* v6.20 UI build — composer controls are contained inside the input and mobile navigation is aligned. */
 /* ============================================================
    Actionables v3 — clean hierarchy:
    Project → SPOC/Owner → Line Item → Description → ETA → Status
@@ -3199,7 +3200,7 @@ function aiExec(o){
     var errors=[];items.forEach(function(it){errors=errors.concat(aiValidateAdd(it).map(function(e){return it.lineItem+': '+e;}));});
     if(items.length===1&&!errors.length){
       var one=items[0];
-      aiChatPush('ai','I prepared this addition. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:'__new',title:one.lineItem,fields:{project:one.projectId==='__personal'?'Personal':projName(one.projectId),owner:one.owner||one.spoc||'To be assigned',eta:plainEta(one)||'No ETA',description:one.task||one.description||'',followup:(one.rem&&one.rem.date)?one.rem.date:''}});
+      aiChatPush('ai','I prepared this addition. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:'__new',title:one.lineItem});
       openForm(null,Object.assign({},one,{aiReview:true,aiReviewSource:'AI add'}));
     }else{
       aiState.pending={kind:'add',items:items,errors:errors};
@@ -3211,7 +3212,7 @@ function aiExec(o){
     if(!items2.length){aiChatPush('ai',(o&&o.reply)||'I could not find a valid change to review.');return;}
     if(items2.length===1&&!errors2.length){
       var uone=items2[0];
-      aiChatPush('ai','I prepared this update. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:uone.id,title:uone.title,fields:{project:projName((actById(uone.id)||{}).projectId),changes:uone.diff||[]}});
+      aiChatPush('ai','I prepared this update. It is open in Edit mode. Review, change anything you want, then Save or Reject.',{type:'edit-review',id:uone.id,title:uone.title});
       openForm(uone.id,{aiReview:true,aiReviewSource:'AI update',aiPatch:uone.patch});
     }else{
       aiState.pending={kind:'update',items:items2,errors:errors2};
@@ -3253,17 +3254,7 @@ function aiBubble(m,idx){
 function aiCard(c,idx){
   if(!c)return '';
   if(c.type==='pending')return aiPendingCard(c.pending||aiState.pending||{});
-  if(c.type==='edit-review'){
-    var f=c.fields||{};
-    var rows='';
-    if(f.project)rows+='<div class="ai-prop-row"><span>Project</span><b>'+esc(f.project)+'</b></div>';
-    if(f.owner)rows+='<div class="ai-prop-row"><span>Owner / SPOC</span><b>'+esc(f.owner)+'</b></div>';
-    if(f.eta)rows+='<div class="ai-prop-row"><span>ETA</span><b>'+esc(f.eta)+'</b></div>';
-    if(f.description)rows+='<div class="ai-prop-row ai-prop-wide"><span>Description</span><b>'+esc(f.description)+'</b></div>';
-    if(f.followup)rows+='<div class="ai-prop-row"><span>Follow-up</span><b>'+esc(f.followup)+'</b></div>';
-    if(Array.isArray(f.changes)&&f.changes.length)rows+=f.changes.map(function(d){return '<div class="ai-prop-row ai-prop-change"><span>'+esc(d[0]||'Change')+'</span><b>'+(d[1]?'<s>'+esc(d[1])+'</s> → ':'')+esc(d[2]||'')+'</b></div>';}).join('');
-    return '<div class="ai-rescard ai-review-result"><div class="ai-review-result-head">'+I('edit')+'<div><b>AI Assistant</b><small>Proposed change</small></div></div><div class="ai-proposed-title">'+esc(c.title||'Actionable')+'</div>'+(rows?'<div class="ai-proposed-grid">'+rows+'</div>':'')+'<div class="ai-review-note"><span>'+I('alert')+'</span><div><b>Review required</b><small>Review the fields in Edit mode before saving.</small></div></div></div>';
-  }
+  if(c.type==='edit-review')return '<div class="ai-rescard ai-review-result"><div class="ai-review-result-head">'+I('edit')+'<b>Review required</b></div><div class="ai-review-result-body">'+esc(c.title||'Actionable')+' is open in Edit mode. Review and change any field, then click <b>Save</b>.</div></div>';
   var undoBtn=(c.undo&&!c.undone)?'<button class="ai-undo" data-act="ai-undo" data-i="'+idx+'">Undo</button>':(c.undone?'<span class="ai-undone">\u2713 Undone</span>':'');
   if(c.type==='search'){
     var items=(c.ids||[]).map(actById).filter(Boolean);
