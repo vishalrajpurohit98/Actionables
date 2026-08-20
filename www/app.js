@@ -164,7 +164,7 @@ function ensureDefaults(){
   S.version=Math.max(S.version,9);
   S.exportPrefs=S.exportPrefs||{projId:'',from:'',to:'',preset:'all'};
   S.settings=S.settings||{};
-  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default',density:'comfortable',taskView:'comfortable',viewerMode:false,viewerProjectId:'',viewerEmail:''};
+  var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default',density:'comfortable',taskView:'comfortable'};
   for(var k in d)if(S.settings[k]===undefined)S.settings[k]=d[k];
   if(!Array.isArray(S.taskTypes)||!S.taskTypes.length)S.taskTypes=['Activity','Development','Testing','Deployment','Meeting','Follow-up','Documentation'];
   if(S.taskTypes.indexOf('Activity')<0)S.taskTypes.unshift('Activity');
@@ -180,27 +180,19 @@ function ensureDefaults(){
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
     if(a.etaKind===undefined)a.etaKind=a.eta?'date':'none';
     if(a.etaEnd===undefined)a.etaEnd='';
+    normalizeFollowup(a,todayISO());
     if(a.ticketUrl===undefined)a.ticketUrl='';
     if(a.important===undefined)a.important=false;
     if(!Array.isArray(a.tags))a.tags=[];
     if(!a.type)a.type='Activity';
     if(STATUS_MAP[a.status]){a.status=STATUS_MAP[a.status];if(a.status==='Completed'&&!a.completedAt)a.completedAt=a.updatedAt||Date.now();}
   });
-  var _today=todayISO();
-  S.actionables.forEach(function(a){
-    if(a.type&&S.taskTypes.indexOf(a.type)<0)S.taskTypes.push(a.type);
-    var r=a.rem||{};
-    if(r.on&&r.date&&r.date<_today){r.on=false;r.date='';r.notifyOn=false;r.done=false;r.autoFromEta=false;}
-    if((a.etaKind==='none'||a.etaKind==='tbd'||!a.eta) && r.on && r.autoFromEta===true){r.on=false;r.date='';r.notifyOn=false;r.autoFromEta=false;}
-    a.rem=r;
-  });
+  S.actionables.forEach(function(a){if(a.type&&S.taskTypes.indexOf(a.type)<0)S.taskTypes.push(a.type);});
 }
-
 
 function notifState(){try{return (A&&A.notifState)?A.notifState():'web';}catch(e){return 'web';}}
 window.__permChanged=function(){if(view.name==='settings')render();};
 function saveState(){
-  if(S&&S.settings&&S.settings.viewerMode)return;
   var json=JSON.stringify(S);
   try{localStorage.setItem('act_data',json);}catch(e){}
   try{if(A&&A.saveData)A.saveData(json);}catch(e){}
@@ -281,6 +273,17 @@ function relEta(a){
   return{t:fmtD(end),cls:cls};
 }
 function remDue(a,t){return isOpen(a)&&a.rem&&a.rem.on&&!a.rem.done&&a.rem.date&&a.rem.date<=t;}
+/* Follow-up lifecycle: ETA-driven reminders are automatic until the user edits the follow-up.
+   Any active follow-up whose date is already in the past is cleared on load/normalisation. */
+function normalizeFollowup(a,t){
+  if(!a)return false;
+  var r=a.rem;if(!r)return false;
+  var changed=false,now=t||todayISO();
+  if(r.on&&!r.done&&r.date&&r.date<now){
+    r.on=false;r.date='';r.done=false;r.autoFromEta=false;changed=true;
+  }
+  return changed;
+}
 function createdDateISO(a){return a&&a.createdAt?isoFromMs(a.createdAt):'';}
 function assignedDateISO(a){return a&&a.assignedAt?isoFromMs(a.assignedAt):'';}
 function updatedDateISO(a){return a&&a.updatedAt?isoFromMs(a.updatedAt):'';}
@@ -292,9 +295,6 @@ function ageChip(a){var ag=agingDays(a),b=agingBucket(ag);return '<span class="a
 function followupAgeDays(a,t){var r=a&&a.rem;if(!r||!r.on||r.done)return 0;var start=r.requestedOn||createdDateISO(a);return start?Math.max(0,diffDays(t||todayISO(),start)):0;}
 function followupAgeLabel(a,t){var d=followupAgeDays(a,t);return d+' day'+(d===1?'':'s');}
 function bulkCount(){return Object.keys(bulkSel).filter(function(id){return bulkSel[id]&&actById(id);}).length;}
-function isExternalViewer(){return !!(S&&S.settings&&S.settings.viewerMode);}
-function sharedProjectId(){return isExternalViewer()?(S.settings.viewerProjectId||''):'';}
-function viewerGuard(){if(isExternalViewer()){toast('View-only project access');return true;}return false;}
 
 /* ---- METRICS ---- */
 function metrics(){
@@ -497,9 +497,22 @@ function updateAct(id,patch){
   if(etaResetByAssigned && ek===preAssignedEtaKind && ev===preAssignedEta && ee===preAssignedEtaEnd){ek='none';ev='';ee='';}
   if(ek!=='range')ee='';if(ek==='none'||ek==='tbd'){ev='';ee='';}
   if(ek!==a.etaKind||ev!==a.eta||ee!==a.etaEnd){var before=fmtEta(a);a.etaKind=ek;a.eta=ev;a.etaEnd=ee;logAct(a,'ETA changed',before,fmtEta(a));changed=true;}
-  var _rEta=a.rem||{};
-  if(ek==='date'&&ev){var defaultFu=addDaysISO(ev,-1),r=_rEta,autoFollow=!r.on||r.autoFromEta===true;if(autoFollow){a.rem=Object.assign({on:true,date:defaultFu,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',note:'',waitingFor:'',requestedOn:'',expectedBy:'',done:false},r,{on:true,date:defaultFu,notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',autoFromEta:true,done:false});logAct(a,'Follow-up defaulted from ETA','',fmtDY(defaultFu));changed=true;}}
-  else if((ek==='none'||ek==='tbd'||!ev)&&_rEta.on&&_rEta.autoFromEta===true){a.rem=Object.assign({},_rEta,{on:false,date:'',notifyOn:false,autoFromEta:false,done:false});logAct(a,'Automatic follow-up cleared because ETA is not set');changed=true;}
+  /* ETA drives the default follow-up. A manually changed follow-up is preserved.
+     For a range, use the ETA end date as the due point. */
+  if((ek==='date'||ek==='range')&&(ev||ee)){
+    var etaDue=(ek==='range'?(ee||ev):ev);
+    var defaultFu=addDaysISO(etaDue,-1),r=a.rem||{},autoFollow=!r.on||r.autoFromEta===true;
+    if(autoFollow){
+      a.rem=Object.assign({on:true,date:defaultFu,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',note:'',waitingFor:'',requestedOn:'',expectedBy:'',done:false},r,{on:true,date:defaultFu,notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',autoFromEta:true,done:false});
+      logAct(a,'Follow-up defaulted from ETA','',fmtDY(defaultFu));changed=true;
+    }
+  }else if((ek==='none'||ek==='tbd')&&a.rem&&a.rem.autoFromEta){
+    /* Removing the ETA removes only the automatic follow-up; a manually created
+       follow-up must remain untouched. */
+    a.rem=Object.assign({},a.rem,{on:false,date:'',done:false,autoFromEta:false});
+    logAct(a,'Automatic follow-up removed','Follow-up linked to ETA','No follow-up');
+    changed=true;
+  }
   if(changed){a.updatedAt=Date.now();if(completedTransition)scheduleNextOccurrence(a);saveState();}
   return changed;
 }
@@ -508,9 +521,10 @@ function remPatch(id,patch,ev){
   if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false};
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
   for(var k in patch)a.rem[k]=patch[k];
-  if(Object.keys(patch).some(function(k){return k==='date'||k==='on'||k==='notifyOn'||k==='notifyDays'||k==='notifyTime';}))a.rem.autoFromEta=false;
-  if(a.rem.date&&a.rem.date<todayISO()){a.rem.on=false;a.rem.date='';a.rem.notifyOn=false;a.rem.autoFromEta=false;}
+  /* A user-entered follow-up date is no longer controlled by ETA. */
+  if(Object.prototype.hasOwnProperty.call(patch,'date') || Object.prototype.hasOwnProperty.call(patch,'on'))a.rem.autoFromEta=false;
   a.rem.notifyOn = a.rem.notifyOn!==false; a.rem.notifyDays = Math.max(0,parseInt(a.rem.notifyDays,10)||0); a.rem.notifyTime=a.rem.notifyTime||'09:00';
+  if(a.rem.date && a.rem.date<todayISO() && a.rem.on && !a.rem.done){a.rem.on=false;a.rem.date='';a.rem.autoFromEta=false;}
   if(ev)logAct(a,ev.e,ev.f||'',ev.t||'');
   a.updatedAt=Date.now();saveState();
   if(window.Android&&Android.scheduleFollowUp){if(a.rem.on&&a.rem.date&&a.rem.notifyOn){var nd=addDaysISO(a.rem.date,-a.rem.notifyDays);var parts=(a.rem.notifyTime||'09:00').split(':');var dt=new Date(nd+'T'+(parts[0]||'09')+':'+(parts[1]||'00')+':00');Android.scheduleFollowUp(a.id,dt.getTime(),a.lineItem||'Follow-up', 'Follow-up for '+(a.lineItem||'task')+' is due '+fmtDY(a.rem.date),true);}else{Android.cancelFollowUp(a.id);}}
@@ -615,14 +629,13 @@ function render(){
     case 'notifications':html=vNotifications();break;
     case 'settings':html=vSettings();break;
     case 'brief':html=vBrief();break;
-    case 'ai':html=isExternalViewer()?vList():vAI();break;
+    case 'ai':html=vAI();break;
     case 'focus':html=vFocus(view.params.kind||'important');break;
   }
   var fabViews=['home','list','calendar','projects','projectDetail','people','personDetail','workload'];
-  var _viewer=isExternalViewer();
-  app.innerHTML='<div class="screen '+(view.name==='focus'?'focus-view':'')+'">'+html+'</div>'+(_viewer?'':tabbar())+
-    (!_viewer&&fabViews.indexOf(view.name)>=0?'<button class="fab" data-act="add">'+I('plus')+'Add</button>':'')+
-    (!_viewer&&fabViews.indexOf(view.name)>=0?'<div class="mobile-action-dock"><button data-act="add">'+I('plus')+'<span>Add task</span></button><button data-act="focus-menu">'+I('star')+'<span>Focus</span></button></div>':'');
+  app.innerHTML='<div class="screen '+(view.name==='focus'?'focus-view':'')+'">'+html+'</div>'+tabbar()+
+    (fabViews.indexOf(view.name)>=0?'<button class="fab" data-act="add">'+I('plus')+'Add</button>':'')+
+    (fabViews.indexOf(view.name)>=0?'<div class="mobile-action-dock"><button data-act="add">'+I('plus')+'<span>Add task</span></button><button data-act="focus-menu">'+I('star')+'<span>Focus</span></button></div>':'');
   bindViewInputs();
 }
 function nav(name,params,noHist){
@@ -723,14 +736,72 @@ function vHome(){
   var themeBtn='<button class="iconbtn" data-act="theme-toggle" title="Switch theme · current: '+themeLabel(_theme)+'">'+I(_theme==='dark'?'sun':'moon')+'</button>';
   var bell='<button class="iconbtn" data-act="go-notif">'+I('bell')+(notifBadgeOn(m)?'<span class="dot"></span>':'')+' </button>';
   var search='<button class="search-pill" data-act="go-search" title="Global Search · Ctrl+K">'+I('search')+'<span>Search anything…</span><kbd>Ctrl K</kbd></button>';
-  var h=topbar('Actionables',isExternalViewer()?(projName(sharedProjectId())+' · View only'):list.length+' shown',false,
-    (isExternalViewer()?'':cloudSyncBtnHtml()+cloudBadgeHtml()+
+  var h=topbar('Actionables',esc(dateLine),false,cloudSyncBtnHtml()+cloudBadgeHtml()+themeBtn+search+bell);
+  h+='<div class="sumstrip">'+pills.join('')+'</div>';
+  h+='<section class="home-focus"><div class="home-focus-head"><div><div class="eyebrow" style="margin:0">Today’s focus</div><h2>What needs your attention?</h2></div><button class="btn ghost mini" data-act="brief-go">Open briefing</button></div>'+intelligenceSection()+'</section>';
+  h+='<div class="selfrow">'+
+    '<button class="quickadd" data-act="quick-new">'+I('plus')+'Quick task for myself</button>'+
+    '<button class="quickadd viewself" data-act="view-personal">'+I('person')+'View your tasks</button>'+
+    '</div>';
+  if(m.remDueL.length){
+    var fus=sortActs(m.remDueL,'smart');
+    h+='<div class="eyebrow">Follow-ups due<button class="lnk" data-act="kpi" data-q="followup">All '+fus.length+'</button></div>';
+    h+='<div class="list">'+fus.slice(0,5).map(function(a){
+      return '<button class="notif n-fu" data-act="open" data-id="'+a.id+'">'+
+        '<span class="ic">'+I('bell')+'</span><span class="w">'+
+        '<div class="h">'+ttlHtml(a)+'</div>'+
+        '<div class="b">'+esc(a.rem.note||'Follow up')+'</div>'+
+        '<div class="b" style="color:var(--tx3)">'+esc(spocLabel(a))+' \u00b7 '+esc(projCode(a.projectId))+'</div>'+
+        '</span>'+etaView(a)+'</button>';
+    }).join('')+'</div>';
+  }
+  h+='<div class="eyebrow">Project &amp; Owner/SPOC<span style="font-size:.7rem;color:var(--tx3);font-weight:500;letter-spacing:0;text-transform:none">'+m.open.length+' open</span></div>';
+  h+='<div class="board-grid">';
+  S.projects.forEach(function(o){
+    if(o.id==='__personal')return;
+    var items=sortActs(m.open.filter(function(a){return a.projectId===o.id;}),'smart');
+    if(!items.length)return;
+    h+='<div class="proj-block'+(o.id==='__personal'?' personal':'')+'"><button class="ownhead" data-act="proj-filter" data-id="'+o.id+'">'+
+      '<h3>'+esc(o.name)+'</h3><span class="cnt">'+items.length+' open</span>'+
+      '<span class="sp"></span>'+I('filter')+'</button>';
+    grouped(items).forEach(function(g){
+      h+='<div class="grp'+(g.key==='__tbc'?' tbc':'')+'">'+I('person')+
+        esc(g.key==='__tbc'?'Owner/SPOC to be assigned':g.label)+
+        '<span class="n">\u00b7 '+g.items.length+'</span></div>';
+      h+='<div class="brows">'+g.items.map(boardRow).join('')+'</div>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  if(!m.open.length)h+=emptyBox('No open actionables','Add your first actionable with the + button below.');
+  return h;
+}
+
+/* ---- ACTIONABLES LIST ---- */
+var QUICKS=[
+  ['all','All open'],['important','Important'],['mine','Mine'],['followup','Follow-up due'],
+  ['overdue','Overdue'],['today','Due today'],['week','This week'],
+  ['inprog','In progress'],['onhold','On hold'],['dep','Dependency'],['completed','Completed'],['everything','Everything']
+];
+function taskViewControls(){
+  var mode=(S.settings&&S.settings.taskView)||'comfortable';
+  return '<div class=\"task-view-controls\" aria-label=\"Task view density\">'+
+    '<button class=\"tview-btn '+(mode==='compact'?'on':'')+'\" data-act=\"task-view\" data-k=\"compact\" title=\"Compact view\">'+I('items')+'</button>'+
+    '<button class=\"tview-btn '+(mode==='comfortable'?'on':'')+'\" data-act=\"task-view\" data-k=\"comfortable\" title=\"Comfortable view\">'+I('person')+'</button>'+
+    '<button class=\"tview-btn '+(mode==='card'?'on':'')+'\" data-act=\"task-view\" data-k=\"card\" title=\"Card view\">'+I('board')+'</button>'+
+    '</div>';
+}
+
+function vList(){
+  var list=filteredActs(),t=todayISO(),mine=myIds();
+  var h=topbar('Actionables',list.length+' shown',false,
+    cloudSyncBtnHtml()+cloudBadgeHtml()+
     '<button class="iconbtn" data-act="go-calendar" title="Calendar">'+I('cal')+'</button>'+
     '<button class="iconbtn" data-act="go-people" title="Owners / SPOCs">'+I('people')+'</button>'+
     '<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(metrics())?'<span class="dot"></span>':'')+'</button>'+
     '<button class="iconbtn" data-act="open-email" title="Email SPOC">'+I('mail')+'</button>'+
-    '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>'));
-  h+='<div class="action-toolbar">'+(isExternalViewer()?'':'<div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div>')+'<div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'">'+(isExternalViewer()?'':'<button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button>')+'</div></div>';
+    '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
+  h+='<div class="action-toolbar"><div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div><div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'"><button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div></div>';
       '<button class="sqbtn" data-act="open-filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div>';
   h+='<div class="chips">'+QUICKS.map(function(q){
     var n=mainActs().filter(function(a){return quickPass(a,q[0],t,mine);}).length;
@@ -1033,15 +1104,6 @@ function vSettings(){
       '<button class="btn ghost" data-act="perm-appinfo">'+I('sliders')+'Open app info</button></div>'+
       '</div>';
   }
-  if(window.Cloud&&window.Cloud.createProjectViewer){
-    h+='<div class="eyebrow">Project viewer access</div><div class="pane">'+
-      '<div class="note" style="padding-top:0">Create a view-only login for one project. The viewer sees only Actionables for that project.</div>'+
-      '<div class="fld"><label>Project</label><select id="pv-project"><option value="">Select project</option>'+S.projects.filter(function(p){return p.id!=="__personal";}).map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join('')+'</select></div>'+
-      '<div class="fld"><label>Viewer email / user ID</label><input id="pv-email" type="email" placeholder="viewer@example.com"></div>'+
-      '<div class="fld"><label>Password</label><input id="pv-pass" type="password" minlength="6" placeholder="Minimum 6 characters"></div>'+
-      '<button class="btn pri" style="width:100%" data-act="project-viewer-create">Create / update viewer</button>'+
-      '<div class="note" style="padding-bottom:0">Each viewer account is restricted to its assigned project and is read-only.</div></div>';
-  }
   h+='<div class="eyebrow">Data</div><div class="pane">'+
     '<button class="rowline" data-act="backup">'+I('dl')+'<span class="t">Back up data<br><span class="s">Export all data to JSON file (Downloads)</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="import">'+I('edit')+'<span class="t">Import backup<br><span class="s">Restore from a JSON backup file</span></span>'+I('chevR')+'</button>'+
@@ -1177,8 +1239,9 @@ function renderDetail(rec){
     b+='</div>';
   }else{b+='<div class="btnrow"><button class="btn ghost" data-act="rem-add">'+I('bell')+'Add follow-up reminder</button></div>';}
   if(a.notes)b+='<div class="fld wide" style="margin-top:14px"><label>Remarks</label><div class="kv" style="align-items:flex-start;white-space:pre-wrap;font-size:.8rem;line-height:1.5">'+esc(a.notes)+'</div></div>';
-  if(!isExternalViewer())b+='<div class="btnrow">'+(a.status==='Completed'?'<button class="btn ghost" data-act="d-reopen">Reopen</button>':'<button class="btn ok" data-act="d-complete">'+I('check')+'Mark completed</button>')+'<button class="btn ghost" data-act="d-edit">'+I('edit')+'Edit</button></div>';
-  if(!isExternalViewer())b+='<div class="eyebrow" style="margin:20px 0 8px;padding:0">Comments \u00b7 '+a.comments.length+'</div>';
+  b+='<div class="btnrow">'+(a.status==='Completed'?'<button class="btn ghost" data-act="d-reopen">Reopen</button>':'<button class="btn ok" data-act="d-complete">'+I('check')+'Mark completed</button>')+
+    '<button class="btn ghost" data-act="d-edit">'+I('edit')+'Edit</button></div>';
+  b+='<div class="eyebrow" style="margin:20px 0 8px;padding:0">Comments \u00b7 '+a.comments.length+'</div>';
   b+='<div class="cmtcompose"><div class="cmt-input-wrap"><input id="cmtIn" placeholder="Add a comment\u2026"><button class="cmt-mic" data-act="d-cmt-voice" title="Speak comment" aria-label="Speak comment">'+I('mic')+'</button></div><div class="cmtbtns"><button class="btn ghost mini" data-act="d-cmt-rephrase">'+I('spark')+'Rephrase</button><button class="btn pri mini" data-act="d-comment">Add</button></div></div>';
   b+=a.comments.map(function(c,idx){return {c:c,i:idx};}).reverse().map(function(o){
     var c=o.c,ci=o.i,edt=(c.edited?' \u00b7 edited':'');
@@ -1208,7 +1271,7 @@ function openForm(id,prefill){
   if(a){
     f={projectId:a.projectId,ticket:a.ticket,ticketUrl:a.ticketUrl,lineItem:a.lineItem,task:a.task,
       spocIds:a.spocIds.slice(),assignedAt:a.assignedAt||null,etaKind:a.etaKind,eta:a.eta,etaEnd:a.etaEnd,
-      remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',remWaiting:a.rem?a.rem.waitingFor:'',remRequested:a.rem?a.rem.requestedOn:'',remExpected:a.rem?a.rem.expectedBy:'',
+      remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',remWaiting:a.rem?a.rem.waitingFor:'',remRequested:a.rem?a.rem.requestedOn:'',remExpected:a.rem?a.rem.expectedBy:'',remAutoFromEta:!!(a.rem&&a.rem.autoFromEta),
       recurrence:a.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:a.id},
       status:a.status,notes:a.notes,important:!!a.important,tags:(a.tags||[]).slice(),type:a.type||'Activity',categoryId:a.categoryId||'',quick:false};
   }else{
@@ -1216,7 +1279,7 @@ function openForm(id,prefill){
     var proj=quick?'__personal':(P.projectId||(S.projects[0]?S.projects[0].id:''));
     f={projectId:proj,ticket:P.ticket||'',ticketUrl:'',lineItem:P.lineItem||'',task:P.task||'',spocIds:P.spocIds?P.spocIds.slice():[],
       assignedAt:P.assignedAt!==undefined?P.assignedAt:Date.now(),etaKind:P.etaKind||(P.eta?'date':'none'),eta:P.eta||'',etaEnd:P.etaEnd||'',
-      remOn:false,remDate:'',remTime:'',remNote:'',remWaiting:'',remRequested:'',remExpected:'',recurrence:P.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:''},status:P.status||'In Progress',notes:P.notes||'',
+      remOn:false,remDate:'',remTime:'',remNote:'',remWaiting:'',remRequested:'',remExpected:'',remAutoFromEta:false,recurrence:P.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:''},status:P.status||'In Progress',notes:P.notes||'',
       important:!!P.important,tags:(P.tags||[]).slice(),type:P.type||'Activity',categoryId:P.categoryId||'',quick:quick};
   }
   if(a&&prefill&&prefill.aiPatch){var ap=prefill.aiPatch;Object.keys(ap).forEach(function(k){if(k==='spocIds')f.spocIds=(ap[k]||[]).slice();else if(k==='tags')f.tags=(ap[k]||[]).slice();else if(k==='important')f.important=!!ap[k];else if(Object.prototype.hasOwnProperty.call(f,k))f[k]=ap[k];});}
@@ -1350,10 +1413,10 @@ function saveForm(rec){
     var now=Date.now();
     var a={id:uid('a'),projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),
       lineItem:f.lineItem,task:f.task,type:f.type||'Activity',spocIds:f.spocIds.slice(),etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,
-      status:f.status,important:!!f.important,tags:(f.tags||[]).slice(),rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,waitingFor:f.remWaiting,requestedOn:f.remRequested,expectedBy:f.remExpected,done:false},
+      status:f.status,important:!!f.important,tags:(f.tags||[]).slice(),rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,waitingFor:f.remWaiting,requestedOn:f.remRequested,expectedBy:f.remExpected,notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false,done:false},
       recurrence:f.recurrence,
       notes:f.notes,comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null,archived:false,categoryId:f.categoryId||'',assignedAt:f.assignedAt||now};
-    if(a.etaKind==='date'&&a.eta){var df=addDaysISO(a.eta,-1);a.rem=Object.assign(a.rem,{on:true,date:df,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:true,done:false});}
+    if((a.etaKind==='date'||a.etaKind==='range')&&(a.eta||a.etaEnd)){var df=addDaysISO(a.etaKind==='range'?(a.etaEnd||a.eta):a.eta,-1);a.rem=Object.assign(a.rem,{on:true,date:df,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:true,done:false});}
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
     if(a.rem.on)logAct(a,'Reminder set','',a.rem.date?fmtDY(a.rem.date):'');
@@ -1788,7 +1851,6 @@ document.addEventListener('click',function(e){
       }).catch(function(){el.classList.remove('spin');});
       break;
     }
-    case 'project-viewer-create':{if(!window.Cloud||!window.Cloud.createProjectViewer){toast('Project sharing needs Firebase sync');break;}var pp=$('#pv-project'),pe=$('#pv-email'),pw=$('#pv-pass');var pidv=pp&&pp.value,emv=pe&&pe.value.trim(),pwv=pw&&pw.value;if(!pidv||!emv||!pwv){toast('Select a project and enter viewer email/password');break;}if(pwv.length<6){toast('Password must be at least 6 characters');break;}window.Cloud.createProjectViewer(emv,pwv,pidv).then(function(r){toast(r&&r.created?'Viewer created and project shared':'Project viewer updated');}).catch(function(e){toast((e&&e.message)||'Could not create viewer');});break;}
     case 'cloud-signout':{if(window.Cloud&&window.Cloud.signOut){confirmSheet('Sign out of sync?','This device will stop syncing until you sign in again. Your data stays saved locally.','Sign out',false,function(){window.Cloud.signOut();render();toast('Signed out of sync');});}break;}
     /* Actionables */
     case 'open':openDetail(id);break;
@@ -1797,8 +1859,8 @@ document.addEventListener('click',function(e){
     case 'bulk-open':openBulkActions();break;
     case 'bulk-apply':applyBulkActions();break;
     case 'bulk-delete':{var ids=Object.keys(bulkSel).filter(function(x){return bulkSel[x]&&actById(x);});if(!ids.length)break;confirmSheet('Delete selected tasks?','Delete '+ids.length+' actionable'+(ids.length===1?'':'s')+'. A restore point will be created first.','Delete',true,function(){snapshot('Before bulk delete');S.actionables=S.actionables.filter(function(a){return ids.indexOf(a.id)<0;});saveState();bulkSel={};closeTop();render();toast('Deleted '+ids.length+' task'+(ids.length===1?'':'s'),{label:'Undo',fn:function(){restoreVersion(0);}});});break;}
-    case 'add': if(viewerGuard())break;openForm(null,view.name==='projectDetail'?{projectId:view.params.id}:null);break;
-    case 'quick-new': if(viewerGuard())break;openForm(null,{quick:true});break;
+    case 'add':openForm(null,view.name==='projectDetail'?{projectId:view.params.id}:null);break;
+    case 'quick-new':openForm(null,{quick:true});break;
     case 'ai-tab':aiState.tab=el.getAttribute('data-k');aiState.out='';aiState.outKind='';aiState.items=null;aiState.edits=null;aiState.err='';aiState.input='';render();break;
     case 'ai-key-save':{var _k=$('#aiKeyInput');if(_k)aiSetKey(_k.value.trim());var _b=$('#aiBase');if(_b)S.settings.aiCustomBase=_b.value.trim();var _m=$('#aiModelId')||$('#aiModelPick');if(_m&&_m.value.trim())aiSetModel(_m.value.trim());if(!aiModel()){aiState.err='Enter or choose a model.';render();break;}aiState.editKey=false;aiState.err='';aiState.kModel='';saveState();render();break;}
     case 'ai-connect':case 'ai-reload-models':{var _k2=$('#aiKeyInput');if(_k2)aiSetKey(_k2.value.trim());var _b2=$('#aiBase');if(_b2)S.settings.aiCustomBase=_b2.value.trim();aiConnect();break;}
@@ -1875,7 +1937,7 @@ document.addEventListener('click',function(e){
     case 'confirm-ok':{var cs=sheetFor('confirm');if(cs){var cb=cs.onOk;closeSheet(cs);if(cb)cb();}break;}
     case 'input-ok':{var isRec=sheetFor('input');if(isRec){var val=($('#inpS',isRec.sheet)||{}).value||'';val=val.trim();if(!val){toast('Enter a value');break;}var cb2=isRec.onOk;closeSheet(isRec);if(cb2)cb2(val);}break;}
     /* Detail sheet */
-    case 'd-delete': if(viewerGuard())break;{
+    case 'd-delete':{
       var drDel=sheetFor('detail');
       if(drDel){
         var delA=actById(drDel.data.id);
@@ -1889,7 +1951,7 @@ document.addEventListener('click',function(e){
       }
       break;
     }
-    case 'd-comment': if(viewerGuard())break;{
+    case 'd-comment':{
       var drC=sheetFor('detail');
       if(drC){
         var ci=$('#cmtIn',drC.sheet),txt=ci?(ci.value||'').trim():'';
@@ -1933,9 +1995,9 @@ document.addEventListener('click',function(e){
     }
     case 'd-spoc':{var dr0=sheetFor('detail');if(dr0){var a0=actById(dr0.data.id);if(a0){var arr0=a0.spocIds.slice();var ix0=arr0.indexOf(id);if(ix0>=0)arr0.splice(ix0,1);else arr0.push(id);updateAct(dr0.data.id,{spocIds:arr0});renderDetail(dr0);render();}}break;}
     case 'd-spoc-new':{var drn=sheetFor('detail');if(drn){var an=actById(drn.data.id);if(an)personSheet(function(u){updateAct(drn.data.id,{spocIds:an.spocIds.concat([u.id])});renderDetail(drn);render();});}break;}
-    case 'd-complete': if(viewerGuard())break;{var dr=sheetFor('detail');if(dr){updateAct(dr.data.id,{status:'Completed'});var a2=actById(dr.data.id);if(a2){logAct(a2,'Completed');saveState();}renderDetail(dr);render();toast('Completed');}break;}
+    case 'd-complete':{var dr=sheetFor('detail');if(dr){updateAct(dr.data.id,{status:'Completed'});var a2=actById(dr.data.id);if(a2){logAct(a2,'Completed');saveState();}renderDetail(dr);render();toast('Completed');}break;}
     case 'd-reopen':{var dr2=sheetFor('detail');if(dr2){updateAct(dr2.data.id,{status:'In Progress'});var a3=actById(dr2.data.id);if(a3){logAct(a3,'Reopened');saveState();}renderDetail(dr2);render();toast('Reopened');}break;}
-    case 'd-edit': if(viewerGuard())break;{var dr3=sheetFor('detail');if(dr3)openForm(dr3.data.id);break;}
+    case 'd-edit':{var dr3=sheetFor('detail');if(dr3)openForm(dr3.data.id);break;}
     case 'd-act-toggle':{var drAct=sheetFor('detail');if(drAct){drAct.data.actOpen=!drAct.data.actOpen;renderDetail(drAct);}break;}
     case 'd-restore-point':{var drSnap=sheetFor('detail');if(drSnap){snapshot('Manual restore point');toast('Restore point saved');}break;}
     case 'rem-add':{var drRem=sheetFor('detail');if(drRem){var arRem=actById(drRem.data.id);if(arRem){var next=addDaysISO(todayISO(),1);remPatch(arRem.id,{on:true,date:next,time:'',note:'',done:false,waitingFor:'',requestedOn:todayISO(),expectedBy:''},{e:'Follow-up set',t:fmtDY(next)});renderDetail(drRem);render();toast('Follow-up reminder added');}}break;}
@@ -2068,8 +2130,20 @@ document.addEventListener('change',function(e){
         if(v==='__new'){inputSheet('New project','Project name',function(name){var p={id:uid('p'),name:name,code:name.split(/\s+/)[0].toUpperCase().slice(0,6)};ensureProjectCategories(p);S.projects.push(p);saveState();f.projectId=p.id;renderForm(fr);});}
         else{f.projectId=v;f.categoryId='';renderForm(fr);}break;
       case 'f-ticket':f.ticket=v;break;case 'f-url':f.ticketUrl=v;break;case 'f-line':f.lineItem=v;break;case 'f-task':f.task=v;break;case 'f-category':f.categoryId=v;break;case 'f-assigned':f.assignedAt=v?isoToDate(v).getTime():null;break;
-      case 'f-etakind':f.etaKind=v;renderForm(fr);break;case 'f-eta':f.eta=v;break;case 'f-etaend':f.etaEnd=v;break;
-      case 'f-remon':f.remOn=!!v;if(f.remOn&&!f.remDate)f.remDate=todayISO();renderForm(fr);break;
+      case 'f-etakind':
+        f.etaKind=v;
+        if(v==='none'||v==='tbd'){if(f.remAutoFromEta){f.remOn=false;f.remDate='';f.remAutoFromEta=false;}}
+        else if((v==='date'||v==='range')&&f.eta){var _fuBase=v==='range'?(f.etaEnd||f.eta):f.eta;f.remOn=true;f.remDate=addDaysISO(_fuBase,-1);f.remAutoFromEta=true;}
+        renderForm(fr);break;
+      case 'f-eta':
+        f.eta=v;
+        if((f.etaKind==='date'||f.etaKind==='range')&&v&&(!f.remOn||f.remAutoFromEta)){var _fuBase2=f.etaKind==='range'?(f.etaEnd||v):v;f.remOn=true;f.remDate=addDaysISO(_fuBase2,-1);f.remAutoFromEta=true;}
+        renderForm(fr);break;
+      case 'f-etaend':
+        f.etaEnd=v;
+        if(f.etaKind==='range'&&v&&f.eta&&(!f.remOn||f.remAutoFromEta)){f.remOn=true;f.remDate=addDaysISO(v,-1);f.remAutoFromEta=true;}
+        renderForm(fr);break;
+      case 'f-remon':f.remOn=!!v;if(f.remOn&&!f.remDate)f.remDate=todayISO();f.remAutoFromEta=false;renderForm(fr);break;
       case 'f-remdate':f.remDate=v;break;case 'f-remtime':f.remTime=v;break;case 'f-remnote':f.remNote=v;break;case 'f-remwaiting':f.remWaiting=v;break;case 'f-remrequested':f.remRequested=v;break;case 'f-remexpected':f.remExpected=v;break;
       case 'f-recur':f.recurrence.enabled=v!=='none';f.recurrence.freq=v==='none'?'weekly':v;if(v==='custom'&&!f.recurrence.unit)f.recurrence.unit='week';if(f.recurrence.enabled&&!f.eta)f.eta=addDaysISO(todayISO(),1),f.etaKind='date';renderForm(fr);break;
       case 'f-recur-int':f.recurrence.interval=Math.max(1,parseInt(v,10)||1);break;case 'f-recur-unit':f.recurrence.unit=v;break;case 'f-recur-end':f.recurrence.endDate=v;break;
@@ -2132,17 +2206,6 @@ function goBack(){
 }
 window.__handleBack=function(){return goBack()?'handled':'exit';};
 window.__onResume=function(){render();};
-
-function getProjectSharedState(pid){
-  var p=projById(pid);if(!p)return null;
-  var acts=S.actionables.filter(function(a){return a.projectId===pid&&!a.archived;}).map(function(a){return JSON.parse(JSON.stringify(a));});
-  var ids={};acts.forEach(function(a){(a.spocIds||[]).forEach(function(id){ids[id]=1;});});
-  var people=S.people.filter(function(u){return ids[u.id];}).map(function(u){return JSON.parse(JSON.stringify(u));});
-  var st={version:S.version,exportPrefs:{projId:'',from:'',to:'',preset:'all'},settings:Object.assign({},S.settings,{viewerMode:true,viewerProjectId:pid,viewerEmail:(S.settings&&S.settings.viewerEmail)||''}),taskTypes:(S.taskTypes||[]).slice(),people:people,projects:[JSON.parse(JSON.stringify(p))],actionables:acts};
-  return st;
-}
-window.__getProjectSharedState=getProjectSharedState;
-window.__enterViewerMode=function(){if(!isExternalViewer())return;view={name:'list',params:{}};history_=[];filters=defaultFilters();render();window.scrollTo(0,0);};
 
 /* ---- CLOUD SYNC BRIDGE (used by sync.js) ---- */
 window.__getState=function(){return S;};

@@ -2541,5 +2541,181 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
 .ai-hello{display:none!important;}
 @media(max-width:700px){.ai-capability{margin:8px 16px 12px;font-size:14px;line-height:1.45}.ai-try{margin-top:2px}.ai-try>span{font-size:12px;letter-spacing:.08em;text-transform:uppercase}.ai-sugg{display:flex;overflow-x:auto;gap:8px;padding:2px 0 6px;scrollbar-width:none}.ai-sugg::-webkit-scrollbar{display:none}.ai-sg{flex:0 0 auto;white-space:nowrap}.topbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 
-/* v6.21 project viewer */
-.viewer-only .fab,.viewer-only .mobile-action-dock{display:none!important;}
+
+/* v6.20 — AI composer + mobile navigation final alignment */
+.ai-cmdbar{
+  position:relative!important;
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+  min-height:72px;
+  max-height:120px;
+  padding:10px 112px 10px 14px!important;
+  margin:10px 0!important;
+  border-radius:18px;
+  overflow:hidden;
+}
+.ai-cmd{
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  min-height:48px;
+  max-height:96px;
+  margin:0!important;
+  padding:8px 0!important;
+  border:0!important;
+  background:transparent!important;
+  resize:none;
+  overflow-y:auto;
+  line-height:1.45;
+}
+.ai-cmd-actions{
+  position:absolute!important;
+  right:10px!important;
+  bottom:10px!important;
+  top:auto!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:8px!important;
+  width:auto!important;
+  height:auto!important;
+  z-index:5;
+}
+.ai-micbtn,.ai-sendbtn{
+  width:42px!important;
+  height:42px!important;
+  min-width:42px!important;
+  max-width:42px!important;
+  min-height:42px!important;
+  max-height:42px!important;
+  flex:0 0 42px!important;
+  padding:0!important;
+  margin:0!important;
+  border-radius:12px!important;
+  box-sizing:border-box!important;
+}
+.ai-micbtn svg,.ai-sendbtn svg{width:19px!important;height:19px!important;display:block!important;}
+.ai-capability{
+  margin:4px 14px 10px!important;
+  font-size:.78rem!important;
+  line-height:1.4!important;
+  color:var(--tx2)!important;
+}
+.ai-try{
+  display:flex!important;
+  align-items:center!important;
+  gap:9px!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  margin:4px 0 12px!important;
+  overflow:hidden!important;
+}
+.ai-try>span{
+  flex:0 0 auto!important;
+  font-size:.68rem!important;
+  line-height:1!important;
+  letter-spacing:.08em!important;
+  text-transform:uppercase!important;
+  color:var(--tx3)!important;
+}
+.ai-sugg{
+  display:flex!important;
+  flex:1 1 auto!important;
+  min-width:0!important;
+  width:auto!important;
+  max-width:none!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  gap:8px!important;
+  padding:2px 16px 6px 0!important;
+  margin:0!important;
+  scrollbar-width:none!important;
+}
+.ai-sugg::-webkit-scrollbar{display:none!important;}
+.ai-sg{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:max-content!important;
+  max-width:none!important;
+  height:40px!important;
+  padding:0 15px!important;
+  border-radius:999px!important;
+  font-size:.72rem!important;
+  line-height:40px!important;
+  white-space:nowrap!important;
+}
+
+@media(max-width:700px){
+  .screen{padding-bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 12px)!important;}
+  .ai-cmdbar{
+    min-height:68px!important;
+    max-height:112px!important;
+    margin:10px 12px!important;
+    width:calc(100% - 24px)!important;
+    padding:9px 96px 9px 12px!important;
+    border-radius:16px!important;
+  }
+  .ai-cmd{max-height:88px!important;}
+  .ai-cmd-actions{right:9px!important;bottom:9px!important;gap:7px!important;}
+  .ai-micbtn,.ai-sendbtn{
+    width:40px!important;height:40px!important;
+    min-width:40px!important;max-width:40px!important;
+    min-height:40px!important;max-height:40px!important;
+    flex-basis:40px!important;
+    border-radius:11px!important;
+  }
+  .ai-capability{margin:6px 16px 12px!important;font-size:14px!important;line-height:1.4!important;}
+  .ai-try{margin:3px 16px 10px!important;width:calc(100% - 32px)!important;gap:9px!important;}
+  .ai-try>span{font-size:12px!important;}
+  .ai-sugg{padding-right:0!important;gap:8px!important;}
+  .ai-sg{height:40px!important;line-height:40px!important;padding:0 14px!important;font-size:13px!important;}
+
+  /* Keep the three mobile navigation items evenly aligned and visually centered. */
+  .tabbar.tabbar-3{
+    height:calc(78px + env(safe-area-inset-bottom))!important;
+    min-height:calc(78px + env(safe-area-inset-bottom))!important;
+    padding:5px 0 env(safe-area-inset-bottom)!important;
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    align-items:stretch!important;
+    justify-content:stretch!important;
+    box-sizing:border-box!important;
+  }
+  .tabbar.tabbar-3 .tab{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    height:68px!important;
+    min-height:68px!important;
+    padding:5px 4px 4px!important;
+    margin:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:5px!important;
+    position:relative!important;
+    box-sizing:border-box!important;
+    border-radius:12px!important;
+  }
+  .tabbar.tabbar-3 .tab svg{width:22px!important;height:22px!important;flex:none!important;}
+  .tabbar.tabbar-3 .tab span{font-size:12px!important;line-height:1.1!important;}
+  .tabbar.tabbar-3 .tab.on{background:transparent!important;}
+  .tabbar.tabbar-3 .tab.on::after{
+    content:''!important;
+    position:absolute!important;
+    top:-5px!important;
+    left:50%!important;
+    transform:translateX(-50%)!important;
+    width:34px!important;
+    height:3px!important;
+    border-radius:0 0 4px 4px!important;
+    background:var(--acc)!important;
+  }
+  .tabbar.tabbar-3 .tab .dot{top:7px!important;right:calc(50% - 17px)!important;}
+}
