@@ -45,6 +45,7 @@ echo ">> staging web assets from: $WEB_DIR"
 rsync -a \
   --exclude '.git' --exclude '.github' --exclude 'android-wrapper' \
   --exclude 'node_modules' --exclude '*.apk' --exclude '.nojekyll' \
+  --exclude 'www' \
   "$WEB_DIR"/ build/stage/assets/
 # sanity: the app entry point must exist
 test -f build/stage/assets/index.html || { echo "ERROR: index.html not found in $WEB_DIR"; exit 1; }

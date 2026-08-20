@@ -2852,3 +2852,11 @@ html.high-contrast-theme .filter, html.high-contrast-theme .sumpill { color: var
   .ai-sugg{gap:6px!important;padding:0!important;}
   .ai-sg{height:34px!important;line-height:34px!important;padding:0 11px!important;font-size:12px!important;}
 }
+
+/* v6.24 — Customize report columns: search + empty state (dark AMOLED) */
+.report-col-search{position:sticky;top:0;z-index:2;padding:2px 0 10px;background:var(--sur,#0b0e13);}
+.report-col-search input[type="search"]{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid var(--br,#232a33);border-radius:11px;background:var(--sur2,#12171d);color:var(--tx,#eef2f6);font-size:.86rem;outline:none;-webkit-appearance:none;appearance:none;}
+.report-col-search input[type="search"]::placeholder{color:var(--tx3,#6b7683);}
+.report-col-search input[type="search"]:focus{border-color:var(--acc,#ff9800);}
+.report-col-search input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;}
+.report-col-empty{padding:16px 10px;text-align:center;color:var(--tx3,#6b7683);font-size:.8rem;}

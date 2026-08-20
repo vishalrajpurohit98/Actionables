@@ -21,5 +21,13 @@
 <script src="sync.js?v=7.5.11"></script>
 <script src="seed.js?v=7.5.11"></script>
 <script src="app.js?v=7.5.11"></script>
+<script>
+/* Register the service worker for offline support & faster loads. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+</script>
 </body>
 </html>

@@ -186,6 +186,12 @@ function ensureDefaults(){
     if(!Array.isArray(a.tags))a.tags=[];
     if(!a.type)a.type='Activity';
     if(STATUS_MAP[a.status]){a.status=STATUS_MAP[a.status];if(a.status==='Completed'&&!a.completedAt)a.completedAt=a.updatedAt||Date.now();}
+    /* Auto-clear active follow-ups whose date is already in the past. */
+    if(a.rem&&a.rem.on&&!a.rem.done&&a.rem.date&&a.rem.date<todayISO()){
+      a.rem.on=false;a.rem.autoFromEta=false;
+      try{logAct(a,'Follow-up cleared (date passed)',fmtDY(a.rem.date),'');}catch(e){}
+      a.rem.date='';
+    }
   });
   S.actionables.forEach(function(a){if(a.type&&S.taskTypes.indexOf(a.type)<0)S.taskTypes.push(a.type);});
 }
@@ -486,19 +492,51 @@ function updateAct(id,patch){
   if(etaResetByAssigned && ek===preAssignedEtaKind && ev===preAssignedEta && ee===preAssignedEtaEnd){ek='none';ev='';ee='';}
   if(ek!=='range')ee='';if(ek==='none'||ek==='tbd'){ev='';ee='';}
   if(ek!==a.etaKind||ev!==a.eta||ee!==a.etaEnd){var before=fmtEta(a);a.etaKind=ek;a.eta=ev;a.etaEnd=ee;logAct(a,'ETA changed',before,fmtEta(a));changed=true;}
-  if(ek==='date'&&ev){var defaultFu=addDaysISO(ev,-1),r=a.rem||{},autoFollow=!r.on||r.autoFromEta===true;if(autoFollow){a.rem=Object.assign({on:true,date:defaultFu,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',note:'',waitingFor:'',requestedOn:'',expectedBy:'',done:false},r,{on:true,date:defaultFu,notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',autoFromEta:true,done:false});logAct(a,'Follow-up defaulted from ETA','',fmtDY(defaultFu));changed=true;}}
+  /* ETA-driven follow-up lifecycle.
+     - ETA date  -> follow-up defaults to 1 day before the date
+     - ETA range -> follow-up defaults to 1 day before the range END
+     - No/TBD ETA-> any AUTO follow-up is cleared (manual ones are left alone)
+     - A manually edited follow-up (autoFromEta!==true) is never touched here. */
+  var etaAnchor = (ek==='date'&&ev) ? ev : (ek==='range'&&(ee||ev)) ? (ee||ev) : '';
+  if(etaAnchor){
+    var defaultFu=addDaysISO(etaAnchor,-1),r=a.rem||{},autoFollow=!r.on||r.autoFromEta===true;
+    if(autoFollow&&r.date!==defaultFu){
+      a.rem=Object.assign({on:true,date:defaultFu,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',note:'',waitingFor:'',requestedOn:'',expectedBy:'',done:false},r,{on:true,date:defaultFu,notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',autoFromEta:true,done:false});
+      logAct(a,'Follow-up defaulted from ETA','',fmtDY(defaultFu));changed=true;syncFollowUpAlarm(a);
+    }
+  } else {
+    /* ETA became none/tbd/empty: clear an auto follow-up, keep manual ones. */
+    if(a.rem&&a.rem.on&&a.rem.autoFromEta===true){
+      var wasFu=a.rem.date;a.rem.on=false;a.rem.date='';a.rem.autoFromEta=false;
+      logAct(a,'Follow-up cleared (ETA removed)',wasFu?fmtDY(wasFu):'','');changed=true;syncFollowUpAlarm(a);
+    }
+  }
   if(changed){a.updatedAt=Date.now();if(completedTransition)scheduleNextOccurrence(a);saveState();}
   return changed;
+}
+/* Schedule or cancel the native Android alarm to match the task's follow-up state. */
+function syncFollowUpAlarm(a){
+  if(!(window.Android&&Android.scheduleFollowUp))return;
+  try{
+    if(a.rem&&a.rem.on&&a.rem.date&&a.rem.notifyOn&&!a.rem.done){
+      var nd=addDaysISO(a.rem.date,-(a.rem.notifyDays||0));
+      var parts=(a.rem.notifyTime||'09:00').split(':');
+      var dt=new Date(nd+'T'+(parts[0]||'09')+':'+(parts[1]||'00')+':00');
+      Android.scheduleFollowUp(a.id,dt.getTime(),a.lineItem||'Follow-up','Follow-up for '+(a.lineItem||'task')+' is due '+fmtDY(a.rem.date),true);
+    }else{Android.cancelFollowUp(a.id);}
+  }catch(e){}
 }
 function remPatch(id,patch,ev){
   var a=actById(id);if(!a)return;
   if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false};
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
+  /* A manual edit to the follow-up date detaches it from ETA control. */
+  if(patch.date!==undefined && patch.date!==a.rem.date && patch.autoFromEta===undefined){a.rem.autoFromEta=false;}
   for(var k in patch)a.rem[k]=patch[k];
   a.rem.notifyOn = a.rem.notifyOn!==false; a.rem.notifyDays = Math.max(0,parseInt(a.rem.notifyDays,10)||0); a.rem.notifyTime=a.rem.notifyTime||'09:00';
   if(ev)logAct(a,ev.e,ev.f||'',ev.t||'');
   a.updatedAt=Date.now();saveState();
-  if(window.Android&&Android.scheduleFollowUp){if(a.rem.on&&a.rem.date&&a.rem.notifyOn){var nd=addDaysISO(a.rem.date,-a.rem.notifyDays);var parts=(a.rem.notifyTime||'09:00').split(':');var dt=new Date(nd+'T'+(parts[0]||'09')+':'+(parts[1]||'00')+':00');Android.scheduleFollowUp(a.id,dt.getTime(),a.lineItem||'Follow-up', 'Follow-up for '+(a.lineItem||'task')+' is due '+fmtDY(a.rem.date),true);}else{Android.cancelFollowUp(a.id);}}
+  syncFollowUpAlarm(a);
 }
 function addComment(id,text){
   var a=actById(id);if(!a)return;
@@ -980,8 +1018,27 @@ function reportData(projId,inclPersonal,range){
   };
 }
 function rn(v,l,col){return '<div class="rn"><div class="v"'+(col?' style="color:'+col+'"':'')+'>'+v+'</div><div class="l">'+l+'</div></div>';}
-function openReportColumns(){var rec=openSheet('<div class="shead"><h2>Customize report columns</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody report-columns"></div><div class="sfoot"><button class="btn ghost" data-act="report-reset">Reset default</button><button class="btn pri" data-act="report-columns-apply">Apply</button></div>',{tag:'report-columns'});renderReportColumns(rec);}
-function renderReportColumns(rec){var all=['Project','Category','Line Item','Description','Owner / SPOC','Assigned Date','Aging','ETA','Status','Remarks','Comments (date-wise)'];var b='<div class="note">Choose the columns for Excel and arrange them with the arrows.</div><div class="report-col-list">'+all.map(function(c){var on=reportColumns.indexOf(c)>=0;var pos=reportColumns.indexOf(c);return '<div class="report-col-row '+(on?'on':'')+'"><label><input type="checkbox" data-report-col="'+esc(c)+'" '+(on?'checked':'')+'> '+esc(c)+'</label>'+(on?'<span class="report-col-arrows"><button class="iconbtn mini" data-act="report-up" data-col="'+esc(c)+'" '+(pos===0?'disabled':'')+'>↑</button><button class="iconbtn mini" data-act="report-down" data-col="'+esc(c)+'" '+(pos===reportColumns.length-1?'disabled':'')+'>↓</button></span>':'')+'</div>';}).join('')+'</div>';rec.sheet.querySelector('.report-columns').innerHTML=b;}
+var reportColSearch='';
+function openReportColumns(){reportColSearch='';var rec=openSheet('<div class="shead"><h2>Customize report columns</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody report-columns"></div><div class="sfoot"><button class="btn ghost" data-act="report-reset">Reset default</button><button class="btn pri" data-act="report-columns-apply">Apply</button></div>',{tag:'report-columns'});renderReportColumns(rec);}
+function renderReportColumns(rec){
+  var q=(reportColSearch||'').trim().toLowerCase();
+  /* Selected fields first, in their chosen order; then the rest (unselected) in registry order. */
+  var selected=reportColumns.filter(function(c){return REPORT_FIELD_MAP[c];});
+  var rest=REPORT_FIELDS.map(function(f){return f.label;}).filter(function(c){return selected.indexOf(c)<0;});
+  var ordered=selected.concat(rest);
+  if(q)ordered=ordered.filter(function(c){return c.toLowerCase().indexOf(q)>=0;});
+  var rows=ordered.map(function(c){
+    var on=reportColumns.indexOf(c)>=0,pos=reportColumns.indexOf(c);
+    var arrows=on?('<span class="report-col-arrows"><button class="iconbtn mini" data-act="report-up" data-col="'+esc(c)+'" '+(pos===0?'disabled':'')+'>↑</button><button class="iconbtn mini" data-act="report-down" data-col="'+esc(c)+'" '+(pos===reportColumns.length-1?'disabled':'')+'>↓</button></span>'):'';
+    return '<div class="report-col-row '+(on?'on':'')+'"><label><input type="checkbox" data-report-col="'+esc(c)+'" '+(on?'checked':'')+'> '+esc(c)+'</label>'+arrows+'</div>';
+  }).join('');
+  if(!rows)rows='<div class="report-col-empty">No fields match "'+esc(reportColSearch)+'".</div>';
+  var b='<div class="note">Tick the fields to include in the export and use the arrows to set their order. Selected fields appear first; Excel columns follow this exact order.</div>'+
+    '<div class="report-col-search"><input type="search" id="reportColSearchInput" data-report-col-search placeholder="🔍 Search fields\u2026" value="'+esc(reportColSearch)+'" autocomplete="off"></div>'+
+    '<div class="report-col-list">'+rows+'</div>';
+  var host=rec.sheet.querySelector('.report-columns');host.innerHTML=b;
+  var si=host.querySelector('#reportColSearchInput');if(si){si.focus();try{si.setSelectionRange(si.value.length,si.value.length);}catch(e){}}
+}
 function vReports(){
   var d=reportData(exportSel.projId||null,false,exportSel);
   var h=topbar('Reports','Status & export',false,'');
@@ -1635,9 +1692,47 @@ function deliverFile(b64,name,mime){
 }
 
 /* Excel: Project | Line Item | Description | Owner | ETA | Status | Remarks */
-var reportColumns=(function(){try{var z=JSON.parse(localStorage.getItem('actionables.reportColumns')||'null');if(Array.isArray(z)&&z.length)return z;}catch(e){}return ['Project','Category','Line Item','Description','Owner / SPOC','Assigned Date','Aging','ETA','Status','Remarks','Comments (date-wise)'];})();
-var reportColumnKeys={Project:'project',Category:'category','Line Item':'lineItem',Description:'description','Owner / SPOC':'owner','Assigned Date':'assigned',Aging:'aging',ETA:'eta',Status:'status',Remarks:'remarks','Comments (date-wise)':'comments'};
-function reportValue(a,key){var c=(a.comments||[]).map(function(x){var d=new Date(x.ts);return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+(x.user?(' ('+x.user+')'):'')+': '+(x.text||'');}).join('\n');return {project:projName(a.projectId),category:categoryName(a.projectId,a.categoryId),lineItem:a.lineItem,description:a.task,owner:spocLabel(a),assigned:assignedDateISO(a)||createdDateISO(a),aging:agingDays(a)+' days',eta:plainEta(a)||(a.etaKind==='tbd'?'TBD':''),status:a.status,remarks:a.notes||'',comments:c}[key]||'';}
+/* ============================================================
+   REPORT FIELD REGISTRY  — single source of truth for exports.
+   Each entry: { label, def (default-selected), val(a) -> string }
+   The label is the stable id used in saved settings and Excel/PDF headers.
+   Add a new field here and it automatically appears in the column
+   picker and both exporters — no other edits needed.
+   ============================================================ */
+function commentsText(a){return (a.comments||[]).map(function(x){var d=new Date(x.ts);return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+(x.user?(' ('+x.user+')'):'')+': '+(x.text||'');}).join('\n');}
+function latestCommentText(a){var cs=a.comments||[];if(!cs.length)return '';var x=cs[cs.length-1];return (x.text||'');}
+function followUpDateStr(a){return (a.rem&&a.rem.on&&a.rem.date)?fmtDY(a.rem.date):'';}
+function followUpNotifStr(a){if(!(a.rem&&a.rem.on&&a.rem.date))return '';if(a.rem.notifyOn===false)return 'Off';var dwn=a.rem.notifyDays||0;var when=dwn===0?'On the day':(dwn+' day'+(dwn===1?'':'s')+' earlier');return when+' at '+(a.rem.notifyTime||'09:00');}
+var REPORT_FIELDS=[
+  {label:'Project',            def:true,  val:function(a){return projName(a.projectId);}},
+  {label:'Category',           def:true,  val:function(a){return categoryName(a.projectId,a.categoryId);}},
+  {label:'Line Item',          def:true,  val:function(a){return a.lineItem||'';}},
+  {label:'Description',        def:true,  val:function(a){return a.task||'';}},
+  {label:'Status',             def:true,  val:function(a){return a.status||'';}},
+  {label:'Priority',           def:true,  val:function(a){return a.important?'Important':'Normal';}},
+  {label:'Owner / SPOC',       def:true,  val:function(a){return spocLabel(a);}},
+  {label:'Task Type',          def:false, val:function(a){return a.type||'Activity';}},
+  {label:'Assigned Date',      def:true,  val:function(a){return fmtDY(assignedDateISO(a)||createdDateISO(a));}},
+  {label:'Aging',              def:true,  val:function(a){return agingDays(a)+' days';}},
+  {label:'ETA',                def:true,  val:function(a){return plainEta(a)||(a.etaKind==='tbd'?'TBD':'');}},
+  {label:'Follow-up Date',     def:true,  val:function(a){return followUpDateStr(a);}},
+  {label:'Follow-up Notification', def:false, val:function(a){return followUpNotifStr(a);}},
+  {label:'Tags',               def:true,  val:function(a){return (a.tags||[]).join(', ');}},
+  {label:'Dependency',         def:true,  val:function(a){return a.status==='Dependency'?'Yes':'';}},
+  {label:'Ticket / Ref ID',    def:false, val:function(a){return a.ticket||'';}},
+  {label:'Ticket URL',         def:false, val:function(a){return a.ticketUrl||'';}},
+  {label:'Created Date',       def:false, val:function(a){return fmtDY(createdDateISO(a));}},
+  {label:'Last Updated',       def:false, val:function(a){return fmtDY(updatedDateISO(a));}},
+  {label:'Completion Date',    def:false, val:function(a){return a.completedAt?fmtDY(isoFromMs(a.completedAt)):'';}},
+  {label:'Remarks',            def:true,  val:function(a){return a.notes||'';}},
+  {label:'Latest Comment',     def:false, val:function(a){return latestCommentText(a);}},
+  {label:'Comments (date-wise)', def:true, val:function(a){return commentsText(a);}}
+];
+var REPORT_FIELD_MAP=(function(){var m={};REPORT_FIELDS.forEach(function(f){m[f.label]=f;});return m;})();
+function reportDefaultColumns(){return REPORT_FIELDS.filter(function(f){return f.def;}).map(function(f){return f.label;});}
+function reportValue(a,label){var f=REPORT_FIELD_MAP[label];if(!f)return '';try{return f.val(a)||'';}catch(e){return '';}}
+/* Load saved selection; drop any labels no longer supported; fall back to defaults. */
+var reportColumns=(function(){try{var z=JSON.parse(localStorage.getItem('actionables.reportColumns')||'null');if(Array.isArray(z)&&z.length){var clean=z.filter(function(c){return REPORT_FIELD_MAP[c];});if(clean.length)return clean;}}catch(e){}return reportDefaultColumns();})();
 function exportRangeFilter(range){return range&&((range.from||'')||(range.to||''))?range:null;}
 function exportExcel(projId,projLabel,listOverride,range){
   if(!xlsxReady()){toast('Export engine loading \u2014 try again');return;}
@@ -1645,7 +1740,7 @@ function exportExcel(projId,projLabel,listOverride,range){
   if(range&&(range.from||range.to))list=list.filter(function(a){var d=isOpen(a)?endEta(a):isoFromMs(a.completedAt||a.updatedAt);return d&&(!range.from||d>=range.from)&&(!range.to||d<=range.to);});
   list=sortActs(list,'project');
   var head=reportColumns.slice();
-  var rows=list.map(function(a){return reportColumns.map(function(col){return reportValue(a,reportColumnKeys[col]);});});
+  var rows=list.map(function(a){return reportColumns.map(function(col){return reportValue(a,col);});});
   var ws=XLSX.utils.aoa_to_sheet([head].concat(rows));
   ws['!cols']=reportColumns.map(function(c){return {wch:Math.min(60,Math.max(12,c==='Description'?42:(c.indexOf('Comments')>=0?48:(c==='Line Item'?30:18))))};});
   /* Bold header row */
@@ -1656,7 +1751,7 @@ function exportExcel(projId,projLabel,listOverride,range){
   deliverFile(b64,(projLabel||'All_Projects').replace(/\s+/g,'_')+'_Report_'+stamp()+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
 
-/* PDF: Project | Line Item | Description | Owner | Assigned | Aging | ETA | Status | Latest comment */
+/* PDF status report — table columns follow the user's selected report columns. */
 function exportPdf(projId,projLabel,range){
   if(!pdfReady()){toast('Export engine loading \u2014 try again');return;}
   var d=reportData(projId||null,true,range);
@@ -1681,15 +1776,18 @@ function exportPdf(projId,projLabel,range){
     if(y>720){doc.addPage();y=48;}
     doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20,26,36);doc.text(title.toUpperCase(),M,y);y+=8;
     if(!list.length){doc.setFont('helvetica','italic');doc.setFontSize(9);doc.setTextColor(130,140,152);y+=12;doc.text(emptyMsg,M,y);y+=20;return;}
+    /* Use the user's selected columns. PDF is width-constrained, so autoTable
+       auto-fits; very wide selections simply get smaller cells. */
+    var pdfCols=reportColumns.slice();
     doc.autoTable({
       startY:y+4,
-      head:[['Project','Category','Line Item','Description','Owner','Assigned','Aging','ETA','Status','Latest comment']],
-      body:list.map(function(a){var lc=(a.comments&&a.comments.length)?a.comments[a.comments.length-1]:null;var cd=lc?new Date(lc.ts):null;var lcs=lc?(cd.getDate()+' '+MON[cd.getMonth()]+' '+cd.getFullYear()+': '+(lc.text||'')):'';return[projCode(a.projectId),categoryName(a.projectId,a.categoryId),a.lineItem,a.task||'',spocLabel(a),fmtDY(assignedDateISO(a)||createdDateISO(a)),agingDays(a)+'d',fmtEta(a),a.status,lcs];}),
+      head:[pdfCols.slice()],
+      body:list.map(function(a){return pdfCols.map(function(col){return reportValue(a,col);});}),
       margin:{left:M,right:M},
-      styles:{fontSize:7.5,cellPadding:3.5,textColor:[45,55,70],lineColor:[225,232,240],lineWidth:.5,valign:'top'},
+      styles:{fontSize:7.5,cellPadding:3.5,textColor:[45,55,70],lineColor:[225,232,240],lineWidth:.5,valign:'top',overflow:'linebreak'},
       headStyles:{fillColor:[17,24,38],textColor:255,fontStyle:'bold',fontSize:8},
       alternateRowStyles:{fillColor:[247,249,252]},
-      columnStyles:{0:{cellWidth:30},1:{cellWidth:52},2:{cellWidth:60},3:{cellWidth:78},4:{cellWidth:46},5:{cellWidth:42},6:{cellWidth:30},7:{cellWidth:42},8:{cellWidth:48},9:{cellWidth:105}}
+      tableWidth:'auto'
     });
     y=doc.lastAutoTable.finalY+20;
   }
@@ -1978,7 +2076,7 @@ document.addEventListener('click',function(e){
     case 'rem-snooze':{var drSnooze=sheetFor('detail');if(drSnooze){var arSnooze=actById(drSnooze.data.id);var days=Math.max(1,parseInt(el.getAttribute('data-n'),10)||1);if(arSnooze&&arSnooze.rem&&arSnooze.rem.on){var base=arSnooze.rem.date&&arSnooze.rem.date>todayISO()?arSnooze.rem.date:todayISO();var nd=addDaysISO(base,days);remPatch(arSnooze.id,{date:nd,done:false},{e:'Follow-up snoozed',f:arSnooze.rem.date||'',t:nd?fmtDY(nd):''});renderDetail(drSnooze);render();toast('Follow-up moved to '+fmtDY(nd));}}break;}
     case 'report-columns':{openReportColumns();break;}
     case 'report-columns-apply':{try{localStorage.setItem('actionables.reportColumns',JSON.stringify(reportColumns));}catch(e){}var rr=sheetFor('report-columns');if(rr){closeSheet(rr);toast('Report columns saved');}break;}
-    case 'report-reset':{reportColumns=['Project','Category','Line Item','Description','Owner / SPOC','Assigned Date','Aging','ETA','Status','Remarks','Comments (date-wise)'];try{localStorage.setItem('actionables.reportColumns',JSON.stringify(reportColumns));}catch(e){}var rr2=sheetFor('report-columns');if(rr2)renderReportColumns(rr2);break;}
+    case 'report-reset':{reportColumns=reportDefaultColumns();reportColSearch='';try{localStorage.setItem('actionables.reportColumns',JSON.stringify(reportColumns));}catch(e){}var rr2=sheetFor('report-columns');if(rr2)renderReportColumns(rr2);toast('Restored default columns');break;}
     case 'report-up':{var cu=el.getAttribute('data-col'),pi=reportColumns.indexOf(cu);if(pi>0){reportColumns.splice(pi,1);reportColumns.splice(pi-1,0,cu);var rr3=sheetFor('report-columns');if(rr3)renderReportColumns(rr3);}break;}
     case 'report-down':{var cd=el.getAttribute('data-col'),pd=reportColumns.indexOf(cd);if(pd>=0&&pd<reportColumns.length-1){reportColumns.splice(pd,1);reportColumns.splice(pd+1,0,cd);var rr4=sheetFor('report-columns');if(rr4)renderReportColumns(rr4);}break;}
     case 'do-export-pdf':{
@@ -2065,6 +2163,23 @@ document.addEventListener('click',function(e){
   }
 });
 
+document.addEventListener('input',function(e){
+  var el=e.target;
+  if(el&&el.hasAttribute&&el.hasAttribute('data-report-col-search')){
+    reportColSearch=el.value||'';
+    var q=reportColSearch.trim().toLowerCase();
+    var host=el.closest?el.closest('.report-columns'):null;if(!host)return;
+    var any=false;
+    host.querySelectorAll('.report-col-row').forEach(function(row){
+      var lbl=(row.textContent||'').trim().toLowerCase();
+      var show=!q||lbl.indexOf(q)>=0;row.style.display=show?'':'none';if(show)any=true;
+    });
+    var emptyEl=host.querySelector('.report-col-empty');
+    if(!any){if(!emptyEl){emptyEl=document.createElement('div');emptyEl.className='report-col-empty';host.querySelector('.report-col-list').appendChild(emptyEl);}emptyEl.textContent='No fields match "'+reportColSearch+'".';emptyEl.style.display='';}
+    else if(emptyEl){emptyEl.style.display='none';}
+    return;
+  }
+});
 document.addEventListener('change',function(e){
   var el=e.target,chg=el.getAttribute&&el.getAttribute('data-chg');
   if(el&&el.hasAttribute&&el.hasAttribute('data-report-col')){var rc=el.getAttribute('data-report-col'),ix=reportColumns.indexOf(rc);if(el.checked&&ix<0)reportColumns.push(rc);if(!el.checked&&ix>=0)reportColumns.splice(ix,1);var rcr=sheetFor('report-columns');if(rcr)renderReportColumns(rcr);return;}
@@ -3235,7 +3350,7 @@ function aiExec(o){
     if(o.report&&o.report.filter&&Object.keys(o.report.filter).length)rlist=aiFilterList(o.report.filter);else rlist=((o.report&&o.report.ids)||[]).map(actById).filter(Boolean);
     if(!rlist.length){aiChatPush('ai',(o&&o.reply)||'No tasks matched that report.');return;}
     var fmt=((o.report&&o.report.format)||'pdf').toLowerCase(),label=(o.report&&o.report.label)||'AI report';
-    if((fmt==='excel'||fmt==='xlsx')&&o.report&&Array.isArray(o.report.columns)&&o.report.columns.length){var allowed=['Project','Category','Line Item','Description','Owner / SPOC','Assigned Date','Aging','ETA','Status','Remarks','Comments (date-wise)'];reportColumns=o.report.columns.filter(function(c){return allowed.indexOf(c)>=0;});if(!reportColumns.length)reportColumns=allowed.slice();try{localStorage.setItem('actionables.reportColumns',JSON.stringify(reportColumns));}catch(e){} }
+    if((fmt==='excel'||fmt==='xlsx')&&o.report&&Array.isArray(o.report.columns)&&o.report.columns.length){reportColumns=o.report.columns.filter(function(c){return REPORT_FIELD_MAP[c];});if(!reportColumns.length)reportColumns=reportDefaultColumns();try{localStorage.setItem('actionables.reportColumns',JSON.stringify(reportColumns));}catch(e){} }
     if(fmt==='excel'||fmt==='xlsx')exportExcel(null,label,rlist);else aiReportPdf(rlist,label);
     aiChatPush('ai',(o&&o.reply)||('Downloaded a '+((fmt==='excel'||fmt==='xlsx')?'spreadsheet':'PDF')+' report of '+rlist.length+' task'+(rlist.length===1?'':'s')+'.'));
   } else if(act==='quality'){
