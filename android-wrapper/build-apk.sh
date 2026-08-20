@@ -23,6 +23,7 @@ PLATFORM_VER="${PLATFORM_VER:-android-34}"
 WEB_DIR="${WEB_DIR:-..}"                      # default: parent = repo root
 OUT_APK="${OUT_APK:-build/Actionables.apk}"
 APP_VERSION="${APP_VERSION:-6.24}"
+VERSION_CODE="${VERSION_CODE:-624}"           # auto-incremented by CI; strictly increasing
 WEB_COMMIT="${WEB_COMMIT:-dev}"
 KEY_PASS="${KEY_PASS:-${KS_PASS:-}}"
 
@@ -57,6 +58,8 @@ echo ">> aapt2 link"
   -I "$PLAT" \
   --manifest AndroidManifest.xml \
   --min-sdk-version 24 --target-sdk-version 34 \
+  --version-code "$VERSION_CODE" \
+  --version-name "$APP_VERSION" \
   --java build/gen \
   --auto-add-overlay \
   build/compiled/res.zip

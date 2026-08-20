@@ -36,6 +36,14 @@ jobs:
       - name: Install SDK packages
         run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;35.0.0"
 
+      - name: Compute version code
+        id: ver
+        run: |
+          # Must be strictly greater than the previously shipped code (624).
+          CODE=$(( 700 + ${{ github.run_number }} ))
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Using versionCode=$CODE"
+
       - name: Decode keystore from committed file
         run: |
           if [ ! -f android-wrapper/keystore.b64 ]; then
@@ -68,6 +76,7 @@ jobs:
           KEY_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
           OUT_APK: ${{ github.workspace }}/Actionables.apk
           APP_VERSION: 6.24
+          VERSION_CODE: ${{ steps.ver.outputs.code }}
           WEB_COMMIT: ${{ github.sha }}
         run: |
           chmod +x build-apk.sh
