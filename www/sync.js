@@ -252,6 +252,20 @@
     } catch (e) {}
   }
 
+  /* Boot the authentication gate immediately. This prevents a blank screen while the Firebase SDK loads. */
+  if (configured()) {
+    try { gate(true); } catch (e) {}
+    var bootGate = document.getElementById('cloudgate');
+    if (bootGate) {
+      var bootIn = bootGate.querySelector('#cgIn');
+      var bootUp = bootGate.querySelector('#cgUp');
+      if (bootIn) bootIn.disabled = true;
+      if (bootUp) bootUp.disabled = true;
+      var bootSub = bootGate.querySelector('#cgSub');
+      if (bootSub) bootSub.textContent = 'Loading secure sign-in…';
+    }
+  }
+
   var Cloud = {
     configured: configured,
     status: function () {
@@ -296,6 +310,15 @@
         firebase.initializeApp(cfg);
         auth = firebase.auth();
         db = firebase.firestore();
+        var readyGate = document.getElementById('cloudgate');
+        if (readyGate) {
+          var readyIn = readyGate.querySelector('#cgIn');
+          var readyUp = readyGate.querySelector('#cgUp');
+          if (readyIn) readyIn.disabled = false;
+          if (readyUp) readyUp.disabled = false;
+          var readySub = readyGate.querySelector('#cgSub');
+          if (readySub) readySub.textContent = 'Sign in to access your workspace';
+        }
         try { db.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
         auth.onAuthStateChanged(function (user) {
           if (user) {
