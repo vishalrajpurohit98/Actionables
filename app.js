@@ -114,6 +114,7 @@ var IC={
   moon:'<path d="M21 12.8a9 9 0 1 1-9.8-9.8A7 7 0 0 0 21 12.8z"/>',
   cloud:'<path d="M7 18h9.5a3.5 3.5 0 0 0 .3-6.98A5 5 0 0 0 7.2 9.5 3.75 3.75 0 0 0 7 18z"/>',
   star:'<path d="M12 3.6l2.55 5.17 5.7.83-4.13 4.02.98 5.68L12 16.6l-5.08 2.7.98-5.68L3.75 9.6l5.7-.83z"/>',
+  brand:'<circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-dasharray="40 10"/><path d="M8.5 12l2.4 2.4 4.8-5.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.2 3.6l.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8z" fill="currentColor"/>' ,
   refresh:'<path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/>'
 };
 function I(name,cls){return '<svg class="'+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+IC[name]+'</svg>';}
@@ -180,7 +181,6 @@ function ensureDefaults(){
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
     if(a.etaKind===undefined)a.etaKind=a.eta?'date':'none';
     if(a.etaEnd===undefined)a.etaEnd='';
-    normalizeFollowup(a,todayISO());
     if(a.ticketUrl===undefined)a.ticketUrl='';
     if(a.important===undefined)a.important=false;
     if(!Array.isArray(a.tags))a.tags=[];
@@ -273,17 +273,6 @@ function relEta(a){
   return{t:fmtD(end),cls:cls};
 }
 function remDue(a,t){return isOpen(a)&&a.rem&&a.rem.on&&!a.rem.done&&a.rem.date&&a.rem.date<=t;}
-/* Follow-up lifecycle: ETA-driven reminders are automatic until the user edits the follow-up.
-   Any active follow-up whose date is already in the past is cleared on load/normalisation. */
-function normalizeFollowup(a,t){
-  if(!a)return false;
-  var r=a.rem;if(!r)return false;
-  var changed=false,now=t||todayISO();
-  if(r.on&&!r.done&&r.date&&r.date<now){
-    r.on=false;r.date='';r.done=false;r.autoFromEta=false;changed=true;
-  }
-  return changed;
-}
 function createdDateISO(a){return a&&a.createdAt?isoFromMs(a.createdAt):'';}
 function assignedDateISO(a){return a&&a.assignedAt?isoFromMs(a.assignedAt):'';}
 function updatedDateISO(a){return a&&a.updatedAt?isoFromMs(a.updatedAt):'';}
@@ -497,22 +486,7 @@ function updateAct(id,patch){
   if(etaResetByAssigned && ek===preAssignedEtaKind && ev===preAssignedEta && ee===preAssignedEtaEnd){ek='none';ev='';ee='';}
   if(ek!=='range')ee='';if(ek==='none'||ek==='tbd'){ev='';ee='';}
   if(ek!==a.etaKind||ev!==a.eta||ee!==a.etaEnd){var before=fmtEta(a);a.etaKind=ek;a.eta=ev;a.etaEnd=ee;logAct(a,'ETA changed',before,fmtEta(a));changed=true;}
-  /* ETA drives the default follow-up. A manually changed follow-up is preserved.
-     For a range, use the ETA end date as the due point. */
-  if((ek==='date'||ek==='range')&&(ev||ee)){
-    var etaDue=(ek==='range'?(ee||ev):ev);
-    var defaultFu=addDaysISO(etaDue,-1),r=a.rem||{},autoFollow=!r.on||r.autoFromEta===true;
-    if(autoFollow){
-      a.rem=Object.assign({on:true,date:defaultFu,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',note:'',waitingFor:'',requestedOn:'',expectedBy:'',done:false},r,{on:true,date:defaultFu,notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',autoFromEta:true,done:false});
-      logAct(a,'Follow-up defaulted from ETA','',fmtDY(defaultFu));changed=true;
-    }
-  }else if((ek==='none'||ek==='tbd')&&a.rem&&a.rem.autoFromEta){
-    /* Removing the ETA removes only the automatic follow-up; a manually created
-       follow-up must remain untouched. */
-    a.rem=Object.assign({},a.rem,{on:false,date:'',done:false,autoFromEta:false});
-    logAct(a,'Automatic follow-up removed','Follow-up linked to ETA','No follow-up');
-    changed=true;
-  }
+  if(ek==='date'&&ev){var defaultFu=addDaysISO(ev,-1),r=a.rem||{},autoFollow=!r.on||r.autoFromEta===true;if(autoFollow){a.rem=Object.assign({on:true,date:defaultFu,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',note:'',waitingFor:'',requestedOn:'',expectedBy:'',done:false},r,{on:true,date:defaultFu,notifyOn:true,notifyDays:1,notifyTime:r.notifyTime||'09:00',autoFromEta:true,done:false});logAct(a,'Follow-up defaulted from ETA','',fmtDY(defaultFu));changed=true;}}
   if(changed){a.updatedAt=Date.now();if(completedTransition)scheduleNextOccurrence(a);saveState();}
   return changed;
 }
@@ -521,10 +495,7 @@ function remPatch(id,patch,ev){
   if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false};
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
   for(var k in patch)a.rem[k]=patch[k];
-  /* A user-entered follow-up date is no longer controlled by ETA. */
-  if(Object.prototype.hasOwnProperty.call(patch,'date') || Object.prototype.hasOwnProperty.call(patch,'on'))a.rem.autoFromEta=false;
   a.rem.notifyOn = a.rem.notifyOn!==false; a.rem.notifyDays = Math.max(0,parseInt(a.rem.notifyDays,10)||0); a.rem.notifyTime=a.rem.notifyTime||'09:00';
-  if(a.rem.date && a.rem.date<todayISO() && a.rem.on && !a.rem.done){a.rem.on=false;a.rem.date='';a.rem.autoFromEta=false;}
   if(ev)logAct(a,ev.e,ev.f||'',ev.t||'');
   a.updatedAt=Date.now();saveState();
   if(window.Android&&Android.scheduleFollowUp){if(a.rem.on&&a.rem.date&&a.rem.notifyOn){var nd=addDaysISO(a.rem.date,-a.rem.notifyDays);var parts=(a.rem.notifyTime||'09:00').split(':');var dt=new Date(nd+'T'+(parts[0]||'09')+':'+(parts[1]||'00')+':00');Android.scheduleFollowUp(a.id,dt.getTime(),a.lineItem||'Follow-up', 'Follow-up for '+(a.lineItem||'task')+' is due '+fmtDY(a.rem.date),true);}else{Android.cancelFollowUp(a.id);}}
@@ -653,7 +624,7 @@ function tabbar(){
   }
   function focusRow(kind,ic,label,red){var on=view.name==='focus'&&view.params.kind===kind;return '<button class="railrow focus-desktop '+(on?'on':'')+'" data-act="focus-nav" data-kind="'+kind+'">'+I(ic)+'<span class="rr-l">'+label+'</span><span class="rr-n '+(red?'r':'')+'">'+focusCounts[kind]+'</span></button>';}
   return '<nav class="tabbar tabbar-3 '+(sidebarCollapsed?'is-collapsed':'')+'">'+
-    '<div class="railbrand"><span class="rb-ic">'+I('check')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span><button class="rail-collapse" data-act="sidebar-toggle" title="'+(sidebarCollapsed?'Show sidebar':'Hide sidebar')+'">'+I(sidebarCollapsed?'chevR':'back')+'</button></div>'+
+    '<div class="railbrand"><span class="rb-ic">'+I('brand')+'</span><span class="rb-tx"><b>Actionables</b><i>Stay on top of what matters</i></span><button class="rail-collapse" data-act="sidebar-toggle" title="'+(sidebarCollapsed?'Show sidebar':'Hide sidebar')+'">'+I(sidebarCollapsed?'chevR':'back')+'</button></div>'+
     tab('list','items','Actionables')+tab('ai','spark','AI')+tab('more','dots','More')+
     '<div class="railsec focus-desktop">FOCUS</div>'+
     focusRow('important','star','Important',false)+focusRow('eta','clock','ETA Breached',true)+focusRow('upcoming','cal','Upcoming',false)+
@@ -1271,7 +1242,7 @@ function openForm(id,prefill){
   if(a){
     f={projectId:a.projectId,ticket:a.ticket,ticketUrl:a.ticketUrl,lineItem:a.lineItem,task:a.task,
       spocIds:a.spocIds.slice(),assignedAt:a.assignedAt||null,etaKind:a.etaKind,eta:a.eta,etaEnd:a.etaEnd,
-      remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',remWaiting:a.rem?a.rem.waitingFor:'',remRequested:a.rem?a.rem.requestedOn:'',remExpected:a.rem?a.rem.expectedBy:'',remAutoFromEta:!!(a.rem&&a.rem.autoFromEta),
+      remOn:a.rem&&a.rem.on,remDate:a.rem?a.rem.date:'',remTime:a.rem?a.rem.time:'',remNote:a.rem?a.rem.note:'',remWaiting:a.rem?a.rem.waitingFor:'',remRequested:a.rem?a.rem.requestedOn:'',remExpected:a.rem?a.rem.expectedBy:'',
       recurrence:a.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:a.id},
       status:a.status,notes:a.notes,important:!!a.important,tags:(a.tags||[]).slice(),type:a.type||'Activity',categoryId:a.categoryId||'',quick:false};
   }else{
@@ -1279,7 +1250,7 @@ function openForm(id,prefill){
     var proj=quick?'__personal':(P.projectId||(S.projects[0]?S.projects[0].id:''));
     f={projectId:proj,ticket:P.ticket||'',ticketUrl:'',lineItem:P.lineItem||'',task:P.task||'',spocIds:P.spocIds?P.spocIds.slice():[],
       assignedAt:P.assignedAt!==undefined?P.assignedAt:Date.now(),etaKind:P.etaKind||(P.eta?'date':'none'),eta:P.eta||'',etaEnd:P.etaEnd||'',
-      remOn:false,remDate:'',remTime:'',remNote:'',remWaiting:'',remRequested:'',remExpected:'',remAutoFromEta:false,recurrence:P.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:''},status:P.status||'In Progress',notes:P.notes||'',
+      remOn:false,remDate:'',remTime:'',remNote:'',remWaiting:'',remRequested:'',remExpected:'',recurrence:P.recurrence||{enabled:false,freq:'weekly',interval:1,unit:'week',endDate:'',seriesId:''},status:P.status||'In Progress',notes:P.notes||'',
       important:!!P.important,tags:(P.tags||[]).slice(),type:P.type||'Activity',categoryId:P.categoryId||'',quick:quick};
   }
   if(a&&prefill&&prefill.aiPatch){var ap=prefill.aiPatch;Object.keys(ap).forEach(function(k){if(k==='spocIds')f.spocIds=(ap[k]||[]).slice();else if(k==='tags')f.tags=(ap[k]||[]).slice();else if(k==='important')f.important=!!ap[k];else if(Object.prototype.hasOwnProperty.call(f,k))f[k]=ap[k];});}
@@ -1413,10 +1384,10 @@ function saveForm(rec){
     var now=Date.now();
     var a={id:uid('a'),projectId:f.projectId,ticket:f.ticket.trim(),ticketUrl:f.ticketUrl.trim(),
       lineItem:f.lineItem,task:f.task,type:f.type||'Activity',spocIds:f.spocIds.slice(),etaKind:f.etaKind,eta:f.eta,etaEnd:f.etaEnd,
-      status:f.status,important:!!f.important,tags:(f.tags||[]).slice(),rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,waitingFor:f.remWaiting,requestedOn:f.remRequested,expectedBy:f.remExpected,notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false,done:false},
+      status:f.status,important:!!f.important,tags:(f.tags||[]).slice(),rem:{on:!!f.remOn,date:f.remDate,time:f.remTime,note:f.remNote,waitingFor:f.remWaiting,requestedOn:f.remRequested,expectedBy:f.remExpected,done:false},
       recurrence:f.recurrence,
       notes:f.notes,comments:[],activity:[],createdAt:now,updatedAt:now,completedAt:null,archived:false,categoryId:f.categoryId||'',assignedAt:f.assignedAt||now};
-    if((a.etaKind==='date'||a.etaKind==='range')&&(a.eta||a.etaEnd)){var df=addDaysISO(a.etaKind==='range'?(a.etaEnd||a.eta):a.eta,-1);a.rem=Object.assign(a.rem,{on:true,date:df,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:true,done:false});}
+    if(a.etaKind==='date'&&a.eta){var df=addDaysISO(a.eta,-1);a.rem=Object.assign(a.rem,{on:true,date:df,time:'09:00',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:true,done:false});}
     logAct(a,'Created');
     if(a.spocIds.length)logAct(a,'Owner/SPOC assigned','',spocLabel(a));
     if(a.rem.on)logAct(a,'Reminder set','',a.rem.date?fmtDY(a.rem.date):'');
@@ -2130,20 +2101,8 @@ document.addEventListener('change',function(e){
         if(v==='__new'){inputSheet('New project','Project name',function(name){var p={id:uid('p'),name:name,code:name.split(/\s+/)[0].toUpperCase().slice(0,6)};ensureProjectCategories(p);S.projects.push(p);saveState();f.projectId=p.id;renderForm(fr);});}
         else{f.projectId=v;f.categoryId='';renderForm(fr);}break;
       case 'f-ticket':f.ticket=v;break;case 'f-url':f.ticketUrl=v;break;case 'f-line':f.lineItem=v;break;case 'f-task':f.task=v;break;case 'f-category':f.categoryId=v;break;case 'f-assigned':f.assignedAt=v?isoToDate(v).getTime():null;break;
-      case 'f-etakind':
-        f.etaKind=v;
-        if(v==='none'||v==='tbd'){if(f.remAutoFromEta){f.remOn=false;f.remDate='';f.remAutoFromEta=false;}}
-        else if((v==='date'||v==='range')&&f.eta){var _fuBase=v==='range'?(f.etaEnd||f.eta):f.eta;f.remOn=true;f.remDate=addDaysISO(_fuBase,-1);f.remAutoFromEta=true;}
-        renderForm(fr);break;
-      case 'f-eta':
-        f.eta=v;
-        if((f.etaKind==='date'||f.etaKind==='range')&&v&&(!f.remOn||f.remAutoFromEta)){var _fuBase2=f.etaKind==='range'?(f.etaEnd||v):v;f.remOn=true;f.remDate=addDaysISO(_fuBase2,-1);f.remAutoFromEta=true;}
-        renderForm(fr);break;
-      case 'f-etaend':
-        f.etaEnd=v;
-        if(f.etaKind==='range'&&v&&f.eta&&(!f.remOn||f.remAutoFromEta)){f.remOn=true;f.remDate=addDaysISO(v,-1);f.remAutoFromEta=true;}
-        renderForm(fr);break;
-      case 'f-remon':f.remOn=!!v;if(f.remOn&&!f.remDate)f.remDate=todayISO();f.remAutoFromEta=false;renderForm(fr);break;
+      case 'f-etakind':f.etaKind=v;renderForm(fr);break;case 'f-eta':f.eta=v;break;case 'f-etaend':f.etaEnd=v;break;
+      case 'f-remon':f.remOn=!!v;if(f.remOn&&!f.remDate)f.remDate=todayISO();renderForm(fr);break;
       case 'f-remdate':f.remDate=v;break;case 'f-remtime':f.remTime=v;break;case 'f-remnote':f.remNote=v;break;case 'f-remwaiting':f.remWaiting=v;break;case 'f-remrequested':f.remRequested=v;break;case 'f-remexpected':f.remExpected=v;break;
       case 'f-recur':f.recurrence.enabled=v!=='none';f.recurrence.freq=v==='none'?'weekly':v;if(v==='custom'&&!f.recurrence.unit)f.recurrence.unit='week';if(f.recurrence.enabled&&!f.eta)f.eta=addDaysISO(todayISO(),1),f.etaKind='date';renderForm(fr);break;
       case 'f-recur-int':f.recurrence.interval=Math.max(1,parseInt(v,10)||1);break;case 'f-recur-unit':f.recurrence.unit=v;break;case 'f-recur-end':f.recurrence.endDate=v;break;

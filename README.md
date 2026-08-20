@@ -103,3 +103,13 @@ at the site (add the DNS records GitHub shows, and a `CNAME` file is created for
     vendor/             bundled libraries (xlsx, jsPDF) for Excel/PDF export
     .nojekyll           serve files as-is (no Jekyll)
     FIREBASE-SYNC.md    how to turn on realtime cross-device sync
+
+## Android web updates
+
+The Android wrapper now checks the latest `main` commit on GitHub when the app starts. If the installed APK was built from an older commit, it shows an **Update now** prompt. Choosing **Update now** switches the WebView to the GitHub Pages deployment, while **Later** keeps the bundled APK version.
+
+Normal web changes therefore do not require reinstalling the APK after the app has been switched to the remote web version. Native Android changes still require a new APK.
+
+The current remote web URL is:
+
+`https://vishalrajpurohit98.github.io/actionables/`

@@ -30,6 +30,13 @@ import android.speech.SpeechRecognizer;
 import android.os.Bundle;
 import java.util.ArrayList;
 import android.widget.Toast;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.os.Handler;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -47,6 +54,10 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC = 1002;
     private SpeechRecognizer speechRecognizer;
     private boolean voicePending = false;
+    private String pendingRemoteCommit = null;
+    private static final String GITHUB_REPO = "vishalrajpurohit98/actionables";
+    private static final String RELEASES_URL = "https://github.com/" + GITHUB_REPO + "/releases/latest";
+    private static final String REMOTE_WEB_URL = "https://vishalrajpurohit98.github.io/actionables/";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,6 +85,27 @@ public class MainActivity extends Activity {
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageFinished(WebView view, String url) {
+                if (url != null && url.startsWith(REMOTE_WEB_URL) && pendingRemoteCommit != null) {
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                            .putBoolean("use_remote_web", true)
+                            .putString("active_web_commit", pendingRemoteCommit)
+                            .remove("dismissed_web_commit")
+                            .apply();
+                    pendingRemoteCommit = null;
+                }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                if (failingUrl != null && failingUrl.startsWith(REMOTE_WEB_URL)) {
+                    pendingRemoteCommit = null;
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean("use_remote_web", false).apply();
+                    view.loadUrl("file:///android_asset/index.html");
+                }
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 // keep app URLs internal; open external http(s) links in browser
                 if (url.startsWith("https://api.anthropic.com")
@@ -95,7 +127,16 @@ public class MainActivity extends Activity {
         });
 
         web.addJavascriptInterface(new Bridge(), "Android");
-        web.loadUrl("file:///android_asset/index.html");
+        SharedPreferences updatePrefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        boolean useRemoteWeb = updatePrefs.getBoolean("use_remote_web", false);
+        if (useRemoteWeb) {
+            web.loadUrl(REMOTE_WEB_URL + "?cached=" + System.currentTimeMillis());
+        } else {
+            web.loadUrl("file:///android_asset/index.html");
+        }
+        new Handler().postDelayed(new Runnable() {
+            @Override public void run() { checkForAndroidUpdate(); }
+        }, 1800);
     }
 
     @Override
@@ -197,6 +238,95 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void checkForAndroidUpdate() {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                HttpURLConnection conn = null;
+                try {
+                    URL url = new URL("https://api.github.com/repos/" + GITHUB_REPO + "/commits/main");
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(5000);
+                    conn.setRequestProperty("Accept", "application/vnd.github+json");
+                    int code = conn.getResponseCode();
+                    if (code != 200) return;
+                    BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    StringBuilder body = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) body.append(line);
+                    br.close();
+                    String json = body.toString();
+                    String latestSha = extractJsonString(json, "sha");
+                    if (latestSha == null || latestSha.trim().isEmpty()) return;
+                    latestSha = latestSha.trim();
+                    SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+                    String currentSha = prefs.getString("active_web_commit", BuildInfo.WEB_COMMIT);
+                    if ("dev".equals(currentSha) || latestSha.equals(currentSha)) return;
+                    if (latestSha.equals(prefs.getString("dismissed_web_commit", ""))) return;
+                    final String detectedSha = latestSha;
+                    runOnUiThread(new Runnable() {
+                        @Override public void run() { showWebUpdateDialog(detectedSha); }
+                    });
+                } catch (Exception ignored) {
+                    // Update checks are best-effort and must never affect app startup.
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+            }
+        }).start();
+    }
+
+    private String extractJsonString(String json, String key) {
+        String needle = "\"" + key + "\"";
+        int i = json.indexOf(needle);
+        if (i < 0) return null;
+        int colon = json.indexOf(':', i + needle.length());
+        if (colon < 0) return null;
+        int q1 = json.indexOf('\"', colon + 1);
+        if (q1 < 0) return null;
+        int q2 = json.indexOf('\"', q1 + 1);
+        if (q2 < 0) return null;
+        return json.substring(q1 + 1, q2);
+    }
+
+    private void showWebUpdateDialog(final String latestSha) {
+        String shortSha = latestSha.length() > 7 ? latestSha.substring(0, 7) : latestSha;
+        new AlertDialog.Builder(this)
+                .setTitle("New Actionables update available")
+                .setMessage("A newer web version is available. Update now to load the latest tasks, AI assistant and UI changes?\n\nUpdate: " + shortSha)
+                .setNegativeButton("Later", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        rememberDismissedWebCommit(latestSha);
+                    }
+                })
+                .setPositiveButton("Update now", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) {
+                        loadRemoteWeb(latestSha);
+                    }
+                })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    @Override public void onCancel(DialogInterface dialog) {
+                        rememberDismissedWebCommit(latestSha);
+                    }
+                })
+                .show();
+    }
+
+    private void rememberDismissedWebCommit(String sha) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString("dismissed_web_commit", sha).apply();
+    }
+
+    private void loadRemoteWeb(String sha) {
+        try {
+            pendingRemoteCommit = sha;
+            String separator = REMOTE_WEB_URL.contains("?") ? "&" : "?";
+            web.loadUrl(REMOTE_WEB_URL + separator + "update=" + Uri.encode(sha.substring(0, Math.min(12, sha.length()))));
+        } catch (Exception ignored) {
+            web.loadUrl("file:///android_asset/index.html");
+        }
+    }
+
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
@@ -216,7 +346,7 @@ public class MainActivity extends Activity {
     private class Bridge {
 
         @JavascriptInterface
-        public String version() { return "6.17"; }
+        public String version() { return BuildInfo.APP_VERSION; }
 
         @JavascriptInterface
         public boolean isVoiceSupported() {
