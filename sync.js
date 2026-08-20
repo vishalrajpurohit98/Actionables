@@ -19,8 +19,9 @@
   ];
 
   var cfg = window.FIREBASE_CONFIG || null;
-  var auth = null, db = null, ref = null, unsub = null;
-  var uid = null, unlocked = false;
+  var auth = null, db = null, ref = null, unsub = null, shareRef = null, shareUnsub = null, shareListUnsub = null;
+  var uid = null, unlocked = false, viewerMode = false, viewerProjectId = '', viewerEmail = '';
+  var viewerCreatorApp = null;
   var status = { configured: false, signedIn: false, email: '', label: 'Local only' };
   var pushTimer = null, offlineOnly = false, started = false;
 
@@ -136,8 +137,10 @@
       action.then(function () {
         unlocked = true;
         busy(false);
-        gate(false);
-        subscribe();
+        findViewerShare().then(function(isViewer){
+          if(isViewer){viewerMode=true;gate(false);subscribe();}
+          else {viewerMode=false;gate(false);subscribe();}
+        });
       }).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
     });
     g.querySelector('#cgUp').addEventListener('click', function () {
@@ -163,9 +166,62 @@
     el.style.display = e ? 'block' : 'none';
   }
 
+  function applySharedState(data){
+    if(!data||!data.state)return false;
+    try{
+      var obj=typeof data.state==='string'?JSON.parse(data.state):data.state;
+      if(!obj||!obj.actionables)return false;
+      viewerMode=true;viewerProjectId=data.projectId||'';viewerEmail=data.viewerEmail||'';
+      obj.settings=obj.settings||{};obj.settings.viewerMode=true;obj.settings.viewerProjectId=viewerProjectId;obj.settings.viewerEmail=viewerEmail;
+      window.__applyCloudState(obj);
+      if(window.__enterViewerMode)window.__enterViewerMode();
+      setLabel('Project viewer · '+(obj.projects&&obj.projects[0]?obj.projects[0].name:'View only'));
+      return true;
+    }catch(e){return false;}
+  }
+  function subscribeShare(uid0){
+    shareRef=db.collection('projectShares').doc(uid0);
+    shareUnsub=shareRef.onSnapshot(function(snap){
+      if(!snap.exists||snap.data().active===false){ viewerMode=false;viewerProjectId='';gate(true,'Project viewer access is not active.');return; }
+      applySharedState(snap.data());
+      gate(false);
+    },function(){setLabel('Project viewer access error');});
+  }
+  function findViewerShare(){
+    if(!uid)return Promise.resolve(false);
+    return db.collection('projectShares').doc(uid).get({source:'server'}).then(function(snap){
+      if(snap.exists&&snap.data().active!==false){applySharedState(snap.data());return true;}return false;
+    }).catch(function(){return false;});
+  }
+  function publishShares(){
+    if(!uid||viewerMode||!db||!window.__getProjectSharedState)return;
+    try{
+      db.collection('projectShares').where('adminUid','==',uid).get().then(function(q){
+        q.forEach(function(doc){var d=doc.data()||{};var st=window.__getProjectSharedState(d.projectId);if(st)doc.ref.set({adminUid:uid,viewerEmail:d.viewerEmail,projectId:d.projectId,active:d.active!==false,state:JSON.stringify(st),updatedAt:Date.now()},{merge:true});});
+      }).catch(function(){});
+    }catch(e){}
+  }
+  function createProjectViewer(email,password,projectId){
+    if(!auth||!db||!uid)return Promise.reject(new Error('Sign in as the admin first.'));
+    email=String(email||'').trim().toLowerCase();
+    if(!email||!password||!projectId)return Promise.reject(new Error('Project, email and password are required.'));
+    if(!viewerCreatorApp){viewerCreatorApp=firebase.initializeApp(cfg,'viewerCreator');}
+    var a2=viewerCreatorApp.auth();
+    return a2.createUserWithEmailAndPassword(email,password).catch(function(err){
+      if(err&&err.code==='auth/email-already-in-use')return a2.signInWithEmailAndPassword(email,password);
+      throw err;
+    }).then(function(cr){
+      var vu=cr.user;
+      var st=window.__getProjectSharedState(projectId);
+      if(!st)throw new Error('Project not found.');
+      return db.collection('projectShares').doc(vu.uid).set({adminUid:uid,viewerEmail:email,projectId:projectId,active:true,state:JSON.stringify(st),updatedAt:Date.now()},{merge:true}).then(function(){return {created:true,uid:vu.uid};});
+    }).finally(function(){try{a2.signOut();}catch(e){}});
+  }
+
   /* ---- firestore realtime sync ---- */
   function subscribe() {
     if (!uid) return;
+    if(viewerMode){subscribeShare(uid);return;}
     ref = db.collection('users').doc(uid);
     setLabel('Connecting\u2026');
     unsub = ref.onSnapshot(function (snap) {
@@ -192,6 +248,7 @@
       if (!st || !st.actionables || st.actionables.length === 0) return; /* never upload a blank state that would wipe the other device */
       var json = JSON.stringify(st);
       ref.set({ json: json, updatedAt: Date.now() }).catch(function () {});
+      publishShares();
     } catch (e) {}
   }
 
@@ -207,6 +264,8 @@
       pushTimer = setTimeout(function () { pushTimer = null; pushNow(); }, 450);
     },
     signOut: function () { if (auth) auth.signOut(); },
+    createProjectViewer: createProjectViewer,
+    isViewer: function(){return viewerMode;},
     /* Manual "Sync now": probe the server, push local up, and flip to Synced.
        Forces the round-trip instead of waiting for Firestore's passive confirm. */
     syncNow: function () {
@@ -242,7 +301,7 @@
           if (user) {
             uid = user.uid;
             status.signedIn = true; status.email = user.email || '';
-            unlocked = false;
+            unlocked = false;viewerMode=false;viewerProjectId='';viewerEmail='';
             gate(true);
             var g = document.getElementById('cloudgate');
             if (g) {
@@ -257,9 +316,10 @@
             }
             setLabel('Locked');
           } else {
-            uid = null; status.signedIn = false; status.email = ''; unlocked = false;
+            uid = null; status.signedIn = false; status.email = ''; unlocked = false; viewerMode=false;viewerProjectId='';viewerEmail='';
             if (unsub) { try { unsub(); } catch (e) {} unsub = null; }
             ref = null;
+            if(shareUnsub){try{shareUnsub();}catch(e){}}shareUnsub=null;if(shareListUnsub){try{shareListUnsub();}catch(e){}}shareListUnsub=null;shareRef=null;
             gate(true); setLabel('Signed out');
             var g = document.getElementById('cloudgate');
             if (g) {

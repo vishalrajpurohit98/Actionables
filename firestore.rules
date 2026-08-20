@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Main workspace: each signed-in account owns its own workspace document.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Project Viewer shares.
+    // Admin can create/update/delete shares that belong to their own account.
+    // A viewer can read only the share document created for their email/account.
+    match /projectShares/{viewerUid} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == viewerUid ||
+         resource.data.adminUid == request.auth.uid ||
+         resource.data.viewerEmail == request.auth.token.email);
+
+      allow create: if request.auth != null &&
+        request.resource.data.adminUid == request.auth.uid;
+
+      allow update, delete: if request.auth != null &&
+        resource.data.adminUid == request.auth.uid &&
+        request.resource.data.adminUid == request.auth.uid;
+    }
+  }
+}

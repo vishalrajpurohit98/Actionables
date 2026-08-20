@@ -98,3 +98,11 @@ others you can re-import a backup if needed (Settings → Import backup).
   as a second layer.
 - **Turning sync off:** blank out `firebase-config.js` back to the `YOUR_...` placeholders
   and reload — the app returns to local-only with no network calls.
+
+## Project Viewer access
+
+The app can create a Firebase Authentication account restricted to one project. The admin selects a project, enters a viewer email/user ID and password in Settings → Project viewer access, and creates the viewer. The viewer sees only the Actionables screen for that project and is read-only.
+
+Publish the included `firestore.rules` to Firestore before using this feature. The rules allow admins to maintain their own project-share records and allow a viewer to read only the share assigned to that account.
+
+When the admin changes project data, the project snapshot is refreshed for active viewer shares on the next cloud sync.
