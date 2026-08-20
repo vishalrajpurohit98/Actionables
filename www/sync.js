@@ -24,6 +24,8 @@
   var viewerCreatorApp = null;
   var status = { configured: false, signedIn: false, email: '', label: 'Local only' };
   var pushTimer = null, offlineOnly = false, started = false;
+  var dbReadyResolve = null;
+  var dbReady = new Promise(function(resolve){ dbReadyResolve = resolve; });
 
   function configured() {
     return !!(cfg && cfg.apiKey && String(cfg.apiKey).indexOf('YOUR_') !== 0 &&
@@ -44,11 +46,37 @@
       document.head.appendChild(s);
     });
   }
-  function loadSDK() {
-    return SDK.reduce(function (p, src) {
-      return p.then(function () { return loadScript(src); });
-    }, Promise.resolve());
+  function loadScriptWithTimeout(src, ms) {
+    return new Promise(function (res, rej) {
+      var done = false;
+      var s = document.createElement('script');
+      s.src = src; s.async = false;
+      var timer = setTimeout(function () {
+        if (done) return; done = true;
+        rej(new Error('Firebase SDK timed out: ' + src));
+      }, ms || 15000);
+      s.onload = function () {
+        if (done) return; done = true; clearTimeout(timer); res();
+      };
+      s.onerror = function () {
+        if (done) return; done = true; clearTimeout(timer);
+        rej(new Error('Firebase SDK failed to load: ' + src));
+      };
+      document.head.appendChild(s);
+    });
   }
+  function loadSDK() {
+    /* Load App + Auth first. Firestore is deliberately started in parallel but
+       is NOT allowed to block the login screen. */
+    return loadScriptWithTimeout(SDK[0], 15000)
+      .then(function () { return loadScriptWithTimeout(SDK[1], 15000); })
+      .then(function () {
+        var firestorePromise = loadScriptWithTimeout(SDK[2], 20000)
+          .then(function () { return true; }, function () { return false; });
+        return { firestorePromise: firestorePromise };
+      });
+  }
+
 
   function pretty(err) {
     var c = (err && err.code) || '';
@@ -137,10 +165,17 @@
       action.then(function () {
         unlocked = true;
         busy(false);
-        findViewerShare().then(function(isViewer){
-          if(isViewer){viewerMode=true;gate(false);subscribe();}
-          else {viewerMode=false;gate(false);subscribe();}
-        });
+        /* Auth can succeed before Firestore finishes loading. Wait briefly for
+           Firestore so project-viewer mode and cloud sync are initialized safely. */
+        Promise.race([dbReady, new Promise(function(resolve){setTimeout(resolve, 12000);})])
+          .then(function(){
+            return findViewerShare();
+          })
+          .then(function(isViewer){
+            if(isViewer){viewerMode=true;gate(false);subscribe();}
+            else {viewerMode=false;gate(false);subscribe();}
+          })
+          .catch(function(){ viewerMode=false; gate(false); subscribe(); });
       }).catch(function (err) { busy(false); setGateErr(g, pretty(err)); });
     });
     g.querySelector('#cgUp').addEventListener('click', function () {
@@ -306,10 +341,11 @@
       notify();
       if (!configured()) { setLabel('Local only'); return; }
       setLabel('Loading\u2026');
-      loadSDK().then(function () {
+      loadSDK().then(function (sdkState) {
         firebase.initializeApp(cfg);
         auth = firebase.auth();
-        db = firebase.firestore();
+        /* Unlock authentication as soon as Auth SDK is ready. Firestore is optional
+           for the initial screen and is loaded independently below. */
         var readyGate = document.getElementById('cloudgate');
         if (readyGate) {
           var readyIn = readyGate.querySelector('#cgIn');
@@ -319,7 +355,24 @@
           var readySub = readyGate.querySelector('#cgSub');
           if (readySub) readySub.textContent = 'Sign in to access your workspace';
         }
-        try { db.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
+        /* Firestore finishes independently. Authentication is already usable. */
+        (sdkState && sdkState.firestorePromise ? sdkState.firestorePromise : Promise.resolve(false))
+          .then(function (firestoreLoaded) {
+            if (firestoreLoaded && window.firebase && firebase.firestore) {
+              try {
+                db = firebase.firestore();
+                if (dbReadyResolve) dbReadyResolve(true);
+                try { db.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
+                if (status.signedIn) setLabel('Ready · cloud sync');
+              } catch (e) {
+                db = null;
+                if (dbReadyResolve) dbReadyResolve(false);
+              }
+            } else {
+              if (dbReadyResolve) dbReadyResolve(false);
+              setLabel('Auth ready · cloud sync unavailable');
+            }
+          });
         auth.onAuthStateChanged(function (user) {
           if (user) {
             uid = user.uid;
