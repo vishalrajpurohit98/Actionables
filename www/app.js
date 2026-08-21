@@ -139,6 +139,124 @@ function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;try{localStorage.set
 function defaultFilters(){
   return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],etaStatus:'',priority:'',type:'',assigned:'',aging:'',updated:'',dependency:'',followup:'',from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
 }
+/* ---------------- SAVED FILTER VIEWS ----------------
+   A saved view is a named snapshot of the current `filters` object.
+   Stored in S.savedViews = [{id,name,filters,createdAt}]. */
+function savedViews(){return Array.isArray(S.savedViews)?S.savedViews:[];}
+function currentFiltersSnapshot(){return JSON.parse(JSON.stringify(filters));}
+function saveCurrentView(name){
+  name=(name||'').trim();if(!name){toast('Enter a name for the view');return false;}
+  var existing=savedViews().filter(function(v){return v.name.toLowerCase()===name.toLowerCase();})[0];
+  if(existing){existing.filters=currentFiltersSnapshot();existing.updatedAt=Date.now();toast('View “'+name+'” updated');}
+  else{S.savedViews.push({id:uid('view'),name:name,filters:currentFiltersSnapshot(),createdAt:Date.now()});toast('View “'+name+'” saved');}
+  saveState();return true;
+}
+function applySavedView(id){var v=savedViews().filter(function(x){return x.id===id;})[0];if(!v)return;filters=Object.assign(defaultFilters(),JSON.parse(JSON.stringify(v.filters)));nav('list',{});toast('Showing “'+v.name+'”');}
+function deleteSavedView(id){S.savedViews=savedViews().filter(function(x){return x.id!==id;});saveState();var r=sheetFor('views');if(r)renderViewsSheet(r);toast('View deleted');}
+function viewFilterSummary(f){
+  var bits=[];
+  if(f.quick&&f.quick!=='all'){var ql=(QUICKS.filter(function(q){return q[0]===f.quick;})[0]||[,f.quick])[1];bits.push(ql);}
+  if(f.project&&f.project.length)bits.push(f.project.length===1?projName(f.project[0]):f.project.length+' projects');
+  if(f.spoc&&f.spoc.length)bits.push(f.spoc.length+' owner'+(f.spoc.length>1?'s':''));
+  if(f.status&&f.status.length)bits.push(f.status.join(', '));
+  if(f.priority)bits.push(f.priority==='important'?'Important':'Not important');
+  if(f.type)bits.push(f.type);
+  if(f.tags&&f.tags.length)bits.push('#'+f.tags.join(' #'));
+  if(f.updated)bits.push('update: '+f.updated);
+  if(f.aging)bits.push('aging: '+f.aging);
+  if(f.dependency)bits.push(f.dependency==='has'?'has dependency':'no dependency');
+  if(f.followup)bits.push('follow-up: '+f.followup);
+  if(f.q)bits.push('“'+f.q+'”');
+  return bits.length?bits.join(' · '):'All actionables';
+}
+/* ---------------- CUSTOM ALERTS (digest model) ----------------
+   The user enables one or more CONDITIONS and picks one or more digest TIMES.
+   At each time, ONE combined notification fires listing every enabled condition
+   that currently has matches. Nothing fires if no condition matches.
+   - S.alertRules  = [{type, enabled, param}]   (which conditions)
+   - S.alertTimes  = ['09:00','18:00', ...]     (when the digest fires)
+   Rule TYPES + matcher below are mirrored in AlertReceiver.java. */
+var ALERT_TYPES=[
+  {type:'eta_breached', label:'ETA breached / overdue', short:'overdue', desc:'Open items whose ETA date has passed', hasParam:false},
+  {type:'due_today',    label:'Due today',              short:'due today', desc:'Open items with an ETA of today', hasParam:false},
+  {type:'due_week',     label:'Due within 7 days',      short:'due this week', desc:'Open items due in the next week', hasParam:false},
+  {type:'no_update',    label:'No update in N+ days',   short:'stale', desc:'Open items not updated recently', hasParam:true, paramLabel:'Days', paramDefault:3},
+  {type:'aging',        label:'Aged N+ days',           short:'aged', desc:'Open items older than N days', hasParam:true, paramLabel:'Days', paramDefault:15},
+  {type:'followup_due', label:'Follow-up due',          short:'follow-ups due', desc:'Follow-ups due today or earlier', hasParam:false},
+  {type:'dependency',   label:'Dependency-blocked',     short:'blocked', desc:'Items blocked on a dependency', hasParam:false},
+  {type:'unassigned',   label:'Unassigned open items',  short:'unassigned', desc:'Open items with no owner/SPOC', hasParam:false}
+];
+function alertTypeMeta(type){return ALERT_TYPES.filter(function(x){return x.type===type;})[0]||null;}
+function alertRuleFor(type){return (S.alertRules||[]).filter(function(r){return r.type===type;})[0];}
+function ensureAlertRule(type){var r=alertRuleFor(type);if(!r){var meta=alertTypeMeta(type);r={type:type,enabled:false,param:(meta&&meta.paramDefault)||0};S.alertRules.push(r);}return r;}
+function alertTimes(){return Array.isArray(S.alertTimes)?S.alertTimes:[];}
+function enabledAlertRules(){return (S.alertRules||[]).filter(function(r){return r.enabled;});}
+/* Count matcher — mirrored in AlertReceiver.java. Keep both in sync. */
+function alertMatches(a,type,param,t){
+  if(a.projectId==='__personal'||a.archived)return false;
+  var open=isOpen(a);
+  switch(type){
+    case 'eta_breached':{if(!open)return false;var e=endEta(a);return !!e&&e<t;}
+    case 'due_today':{if(!open)return false;var e2=endEta(a);return e2?e2===t:(a.etaKind==='range'&&coversDay(a,t));}
+    case 'due_week':{if(!open)return false;var e3=endEta(a);if(!e3)return false;var k=diffDays(e3,t);return k>=0&&k<=7;}
+    case 'no_update':{if(!open)return false;return staleDays(a,t)>=(param||3);}
+    case 'aging':{if(!open)return false;return agingDays(a,t)>=(param||15);}
+    case 'followup_due':return remDue(a,t);
+    case 'dependency':return open&&a.status==='Dependency';
+    case 'unassigned':return open&&(!a.spocIds||!a.spocIds.length);
+    default:return false;
+  }
+}
+function alertCount(type,param){var t=todayISO();return S.actionables.filter(function(a){return alertMatches(a,type,param,t);}).length;}
+function openAlertsSheet(){var rec=openSheet('<div class="shead"><h2>Custom alerts</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody alerts-body"></div>',{tag:'alerts'});renderAlertsSheet(rec);}
+function renderAlertsSheet(rec){
+  var native=!!(window.Android&&Android.syncAlertRules);
+  var times=alertTimes().slice().sort();
+  var enabledCount=enabledAlertRules().length;
+  var intro='<div class="note" style="padding:0 0 10px;line-height:1.55">Pick the conditions you care about and the time(s) you want a digest. At each time you get <b>one combined notification</b> summarising every enabled condition that has matches. Nothing fires when there\u2019s nothing to report.'+(native?'':' <b>Scheduled digests run in the installed Android app.</b>')+'</div>';
+  // Times section
+  var timesHtml=times.length?times.map(function(tm){return '<span class="alert-time">'+esc(tm)+'<button class="alert-time-x" data-act="alert-time-del" data-time="'+esc(tm)+'">'+I('x')+'</button></span>';}).join(''):'<span class="alert-time-empty">No digest times set</span>';
+  var timesSection='<div class="eyebrow" style="padding:2px 0 8px">Digest times</div>'+
+    '<div class="pane"><div class="alert-times-list">'+timesHtml+'</div>'+
+    '<div class="alert-addtime"><input type="time" id="alertTimeInput" value="09:00"><button class="btn ghost mini" data-act="alert-time-add">+ Add time</button></div>'+
+    '<div class="hint" style="margin-top:8px">Add as many times as you need — once, twice, or more per day.</div></div>';
+  // Preview of what the next digest would contain right now
+  var previewBits=enabledAlertRules().map(function(r){var m=alertTypeMeta(r.type);var c=alertCount(r.type,r.param||(m&&m.paramDefault));return c>0?(c+' '+(m?m.short:r.type)):null;}).filter(Boolean);
+  var preview=(times.length&&enabledCount)?('<div class="alert-preview">'+(previewBits.length?('Next digest would say: <b>'+esc(previewBits.join(' · '))+'</b>'):'Next digest: nothing to report right now.')+'</div>'):'';
+  // Conditions section
+  var cards=ALERT_TYPES.map(function(meta){
+    var r=alertRuleFor(meta.type)||{type:meta.type,enabled:false,param:meta.paramDefault||0};
+    var on=!!r.enabled;
+    var cnt=alertCount(meta.type,r.param||meta.paramDefault);
+    var paramHtml=(meta.hasParam&&on)?('<div class="alert-param"><label>'+esc(meta.paramLabel)+'</label><input type="number" min="1" max="365" value="'+esc(String(r.param||meta.paramDefault))+'" data-chg="alert-param" data-type="'+meta.type+'"></div>'):'';
+    return '<div class="alert-card'+(on?' on':'')+'">'+
+      '<div class="alert-head"><div class="alert-meta"><b>'+esc(meta.label)+'</b><span>'+esc(meta.desc)+'</span></div>'+
+      '<button class="switch'+(on?' on':'')+'" data-act="alert-toggle" data-type="'+meta.type+'"><i></i></button></div>'+
+      '<div class="alert-count'+(cnt?' hot':'')+'">'+cnt+' item'+(cnt===1?'':'s')+' match right now</div>'+
+      paramHtml+
+    '</div>';
+  }).join('');
+  var condSection='<div class="eyebrow" style="padding:16px 0 8px">Conditions</div><div class="alerts-list">'+cards+'</div>';
+  rec.sheet.querySelector('.alerts-body').innerHTML=intro+timesSection+preview+condSection;
+}
+/* Push conditions + times to the native scheduler (Android only). */
+function syncAlertRules(){
+  try{
+    if(!(window.Android&&Android.syncAlertRules))return;
+    var rules=enabledAlertRules().map(function(r){var m=alertTypeMeta(r.type)||{};return {type:r.type,param:r.param||0,label:m.label||r.type,short:m.short||r.type};});
+    var payload={times:alertTimes().slice(),rules:rules};
+    Android.syncAlertRules(JSON.stringify(payload));
+  }catch(e){}
+}
+function renderViewsSheet(rec){
+  var vs=savedViews();
+  var list=vs.length?('<div class="views-list">'+vs.map(function(v){
+    return '<div class="view-row"><button class="view-apply" data-act="view-apply" data-id="'+v.id+'"><span class="view-name">'+esc(v.name)+'</span><span class="view-sum">'+esc(viewFilterSummary(v.filters))+'</span></button><button class="iconbtn mini" data-act="view-update" data-id="'+v.id+'" title="Overwrite with current filters">'+I('dl')+'</button><button class="iconbtn mini danger" data-act="view-delete" data-id="'+v.id+'" title="Delete">'+I('trash')+'</button></div>';
+  }).join('')+'</div>'):emptyBox('No saved views','Set up filters, then save them here for one-tap access.');
+  var cur='<div class="views-save"><div class="eyebrow">Save current filters</div><div class="note" style="padding:2px 0 8px">Currently: '+esc(viewFilterSummary(filters))+'</div><div class="btnrow"><input id="viewName" placeholder="Name this view (e.g. My overdue)" autocomplete="off"><button class="btn pri" data-act="view-save">Save view</button></div></div>';
+  rec.sheet.querySelector('.views-body').innerHTML=cur+(vs.length?'<div class="eyebrow" style="padding:14px 0 8px">Your views</div>':'')+list;
+  var ni=rec.sheet.querySelector('#viewName');if(ni)ni.focus();
+}
 
 function loadState(){
   var raw='';
@@ -164,6 +282,11 @@ function ensureDefaults(){
   S.version=S.version||3;
   S.version=Math.max(S.version,9);
   S.exportPrefs=S.exportPrefs||{projId:'',from:'',to:'',preset:'all'};
+  if(!Array.isArray(S.savedViews))S.savedViews=[];
+  if(!Array.isArray(S.alertRules))S.alertRules=[];
+  if(!Array.isArray(S.alertTimes))S.alertTimes=[];
+  /* Migrate interim per-rule-times model -> global digest times. */
+  (function(){var moved=false;S.alertRules.forEach(function(r){if(r&&Array.isArray(r.times)){r.times.forEach(function(tm){if(S.alertTimes.indexOf(tm)<0){S.alertTimes.push(tm);moved=true;}});delete r.times;}});if(moved)try{saveState();}catch(e){}})();
   S.settings=S.settings||{};
   var d={userName:'Yash',notifEnabled:true,notifHour:9,notifMinute:0,notifSeenDate:'',theme:'dark',accent:'orange',font:'default',density:'comfortable',taskView:'comfortable'};
   for(var k in d)if(S.settings[k]===undefined)S.settings[k]=d[k];
@@ -808,6 +931,7 @@ function vList(){
     '<button class="iconbtn" data-act="go-calendar" title="Calendar">'+I('cal')+'</button>'+
     '<button class="iconbtn" data-act="go-people" title="Owners / SPOCs">'+I('people')+'</button>'+
     '<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(metrics())?'<span class="dot"></span>':'')+'</button>'+
+    '<button class="iconbtn" data-act="open-views" title="Saved views">'+I('star')+(savedViews().length?'<span class="dot"></span>':'')+'</button>'+
     '<button class="iconbtn" data-act="open-email" title="Email SPOC">'+I('mail')+'</button>'+
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
   h+='<div class="action-toolbar"><div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div><div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'"><button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div></div>';
@@ -1120,6 +1244,11 @@ function vSettings(){
     '<button class="switch'+(s.notifEnabled?' on':'')+'" data-act="toggle-notif"><i></i></button></div>'+
     '<div class="fld" style="margin-top:10px"><label>Brief time</label>'+
     '<input type="time" data-chg="set-time" value="'+pad(s.notifHour)+':'+pad(s.notifMinute)+'"'+(s.notifEnabled?'':' disabled')+'></div></div>';
+  var _arActive=(S.alertRules||[]).filter(function(r){return r.enabled;}).length;
+  var _arTimes=(S.alertTimes||[]).length;
+  var _arSummary=(_arActive&&_arTimes)?(_arActive+' condition'+(_arActive===1?'':'s')+' · '+_arTimes+' digest time'+(_arTimes===1?'':'s')):'Get a digest of overdue, stale and due items';
+  h+='<div class="eyebrow">Custom alerts</div><div class="pane">'+
+    '<button class="rowline" data-act="open-alerts">'+I('bell')+'<span class="t">Custom notification digests<br><span class="s">'+esc(_arSummary)+'</span></span>'+I('chevR')+'</button></div>';
   if(A&&A.notifState){
     var ns=notifState();
     var nsL=ns==='granted'?'Allowed':(ns==='denied'?'Not allowed':(ns==='na'?'On \u00b7 manage in system settings':'Browser-managed'));
@@ -1963,6 +2092,15 @@ document.addEventListener('click',function(e){
     case 'people-mode':peopleView.mode='people';nav('people',{});break;
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
+    case 'open-views':openViewsSheet();break;
+    case 'view-apply':{var vr0=sheetFor('views');if(vr0)closeSheet(vr0);applySavedView(el.getAttribute('data-id'));break;}
+    case 'view-save':{var vr=sheetFor('views');var ni=vr?vr.sheet.querySelector('#viewName'):null;if(saveCurrentView(ni?ni.value:'')){if(vr)renderViewsSheet(vr);}break;}
+    case 'view-update':{var vid=el.getAttribute('data-id'),vv=savedViews().filter(function(x){return x.id===vid;})[0];if(vv){vv.filters=currentFiltersSnapshot();vv.updatedAt=Date.now();saveState();var vr2=sheetFor('views');if(vr2)renderViewsSheet(vr2);toast('View “'+vv.name+'” updated with current filters');}break;}
+    case 'view-delete':{var did=el.getAttribute('data-id'),dv=savedViews().filter(function(x){return x.id===did;})[0];confirmSheet('Delete view?','“'+((dv&&dv.name)||'this view')+'” will be removed.','Delete',true,function(){deleteSavedView(did);});break;}
+    case 'open-alerts':openAlertsSheet();break;
+    case 'alert-toggle':{var atp=el.getAttribute('data-type'),ar=ensureAlertRule(atp);ar.enabled=!ar.enabled;saveState();syncAlertRules();var arr=sheetFor('alerts');if(arr)renderAlertsSheet(arr);if(view.name==='settings')render();break;}
+    case 'alert-time-add':{var inp=document.getElementById('alertTimeInput');var tv=inp?inp.value:'';if(tv){if(!Array.isArray(S.alertTimes))S.alertTimes=[];if(S.alertTimes.indexOf(tv)<0){S.alertTimes.push(tv);saveState();syncAlertRules();}}var arr2=sheetFor('alerts');if(arr2)renderAlertsSheet(arr2);break;}
+    case 'alert-time-del':{var tv3=el.getAttribute('data-time');S.alertTimes=(S.alertTimes||[]).filter(function(x){return x!==tv3;});saveState();syncAlertRules();var arr3=sheetFor('alerts');if(arr3)renderAlertsSheet(arr3);break;}
     case 'open-filters':openFilters();break;
     case 'filter-dd-open':{filterDrop.kind=el.getAttribute('data-kind')||'';filterDrop.q='';var frd=sheetFor('filters');if(frd)renderFilterDropdown(frd);break;}
     case 'filter-dd-close':{filterDrop.kind='';filterDrop.q='';var frc=sheetFor('filters');if(frc){var dd=frc.sheet.querySelector('.filter-dd-wrap');if(dd)dd.remove();}break;}
@@ -2254,6 +2392,7 @@ document.addEventListener('change',function(e){
   if(chg==='set-theme'){S.settings.theme=(v==='light'||v==='high-contrast')?v:'dark';saveState();applyTheme();render();toast('Theme: '+themeLabel(S.settings.theme));return;}
   if(chg==='set-name'){S.settings.userName=v;saveState();render();return;}
   if(chg==='set-density'){S.settings.density=v==='compact'?'compact':'comfortable';saveState();applyTheme();render();return;}
+  if(chg==='alert-param'){var apt=el.getAttribute('data-type'),apr=ensureAlertRule(apt);apr.param=Math.max(1,parseInt(v,10)||1);saveState();syncAlertRules();var apsr=sheetFor('alerts');if(apsr)renderAlertsSheet(apsr);return;}
   if(chg==='set-time'){var parts=v.split(':');if(parts.length===2){S.settings.notifHour=+parts[0];S.settings.notifMinute=+parts[1];saveState();syncSchedule();toast('Daily brief at '+v);}return;}
 });
 
@@ -2303,6 +2442,7 @@ loadState();
 applySidebarState();
 applyTheme();
 syncSchedule();
+if(window.syncAlertRules)syncAlertRules();
 render();
 try{if(window.Cloud&&window.Cloud.init)window.Cloud.init();}catch(e){}
 

@@ -13,6 +13,8 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context ctx, Intent intent) {
         if (!Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) return;
+        // Reinstate custom alert-rule alarms.
+        try { AlertScheduler.reinstate(ctx); } catch (Exception ignored) {}
         SharedPreferences p = ctx.getSharedPreferences("actionables_prefs", Context.MODE_PRIVATE);
         if (!p.getBoolean("ne", false)) return;
         int hour = p.getInt("nh", 9);

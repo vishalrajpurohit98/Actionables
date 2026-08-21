@@ -46,10 +46,11 @@ import java.util.Calendar;
 public class MainActivity extends Activity {
 
     private WebView web;
-    private static final String PREFS = "actionables_prefs";
-    private static final String KEY_DATA = "act_data";
+    static final String PREFS = "actionables_prefs";
+    static final String KEY_DATA = "act_data";
     public static final String CHANNEL_ID = "actionables_daily";
     public static final String FOLLOWUP_CHANNEL_ID = "actionables_followups";
+    public static final String ALERT_CHANNEL_ID = "actionables_alerts";
     private static final int REQ_NOTIF = 1001;
     private static final int REQ_MIC = 1002;
     private SpeechRecognizer speechRecognizer;
@@ -337,6 +338,9 @@ public class MainActivity extends Activity {
             NotificationChannel fu = new NotificationChannel(FOLLOWUP_CHANNEL_ID, "Follow-up reminders", NotificationManager.IMPORTANCE_HIGH);
             fu.setDescription("Actionables follow-up reminders");
             nm.createNotificationChannel(fu);
+            NotificationChannel al = new NotificationChannel(ALERT_CHANNEL_ID, "Custom alerts", NotificationManager.IMPORTANCE_HIGH);
+            al.setDescription("Actionables custom notification rules");
+            nm.createNotificationChannel(al);
         }
     }
 
@@ -457,6 +461,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void cancelFollowUp(final String id) {
             scheduleFollowUp(id,0,"","",false);
+        }
+
+        @JavascriptInterface
+        public void syncAlertRules(final String rulesJson) {
+            runOnJs(new Runnable() { public void run() {
+                AlertScheduler.sync(MainActivity.this, rulesJson);
+            }});
         }
 
         @JavascriptInterface
