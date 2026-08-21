@@ -151,7 +151,17 @@ function saveCurrentView(name){
   else{S.savedViews.push({id:uid('view'),name:name,filters:currentFiltersSnapshot(),createdAt:Date.now()});toast('View “'+name+'” saved');}
   saveState();return true;
 }
-function applySavedView(id){var v=savedViews().filter(function(x){return x.id===id;})[0];if(!v)return;filters=Object.assign(defaultFilters(),JSON.parse(JSON.stringify(v.filters)));nav('list',{});toast('Showing “'+v.name+'”');}
+function applySavedView(id){
+  var v=savedViews().filter(function(x){return x.id===id;})[0];
+  if(!v){toast('View not found');return;}
+  var f=defaultFilters();
+  try{var saved=JSON.parse(JSON.stringify(v.filters||{}));for(var k in saved)if(saved[k]!==undefined)f[k]=saved[k];}catch(e){}
+  filters=f;
+  view={name:'list',params:{}};
+  render();
+  try{window.scrollTo(0,0);var appEl=$('#app');if(appEl)appEl.scrollTop=0;}catch(e){}
+  toast('Showing “'+(v.name||'view')+'”');
+}
 function deleteSavedView(id){S.savedViews=savedViews().filter(function(x){return x.id!==id;});saveState();var r=sheetFor('views');if(r)renderViewsSheet(r);toast('View deleted');}
 function viewFilterSummary(f){
   var bits=[];
@@ -248,6 +258,7 @@ function syncAlertRules(){
     Android.syncAlertRules(JSON.stringify(payload));
   }catch(e){}
 }
+function openViewsSheet(){var rec=openSheet('<div class="shead"><h2>Saved views</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody views-body"></div>',{tag:'views'});renderViewsSheet(rec);}
 function renderViewsSheet(rec){
   var vs=savedViews();
   var list=vs.length?('<div class="views-list">'+vs.map(function(v){
@@ -2093,7 +2104,7 @@ document.addEventListener('click',function(e){
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
     case 'open-views':openViewsSheet();break;
-    case 'view-apply':{var vr0=sheetFor('views');if(vr0)closeSheet(vr0);applySavedView(el.getAttribute('data-id'));break;}
+    case 'view-apply':{applySavedView(el.getAttribute('data-id'));var vr0=sheetFor('views');if(vr0)closeSheet(vr0);break;}
     case 'view-save':{var vr=sheetFor('views');var ni=vr?vr.sheet.querySelector('#viewName'):null;if(saveCurrentView(ni?ni.value:'')){if(vr)renderViewsSheet(vr);}break;}
     case 'view-update':{var vid=el.getAttribute('data-id'),vv=savedViews().filter(function(x){return x.id===vid;})[0];if(vv){vv.filters=currentFiltersSnapshot();vv.updatedAt=Date.now();saveState();var vr2=sheetFor('views');if(vr2)renderViewsSheet(vr2);toast('View “'+vv.name+'” updated with current filters');}break;}
     case 'view-delete':{var did=el.getAttribute('data-id'),dv=savedViews().filter(function(x){return x.id===did;})[0];confirmSheet('Delete view?','“'+((dv&&dv.name)||'this view')+'” will be removed.','Delete',true,function(){deleteSavedView(did);});break;}
