@@ -139,46 +139,6 @@ function toggleSidebar(){sidebarCollapsed=!sidebarCollapsed;try{localStorage.set
 function defaultFilters(){
   return{q:'',quick:'all',sort:'smart',project:[],spoc:[],status:[],etaStatus:'',priority:'',type:'',assigned:'',aging:'',updated:'',dependency:'',followup:'',from:'',to:'',fOd:false,fFu:false,fTk:false,tags:[],group:'none'};
 }
-/* ---------------- SAVED FILTER VIEWS ----------------
-   A saved view is a named snapshot of the current `filters` object.
-   Stored in S.savedViews = [{id,name,filters,createdAt}]. */
-function savedViews(){return Array.isArray(S.savedViews)?S.savedViews:[];}
-function currentFiltersSnapshot(){return JSON.parse(JSON.stringify(filters));}
-function saveCurrentView(name){
-  name=(name||'').trim();if(!name){toast('Enter a name for the view');return false;}
-  var existing=savedViews().filter(function(v){return v.name.toLowerCase()===name.toLowerCase();})[0];
-  if(existing){existing.filters=currentFiltersSnapshot();existing.updatedAt=Date.now();toast('View “'+name+'” updated');}
-  else{S.savedViews.push({id:uid('view'),name:name,filters:currentFiltersSnapshot(),createdAt:Date.now()});toast('View “'+name+'” saved');}
-  saveState();return true;
-}
-function applySavedView(id){
-  var v=savedViews().filter(function(x){return x.id===id;})[0];
-  if(!v){toast('View not found');return;}
-  var f=defaultFilters();
-  try{var saved=JSON.parse(JSON.stringify(v.filters||{}));for(var k in saved)if(saved[k]!==undefined)f[k]=saved[k];}catch(e){}
-  filters=f;
-  view={name:'list',params:{}};
-  render();
-  try{window.scrollTo(0,0);var appEl=$('#app');if(appEl)appEl.scrollTop=0;}catch(e){}
-  toast('Showing “'+(v.name||'view')+'”');
-}
-function deleteSavedView(id){S.savedViews=savedViews().filter(function(x){return x.id!==id;});saveState();var r=sheetFor('views');if(r)renderViewsSheet(r);toast('View deleted');}
-function viewFilterSummary(f){
-  var bits=[];
-  if(f.quick&&f.quick!=='all'){var ql=(QUICKS.filter(function(q){return q[0]===f.quick;})[0]||[,f.quick])[1];bits.push(ql);}
-  if(f.project&&f.project.length)bits.push(f.project.length===1?projName(f.project[0]):f.project.length+' projects');
-  if(f.spoc&&f.spoc.length)bits.push(f.spoc.length+' owner'+(f.spoc.length>1?'s':''));
-  if(f.status&&f.status.length)bits.push(f.status.join(', '));
-  if(f.priority)bits.push(f.priority==='important'?'Important':'Not important');
-  if(f.type)bits.push(f.type);
-  if(f.tags&&f.tags.length)bits.push('#'+f.tags.join(' #'));
-  if(f.updated)bits.push('update: '+f.updated);
-  if(f.aging)bits.push('aging: '+f.aging);
-  if(f.dependency)bits.push(f.dependency==='has'?'has dependency':'no dependency');
-  if(f.followup)bits.push('follow-up: '+f.followup);
-  if(f.q)bits.push('“'+f.q+'”');
-  return bits.length?bits.join(' · '):'All actionables';
-}
 /* ---------------- CUSTOM ALERTS (digest model) ----------------
    The user enables one or more CONDITIONS and picks one or more digest TIMES.
    At each time, ONE combined notification fires listing every enabled condition
@@ -258,17 +218,6 @@ function syncAlertRules(){
     Android.syncAlertRules(JSON.stringify(payload));
   }catch(e){}
 }
-function openViewsSheet(){var rec=openSheet('<div class="shead"><h2>Saved views</h2><button class="x" data-act="close-sheet">'+I('x')+'</button></div><div class="sbody views-body"></div>',{tag:'views'});renderViewsSheet(rec);}
-function renderViewsSheet(rec){
-  var vs=savedViews();
-  var list=vs.length?('<div class="views-list">'+vs.map(function(v){
-    return '<div class="view-row"><button class="view-apply" data-act="view-apply" data-id="'+v.id+'"><span class="view-name">'+esc(v.name)+'</span><span class="view-sum">'+esc(viewFilterSummary(v.filters))+'</span></button><button class="iconbtn mini" data-act="view-update" data-id="'+v.id+'" title="Overwrite with current filters">'+I('dl')+'</button><button class="iconbtn mini danger" data-act="view-delete" data-id="'+v.id+'" title="Delete">'+I('trash')+'</button></div>';
-  }).join('')+'</div>'):emptyBox('No saved views','Set up filters, then save them here for one-tap access.');
-  var cur='<div class="views-save"><div class="eyebrow">Save current filters</div><div class="note" style="padding:2px 0 8px">Currently: '+esc(viewFilterSummary(filters))+'</div><div class="btnrow"><input id="viewName" placeholder="Name this view (e.g. My overdue)" autocomplete="off"><button class="btn pri" data-act="view-save">Save view</button></div></div>';
-  rec.sheet.querySelector('.views-body').innerHTML=cur+(vs.length?'<div class="eyebrow" style="padding:14px 0 8px">Your views</div>':'')+list;
-  var ni=rec.sheet.querySelector('#viewName');if(ni)ni.focus();
-}
-
 function loadState(){
   var raw='';
   try{if(A&&A.loadData)raw=A.loadData()||'';}catch(e){raw='';}
@@ -293,7 +242,6 @@ function ensureDefaults(){
   S.version=S.version||3;
   S.version=Math.max(S.version,9);
   S.exportPrefs=S.exportPrefs||{projId:'',from:'',to:'',preset:'all'};
-  if(!Array.isArray(S.savedViews))S.savedViews=[];
   if(!Array.isArray(S.alertRules))S.alertRules=[];
   if(!Array.isArray(S.alertTimes))S.alertTimes=[];
   /* Migrate interim per-rule-times model -> global digest times. */
@@ -942,7 +890,6 @@ function vList(){
     '<button class="iconbtn" data-act="go-calendar" title="Calendar">'+I('cal')+'</button>'+
     '<button class="iconbtn" data-act="go-people" title="Owners / SPOCs">'+I('people')+'</button>'+
     '<button class="iconbtn" data-act="go-notif" title="Notifications">'+I('bell')+(notifBadgeOn(metrics())?'<span class="dot"></span>':'')+'</button>'+
-    '<button class="iconbtn" data-act="open-views" title="Saved views">'+I('star')+(savedViews().length?'<span class="dot"></span>':'')+'</button>'+
     '<button class="iconbtn" data-act="open-email" title="Email SPOC">'+I('mail')+'</button>'+
     '<button class="iconbtn" data-act="export-list-excel" title="Export Excel">'+I('dl')+'</button>');
   h+='<div class="action-toolbar"><div class="mytasks-group"><button class="mytasks-view" data-act="view-personal">'+I('person')+'<span>View my tasks</span></button><button class="mytasks-add" data-act="quick-new" title="Add my task">'+I('plus')+'<span>Add my task</span></button></div><div class="toolbar-search"><input id="srch" type="search" placeholder="Search project, line item, owner…" value="'+esc(filters.q)+'"><button class="sqbtn" data-act="open-filters" title="Filters">'+I('filter')+(advCount()?'<span class="cnt">'+advCount()+'</span>':'')+' </button></div></div>';
@@ -2103,11 +2050,6 @@ document.addEventListener('click',function(e){
     case 'people-mode':peopleView.mode='people';nav('people',{});break;
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
-    case 'open-views':openViewsSheet();break;
-    case 'view-apply':{applySavedView(el.getAttribute('data-id'));var vr0=sheetFor('views');if(vr0)closeSheet(vr0);break;}
-    case 'view-save':{var vr=sheetFor('views');var ni=vr?vr.sheet.querySelector('#viewName'):null;if(saveCurrentView(ni?ni.value:'')){if(vr)renderViewsSheet(vr);}break;}
-    case 'view-update':{var vid=el.getAttribute('data-id'),vv=savedViews().filter(function(x){return x.id===vid;})[0];if(vv){vv.filters=currentFiltersSnapshot();vv.updatedAt=Date.now();saveState();var vr2=sheetFor('views');if(vr2)renderViewsSheet(vr2);toast('View “'+vv.name+'” updated with current filters');}break;}
-    case 'view-delete':{var did=el.getAttribute('data-id'),dv=savedViews().filter(function(x){return x.id===did;})[0];confirmSheet('Delete view?','“'+((dv&&dv.name)||'this view')+'” will be removed.','Delete',true,function(){deleteSavedView(did);});break;}
     case 'open-alerts':openAlertsSheet();break;
     case 'alert-toggle':{var atp=el.getAttribute('data-type'),ar=ensureAlertRule(atp);ar.enabled=!ar.enabled;saveState();syncAlertRules();var arr=sheetFor('alerts');if(arr)renderAlertsSheet(arr);if(view.name==='settings')render();break;}
     case 'alert-time-add':{var inp=document.getElementById('alertTimeInput');var tv=inp?inp.value:'';if(tv){if(!Array.isArray(S.alertTimes))S.alertTimes=[];if(S.alertTimes.indexOf(tv)<0){S.alertTimes.push(tv);saveState();syncAlertRules();}}var arr2=sheetFor('alerts');if(arr2)renderAlertsSheet(arr2);break;}
