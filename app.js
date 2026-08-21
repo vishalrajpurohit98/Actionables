@@ -259,7 +259,7 @@ function ensureDefaults(){
     S.projects.push({id:'__personal',name:'Personal',code:'ME'});
   S.actionables.forEach(function(a){
     a.comments=a.comments||[];a.activity=a.activity||[];a.spocIds=a.spocIds||[];delete a.parentId;a.archived=!!a.archived;if(a.assignedAt===undefined)a.assignedAt=a.spocIds.length?(a.createdAt||Date.now()):null;
-    if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false};
+    if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false,repeat:'none',repeatEvery:0};
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
     if(a.etaKind===undefined)a.etaKind=a.eta?'date':'none';
     if(a.etaEnd===undefined)a.etaEnd='';
@@ -269,10 +269,31 @@ function ensureDefaults(){
     if(!a.type)a.type='Activity';
     if(STATUS_MAP[a.status]){a.status=STATUS_MAP[a.status];if(a.status==='Completed'&&!a.completedAt)a.completedAt=a.updatedAt||Date.now();}
     /* Auto-clear active follow-ups whose date is already in the past. */
+    /* Follow-up date handling on load:
+       - Repeating follow-up (repeat==='every'): roll the date forward by the
+         interval until it's today or later. Stop (clear) only if the ETA date
+         has already passed, or the item is done. No ETA => keep repeating.
+       - Non-repeating follow-up: clear once its date is in the past (as before). */
     if(a.rem&&a.rem.on&&!a.rem.done&&a.rem.date&&a.rem.date<todayISO()){
-      a.rem.on=false;a.rem.autoFromEta=false;
-      try{logAct(a,'Follow-up cleared (date passed)',fmtDY(a.rem.date),'');}catch(e){}
-      a.rem.date='';
+      if(a.rem.repeat==='every'&&(a.rem.repeatEvery>0)){
+        var etaStop=endEta(a); // ETA date (or range end); '' if none
+        if(etaStop&&etaStop<todayISO()){
+          // ETA has passed -> stop nudging.
+          var wasR=a.rem.date;a.rem.on=false;a.rem.date='';a.rem.autoFromEta=false;
+          try{logAct(a,'Repeating follow-up ended (ETA passed)',fmtDY(wasR),'');}catch(e){}
+          try{if(window.syncFollowUpAlarm)syncFollowUpAlarm(a);}catch(e){}
+        }else{
+          var nd2=a.rem.date,guard=0;
+          while(nd2<todayISO()&&guard<2000){nd2=addDaysISO(nd2,a.rem.repeatEvery);guard++;}
+          // Don't roll past a still-future ETA: cap at the ETA date if we'd overshoot it.
+          if(etaStop&&nd2>etaStop)nd2=etaStop;
+          if(nd2!==a.rem.date){try{logAct(a,'Follow-up rolled forward',fmtDY(a.rem.date),fmtDY(nd2));}catch(e){}a.rem.date=nd2;try{if(window.syncFollowUpAlarm)syncFollowUpAlarm(a);}catch(e){}}
+        }
+      }else{
+        a.rem.on=false;a.rem.autoFromEta=false;
+        try{logAct(a,'Follow-up cleared (date passed)',fmtDY(a.rem.date),'');}catch(e){}
+        a.rem.date='';
+      }
     }
   });
   S.actionables.forEach(function(a){if(a.type&&S.taskTypes.indexOf(a.type)<0)S.taskTypes.push(a.type);});
@@ -610,7 +631,7 @@ function syncFollowUpAlarm(a){
 }
 function remPatch(id,patch,ev){
   var a=actById(id);if(!a)return;
-  if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false};
+  if(!a.rem)a.rem={on:false,date:'',time:'',note:'',done:false,waitingFor:'',requestedOn:'',expectedBy:'',notifyOn:true,notifyDays:1,notifyTime:'09:00',autoFromEta:false,repeat:'none',repeatEvery:0};
   a.rem.waitingFor=a.rem.waitingFor||'';a.rem.requestedOn=a.rem.requestedOn||'';a.rem.expectedBy=a.rem.expectedBy||'';
   /* A manual edit to the follow-up date detaches it from ETA control. */
   if(patch.date!==undefined && patch.date!==a.rem.date && patch.autoFromEta===undefined){a.rem.autoFromEta=false;}
@@ -1346,7 +1367,9 @@ function renderDetail(rec){
       b+='<div style="font-size:.8rem;color:var(--tx2);margin-top:8px">'+esc(r.note||'Follow-up')+'</div>'+
         '<div class="btnrow" style="margin-top:10px"><button class="btn ghost mini" data-act="rem-react">Reactivate</button><button class="btn ghost mini" data-act="rem-remove">Remove</button></div>';
     }else{
-      b+='<div class="remgrid followup-simple"><div class="fld wide"><label>Next follow-up date</label><input type="date" data-chg="rem-date" value="'+esc(r.date||'')+'"></div><div class="fld wide"><label>🔔 Notification</label><select data-chg="rem-notify"><option value="off"'+(r.notifyOn===false?' selected':'')+'>Off</option><option value="0"'+(r.notifyOn!==false&&(!r.notifyDays||r.notifyDays===0)?' selected':'')+'>On the day</option><option value="1"'+(r.notifyOn!==false&&r.notifyDays===1?' selected':'')+'>1 day earlier</option><option value="2"'+(r.notifyOn!==false&&r.notifyDays===2?' selected':'')+'>2 days earlier</option><option value="3"'+(r.notifyOn!==false&&r.notifyDays===3?' selected':'')+'>3 days earlier</option><option value="7"'+(r.notifyOn!==false&&r.notifyDays===7?' selected':'')+'>1 week earlier</option><option value="custom">Custom</option></select></div>'+(r.notifyDaysCustom?'<div class="fld"><label>Custom days earlier</label><input type="number" min="0" max="365" data-chg="rem-customdays" value="'+esc(String(r.notifyDaysCustom))+'"></div>':'')+'<div class="fld"><label>Notification time</label><input type="time" data-chg="rem-notifytime" value="'+esc(r.notifyTime||'09:00')+'"></div></div>'+
+      b+='<div class="remgrid followup-simple"><div class="fld wide"><label>Next follow-up date</label><input type="date" data-chg="rem-date" value="'+esc(r.date||'')+'"></div><div class="fld wide"><label>🔔 Notification</label><select data-chg="rem-notify"><option value="off"'+(r.notifyOn===false?' selected':'')+'>Off</option><option value="0"'+(r.notifyOn!==false&&(!r.notifyDays||r.notifyDays===0)?' selected':'')+'>On the day</option><option value="1"'+(r.notifyOn!==false&&r.notifyDays===1?' selected':'')+'>1 day earlier</option><option value="2"'+(r.notifyOn!==false&&r.notifyDays===2?' selected':'')+'>2 days earlier</option><option value="3"'+(r.notifyOn!==false&&r.notifyDays===3?' selected':'')+'>3 days earlier</option><option value="7"'+(r.notifyOn!==false&&r.notifyDays===7?' selected':'')+'>1 week earlier</option><option value="custom">Custom</option></select></div>'+(r.notifyDaysCustom?'<div class="fld"><label>Custom days earlier</label><input type="number" min="0" max="365" data-chg="rem-customdays" value="'+esc(String(r.notifyDaysCustom))+'"></div>':'')+'<div class="fld"><label>Notification time</label><input type="time" data-chg="rem-notifytime" value="'+esc(r.notifyTime||'09:00')+'"></div>'+
+        '<div class="fld wide"><label>🔁 Repeat follow-up</label><select data-chg="rem-repeat"><option value="none"'+(!r.repeat||r.repeat==='none'?' selected':'')+'>Does not repeat</option><option value="1"'+(r.repeat==='every'&&r.repeatEvery===1?' selected':'')+'>Every day</option><option value="2"'+(r.repeat==='every'&&r.repeatEvery===2?' selected':'')+'>Every 2 days</option><option value="3"'+(r.repeat==='every'&&r.repeatEvery===3?' selected':'')+'>Every 3 days</option><option value="7"'+(r.repeat==='every'&&r.repeatEvery===7?' selected':'')+'>Every week</option><option value="custom"'+(r.repeat==='every'&&[1,2,3,7].indexOf(r.repeatEvery)<0?' selected':'')+'>Custom\u2026</option></select></div>'+((r.repeat==='every'&&[1,2,3,7].indexOf(r.repeatEvery)<0)?'<div class="fld"><label>Every N days</label><input type="number" min="1" max="365" data-chg="rem-repeatevery" value="'+esc(String(r.repeatEvery||1))+'"></div>':'')+
+        ((r.repeat==='every')?'<div class="fld wide"><div class="hint" style="margin:0">Rolls the follow-up forward automatically. Stops when you mark it done'+(endEta(a)?' or when the ETA ('+esc(fmtEta(a))+') passes':'')+'.</div></div>':'')+'</div>'+
         '<div class="btnrow" style="margin-top:10px"><button class="btn ok mini" data-act="rem-done">'+I('check')+'Done</button>'+
         '<button class="btn ghost mini" data-act="rem-snooze" data-n="1">+1d</button><button class="btn ghost mini" data-act="rem-snooze" data-n="3">+3d</button>'+
         '<button class="btn ghost mini" data-act="rem-snooze" data-n="7">+1w</button><button class="btn ghost mini" data-act="rem-remove">'+I('x')+'</button></div>';
@@ -2297,6 +2320,8 @@ document.addEventListener('change',function(e){
     else if(chg==='rem-waiting')remPatch(aid,{waitingFor:v});
     else if(chg==='rem-requested')remPatch(aid,{requestedOn:v});
     else if(chg==='rem-expected')remPatch(aid,{expectedBy:v});
+    else if(chg==='rem-repeat'){if(v==='none')remPatch(aid,{repeat:'none'},{e:'Follow-up repeat off'});else if(v==='custom')remPatch(aid,{repeat:'every',repeatEvery:(actById(aid).rem&&[1,2,3,7].indexOf(actById(aid).rem.repeatEvery)<0&&actById(aid).rem.repeatEvery)||4},{e:'Follow-up repeat set'});else remPatch(aid,{repeat:'every',repeatEvery:Math.max(1,parseInt(v,10)||1)},{e:'Follow-up repeat set',t:'every '+v+'d'});}
+    else if(chg==='rem-repeatevery')remPatch(aid,{repeat:'every',repeatEvery:Math.max(1,Math.min(365,parseInt(v,10)||1))},{e:'Follow-up repeat set'});
     if(chg==='rem-note'||chg==='rem-time'){render();return;}
     renderDetail(dr);render();return;
   }
