@@ -207,6 +207,8 @@ function reconnectSync(){
     window.Cloud.signInOnce(em,pw).then(function(){g.parentNode&&g.parentNode.removeChild(g);toast('Sync reconnected');render();}).catch(function(){err('Sign-in failed');});
   });
 }
+function pad(n){return (n<10?'0':'')+n;}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function isoToDate(iso){var p=iso.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
 function addDaysISO(iso,n){var p=iso.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function diffDays(a,b){return Math.round((isoToDate(a)-isoToDate(b))/86400000);}
