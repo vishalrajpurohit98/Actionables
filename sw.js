@@ -5,7 +5,7 @@
    - Auto-activates new versions so an OTA web deploy takes effect on next launch.
    Bump CACHE_VERSION whenever the shell asset list changes. The ?v= query in
    index.html already versions the individual files, so normal deploys are fine. */
-var CACHE_VERSION = 'actionables-v6_24';
+var CACHE_VERSION = 'actionables-v6_24_2';
 var SHELL = [
   './',
   './index.html',
@@ -15,14 +15,13 @@ var SHELL = [
   './seed.js',
   './firebase-config.js',
   './manifest.json',
-  './vendor/xlsx.full.min.js',
-  './vendor/jspdf.umd.min.js',
-  './vendor/jspdf.autotable.min.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/favicon-64.png',
   './icons/apple-touch-icon.png'
 ];
+/* Export libs (xlsx/jspdf) are intentionally NOT precached — they load lazily
+   on first export and get cached on demand by the fetch handler below. */
 
 self.addEventListener('install', function (e) {
   self.skipWaiting();

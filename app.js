@@ -1854,7 +1854,7 @@ function reportValue(a,label){var f=REPORT_FIELD_MAP[label];if(!f)return '';try{
 var reportColumns=(function(){try{var z=JSON.parse(localStorage.getItem('actionables.reportColumns')||'null');if(Array.isArray(z)&&z.length){var clean=z.filter(function(c){return REPORT_FIELD_MAP[c];});if(clean.length)return clean;}}catch(e){}return reportDefaultColumns();})();
 function exportRangeFilter(range){return range&&((range.from||'')||(range.to||''))?range:null;}
 function exportExcel(projId,projLabel,listOverride,range){
-  if(!xlsxReady()){toast('Export engine loading \u2014 try again');return;}
+  if(!xlsxReady()){if(window.loadExportLibs){toast('Preparing export\u2026');window.loadExportLibs('xlsx').then(function(){exportExcel(projId,projLabel,listOverride,range);}).catch(function(){toast('Could not load export engine');});}else{toast('Export engine unavailable');}return;}
   var list=listOverride?listOverride.slice():(projId?S.actionables.filter(function(a){return a.projectId===projId&&((range&&(range.from||range.to))||isOpen(a));}):S.actionables.filter(function(a){return (range&&(range.from||range.to))||isOpen(a);}));
   if(range&&(range.from||range.to))list=list.filter(function(a){var d=isOpen(a)?endEta(a):isoFromMs(a.completedAt||a.updatedAt);return d&&(!range.from||d>=range.from)&&(!range.to||d<=range.to);});
   list=sortActs(list,'project');
@@ -1872,7 +1872,7 @@ function exportExcel(projId,projLabel,listOverride,range){
 
 /* PDF status report — table columns follow the user's selected report columns. */
 function exportPdf(projId,projLabel,range){
-  if(!pdfReady()){toast('Export engine loading \u2014 try again');return;}
+  if(!pdfReady()){if(window.loadExportLibs){toast('Preparing export\u2026');window.loadExportLibs('pdf').then(function(){exportPdf(projId,projLabel,range);}).catch(function(){toast('Could not load export engine');});}else{toast('Export engine unavailable');}return;}
   var d=reportData(projId||null,true,range);
   var t=todayISO();
   var label=projLabel||'All Projects';
@@ -2266,7 +2266,7 @@ document.addEventListener('click',function(e){
       var tinp=$('#tmplFileInput',trec.sheet);if(!tinp)break;
       tinp.onchange=function(){
         var file=tinp.files&&tinp.files[0];if(!file)return;
-        if(!xlsxReady()){toast('Import engine loading \u2014 try again');return;}
+        if(!xlsxReady()){if(window.loadExportLibs){toast('Preparing import\u2026');window.loadExportLibs('xlsx').then(function(){tinp.onchange();}).catch(function(){toast('Could not load import engine');});return;}else{toast('Import engine unavailable');return;}}
         var fr=new FileReader();
         fr.onload=function(ev){
           var wb;try{wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});}catch(e){toast('Could not read the Excel file');return;}
@@ -2465,7 +2465,7 @@ function findOrAddPerson(name,c){name=String(name==null?'':name).trim();if(!name
 function sheetRows(wb,name){var ws=wb.Sheets[name];if(!ws)return [];return XLSX.utils.sheet_to_json(ws,{header:1,defval:''});}
 
 function exportTemplate(){
-  if(!xlsxReady()){toast('Export engine loading \u2014 try again');return;}
+  if(!xlsxReady()){if(window.loadExportLibs){toast('Preparing template\u2026');window.loadExportLibs('xlsx').then(function(){exportTemplate();}).catch(function(){toast('Could not load export engine');});}else{toast('Export engine unavailable');}return;}
   var XU=XLSX.utils,wb=XU.book_new();
   var info=[
    ['Actionables \u2014 data template (round-trip)'],
@@ -3232,7 +3232,7 @@ function aiCopyFallback(t){
   try{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.top='-1000px';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();var ok=document.execCommand('copy');document.body.removeChild(ta);toast(ok?'Copied to clipboard':'Copy not supported here');}catch(e){toast('Copy not supported here');}
 }
 function aiExportPDF(title,text){
-  if(!pdfReady()){toast('PDF engine loading \u2014 try again');return;}
+  if(!pdfReady()){if(window.loadExportLibs){toast('Preparing PDF\u2026');window.loadExportLibs('pdf').then(function(){aiExportPDF(title,text);}).catch(function(){toast('Could not load PDF engine');});}else{toast('PDF engine unavailable');}return;}
   if(!text){toast('Nothing to export');return;}
   var jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:'pt',format:'a4'});
   var W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=48,y=54;
@@ -3545,7 +3545,7 @@ function aiCopyText(idx){ var m=aiChat[idx]; if(!m)return; var t=m.text||''; if(
 
 /* flat-list report PDF for AI-generated reports */
 function aiReportPdf(list,label){
-  if(!pdfReady()){toast('PDF engine loading \u2014 try again');return false;}
+  if(!pdfReady()){if(window.loadExportLibs){toast('Preparing PDF\u2026');window.loadExportLibs('pdf').then(function(){aiReportPdf(list,label);}).catch(function(){toast('Could not load PDF engine');});}else{toast('PDF engine unavailable');}return false;}
   var jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:'pt',format:'a4'});
   var W=doc.internal.pageSize.getWidth(),M=40,y=48;
   doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(20,26,36);

@@ -14,13 +14,35 @@
 <div id="app"></div>
 <div id="sheets"></div>
 <div id="toastwrap"></div>
-<script src="vendor/xlsx.full.min.js"></script>
-<script src="vendor/jspdf.umd.min.js"></script>
-<script src="vendor/jspdf.autotable.min.js"></script>
-<script src="firebase-config.js"></script>
-<script src="sync.js?v=7.5.11"></script>
-<script src="seed.js?v=7.5.11"></script>
-<script src="app.js?v=7.5.11"></script>
+<script src="firebase-config.js" defer></script>
+<script src="sync.js?v=7.5.11" defer></script>
+<script src="seed.js?v=7.5.11" defer></script>
+<script src="app.js?v=7.5.11" defer></script>
+<script>
+/* Export libraries (XLSX ~880KB, jsPDF ~360KB) are loaded lazily on first
+   export/import instead of at startup, so the app paints immediately.
+   window.loadExportLibs(kind) returns a Promise; kind = 'xlsx' | 'pdf'. */
+window.loadExportLibs = (function () {
+  var loaded = {}, loading = {};
+  function one(src) {
+    if (loaded[src]) return Promise.resolve();
+    if (loading[src]) return loading[src];
+    loading[src] = new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function () { loaded[src] = true; res(); };
+      s.onerror = function () { rej(new Error('Failed to load ' + src)); };
+      document.body.appendChild(s);
+    });
+    return loading[src];
+  }
+  return function (kind) {
+    if (kind === 'xlsx') return one('vendor/xlsx.full.min.js');
+    if (kind === 'pdf') return one('vendor/jspdf.umd.min.js').then(function () { return one('vendor/jspdf.autotable.min.js'); });
+    return Promise.resolve();
+  };
+})();
+</script>
 <script>
 /* Register the service worker for offline support & faster loads. */
 if ('serviceWorker' in navigator) {
