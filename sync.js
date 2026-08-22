@@ -115,7 +115,6 @@
     g.className = 'cloudgate';
     g.innerHTML =
       '<div class="lock-bg"></div>' +
-      '<div class="lock-top"><div class="lock-clock" id="cgClock"></div><div class="lock-date" id="cgDate"></div></div>' +
       '<div class="cloudcard lock-card">' +
         '<div class="lock-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10" width="13" height="10" rx="2"/><path d="M8 10V7.8a4 4 0 0 1 8 0V10"/></svg></div>' +
         '<div class="cg-h">Actionables</div>' +
@@ -143,12 +142,6 @@
     function creds() {
       return { e: (g.querySelector('#cgEmail').value || '').trim(), p: g.querySelector('#cgPass').value || '' };
     }
-    function updateClock(){
-      var now=new Date(), clock=g.querySelector('#cgClock'), date=g.querySelector('#cgDate');
-      if(!clock||!date)return;
-      clock.textContent=now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      date.textContent=now.toLocaleDateString([], {weekday:'long',day:'numeric',month:'long'});
-    }
     function togglePassword(){
       var p=g.querySelector('#cgPass'), eye=g.querySelector('#cgEye');
       if(!p||!eye)return;
@@ -160,8 +153,6 @@
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 18 18"/><path d="M10.6 5.1A10.5 10.5 0 0 1 12 5c6 0 9.5 7 9.5 7a16 16 0 0 1-3.1 3.7"/><path d="M6.2 6.3C3.9 8 2.5 12 2.5 12s3.5 7 9.5 7c1.2 0 2.3-.2 3.3-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
     }
     g.querySelector('#cgEye').addEventListener('click', togglePassword);
-    updateClock();
-    g.__clockTimer=setInterval(updateClock,30000);
 
     g.querySelector('#cgIn').addEventListener('click', function () {
       var c = creds();
