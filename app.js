@@ -57,8 +57,156 @@ var FONTS=[['default','Default'],['apple','Apple'],['modern','Modern'],['pro','P
 function $(s,r){return (r||document).querySelector(s);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
-function pad(n){return (n<10?'0':'')+n;}
-function todayISO(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+
+/* ================= LOCAL LOCK (APK): PIN + fingerprint =================
+   The APK never shows the Firebase login screen. Firebase runs silently in the
+   background for cloud sync (its session persists after a one-time sign-in).
+   The only gate the user sees is a local PIN + fingerprint.
+   - First run (no PIN, no Firebase session): "activate" screen collects the
+     email+password ONCE (to turn on sync) and sets the local PIN together.
+   - First run but Firebase already has a session: just set a PIN.
+   - Returning: PIN + fingerprint unlock, sync restores silently.
+   Web is unaffected (keeps the Firebase login). */
+var LocalLock = (function(){
+  var KEY_PIN='actionables.localpin', KEY_BIO='actionables.biometric';
+  function isApk(){ return !!(window.Android); }
+  function hash(s){ var h=5381,i=s.length; while(i){h=(h*33)^s.charCodeAt(--i);} return (h>>>0).toString(36); }
+  function hasPin(){ try{ return !!localStorage.getItem(KEY_PIN); }catch(e){ return false; } }
+  function setPin(pin){ try{ localStorage.setItem(KEY_PIN,hash(String(pin))); return true; }catch(e){ return false; } }
+  function checkPin(pin){ try{ return localStorage.getItem(KEY_PIN)===hash(String(pin)); }catch(e){ return false; } }
+  function bioSupported(){ try{ return !!(window.Android&&window.Android.authenticateBiometric&&window.Android.biometricAvailable&&window.Android.biometricAvailable()); }catch(e){ return false; } }
+  function bioEnabled(){ try{ return localStorage.getItem(KEY_BIO)==='1'; }catch(e){ return false; } }
+  function setBioFlag(on){ try{ if(on)localStorage.setItem(KEY_BIO,'1'); else localStorage.removeItem(KEY_BIO); }catch(e){} }
+  function cloudReady(){ return !!(window.Cloud); }
+  function hasSession(){ try{ return !!(window.Cloud&&window.Cloud.hasSession&&window.Cloud.hasSession()); }catch(e){ return false; } }
+
+  var unlocked=false;
+  function open(){ unlocked=true; var g=document.getElementById('locallock'); if(g&&g.parentNode)g.parentNode.removeChild(g); document.body.classList.remove('auth-locked'); }
+  function afterSetPin(){ if(bioSupported())setBioFlag(true); open(); try{ toast('PIN set'+(bioSupported()?' \u00b7 fingerprint enabled':'')); }catch(e){} }
+
+  /* mode: 'signin' (first run: email+pass+PIN) | 'set' (PIN only) | 'unlock' */
+  function screen(mode){
+    document.body.classList.add('auth-locked');
+    var g=document.getElementById('locallock'); if(g&&g.parentNode)g.parentNode.removeChild(g);
+    g=document.createElement('div'); g.id='locallock'; g.className='cloudgate';
+    var isSignin=mode==='signin', isSet=mode==='set';
+    var head =
+      '<div class="lock-bg"></div>'+
+      '<div class="cloudcard lock-card">'+
+        '<div class="lock-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="10" width="13" height="10" rx="2"/><path d="M8 10V7.8a4 4 0 0 1 8 0V10"/></svg></div>'+
+        '<div class="cg-h">Actionables</div>';
+    var body;
+    if(isSignin){
+      body =
+        '<div class="cg-s">Sign in once to turn on sync, then set a PIN</div>'+
+        '<div class="cg-err" id="llErr"></div>'+
+        '<label class="cg-l">Email</label><div class="lock-field"><input id="llEmail" type="email" autocomplete="username" placeholder="you@example.com"></div>'+
+        '<label class="cg-l">Password</label><div class="lock-field"><input id="llPass" type="password" autocomplete="current-password" placeholder="Firebase account password"></div>'+
+        '<label class="cg-l">New PIN (4\u20138 digits)</label><div class="lock-field"><input id="llPin" type="password" inputmode="numeric" placeholder="\u2022\u2022\u2022\u2022" maxlength="8"></div>'+
+        '<div class="cg-btns"><button class="btn pri lock-unlock" id="llGo">Activate</button></div>'+
+        '<div class="lock-links"><button class="cg-skip" id="llSkip">Skip \u2014 use offline only</button></div>'+
+        '<div class="lock-secure">Sync via Firebase \u00b7 PIN stored on this device</div>';
+    } else if(isSet){
+      body =
+        '<div class="cg-s">Set a PIN to protect the app</div>'+
+        '<div class="cg-err" id="llErr"></div>'+
+        '<label class="cg-l">New PIN (4\u20138 digits)</label><div class="lock-field"><input id="llPin" type="password" inputmode="numeric" placeholder="\u2022\u2022\u2022\u2022" maxlength="8"></div>'+
+        '<label class="cg-l">Confirm PIN</label><div class="lock-field"><input id="llPin2" type="password" inputmode="numeric" placeholder="\u2022\u2022\u2022\u2022" maxlength="8"></div>'+
+        '<div class="cg-btns"><button class="btn pri lock-unlock" id="llGo">Set PIN</button></div>'+
+        '<div class="lock-secure">Stored on this device</div>';
+    } else {
+      body =
+        '<div class="cg-s">Enter your PIN to unlock</div>'+
+        '<div class="cg-err" id="llErr"></div>'+
+        '<label class="cg-l">PIN</label><div class="lock-field"><input id="llPin" type="password" inputmode="numeric" placeholder="\u2022\u2022\u2022\u2022" maxlength="8"></div>'+
+        '<div class="cg-btns"><button class="btn pri lock-unlock" id="llGo">Unlock</button></div>'+
+        ((bioSupported()&&bioEnabled())?'<div class="lock-links"><button class="cg-skip" id="llBio">Use fingerprint</button></div>':'')+
+        '<div class="lock-secure">Stored on this device</div>';
+    }
+    g.innerHTML = head + body + '</div><div class="lock-footer">Developed by <b>Vishal</b> \u00b7 Personal workspace</div>';
+    document.body.appendChild(g);
+    var err=function(m){ var e=g.querySelector('#llErr'); if(e)e.textContent=m||''; };
+    var pin=g.querySelector('#llPin');
+
+    if(isSignin){
+      g.querySelector('#llGo').addEventListener('click',function(){
+        var em=(g.querySelector('#llEmail').value||'').trim();
+        var pw=g.querySelector('#llPass').value||'';
+        var a=(pin.value||'').trim();
+        if(!em||!pw){ err('Enter your email and password'); return; }
+        if(!/^\d{4,8}$/.test(a)){ err('PIN must be 4\u20138 digits'); return; }
+        err('Signing in\u2026');
+        var go=function(){
+          window.Cloud.signInOnce(em,pw).then(function(){
+            setPin(a); afterSetPin();
+          }).catch(function(e2){ err('Sign-in failed \u2014 check email/password'); });
+        };
+        if(window.Cloud&&window.Cloud.onReady) window.Cloud.onReady(go); else go();
+      });
+      g.querySelector('#llSkip').addEventListener('click',function(){
+        // Offline-only: set just a PIN, no sync.
+        var a=(pin.value||'').trim();
+        if(!/^\d{4,8}$/.test(a)){ err('Set a 4\u20138 digit PIN to continue offline'); return; }
+        setPin(a); afterSetPin();
+      });
+    } else if(isSet){
+      g.querySelector('#llGo').addEventListener('click',function(){
+        var a=(pin.value||'').trim(), b=(g.querySelector('#llPin2').value||'').trim();
+        if(!/^\d{4,8}$/.test(a)){ err('PIN must be 4\u20138 digits'); return; }
+        if(a!==b){ err('PINs don\u2019t match'); return; }
+        setPin(a); afterSetPin();
+      });
+    } else {
+      var tryUnlock=function(){ if(checkPin((pin.value||'').trim())) open(); else { err('Wrong PIN'); pin.value=''; pin.focus(); } };
+      g.querySelector('#llGo').addEventListener('click',tryUnlock);
+      pin.addEventListener('keydown',function(e){ if(e.key==='Enter')tryUnlock(); });
+      var bioBtn=g.querySelector('#llBio');
+      var doBio=function(){ if(!bioSupported())return; window.onBiometricResult=function(ok){ if(ok)open(); }; try{ window.Android.authenticateBiometric('Unlock Actionables','Use your fingerprint'); }catch(e){} };
+      if(bioBtn)bioBtn.addEventListener('click',doBio);
+      if(bioSupported()&&bioEnabled()) setTimeout(doBio,300);
+      setTimeout(function(){ if(pin)pin.focus(); },50);
+    }
+  }
+
+  return {
+    start:function(){
+      if(!isApk()) return false;              // web: leave Firebase login alone
+      if(hasPin()){ screen('unlock'); return true; }
+      /* No PIN yet. If Firebase already has a session, just set a PIN.
+         Otherwise offer the one-time sign-in + PIN (with skip for offline). */
+      if(hasSession()){ screen('set'); }
+      else { screen('signin'); }
+      return true;
+    },
+    isUnlocked:function(){ return unlocked; },
+    hasPin:hasPin,
+    changePin:function(){ screen('set'); },
+    bioSupported:bioSupported,
+    bioEnabled:bioEnabled,
+    setBio:function(on){ if(on&&!bioSupported())return 'unsupported'; setBioFlag(on); return 'ok'; }
+  };
+})();
+function reconnectSync(){
+  if(!(window.Cloud&&window.Cloud.signInOnce)){toast('Sync not available');return;}
+  var g=document.createElement('div');g.id='reconnectgate';g.className='cloudgate';
+  g.innerHTML='<div class="lock-bg"></div><div class="cloudcard lock-card">'+
+    '<div class="cg-h">Reconnect sync</div>'+
+    '<div class="cg-s">Sign in to resume cloud sync</div>'+
+    '<div class="cg-err" id="rcErr"></div>'+
+    '<label class="cg-l">Email</label><div class="lock-field"><input id="rcEmail" type="email" placeholder="you@example.com"></div>'+
+    '<label class="cg-l">Password</label><div class="lock-field"><input id="rcPass" type="password" placeholder="Password"></div>'+
+    '<div class="cg-btns"><button class="btn pri lock-unlock" id="rcGo">Reconnect</button><button class="btn ghost" id="rcCancel">Cancel</button></div>'+
+    '</div>';
+  document.body.appendChild(g);
+  var err=function(m){var e=g.querySelector('#rcErr');if(e)e.textContent=m||'';};
+  g.querySelector('#rcCancel').addEventListener('click',function(){g.parentNode&&g.parentNode.removeChild(g);});
+  g.querySelector('#rcGo').addEventListener('click',function(){
+    var em=(g.querySelector('#rcEmail').value||'').trim(),pw=g.querySelector('#rcPass').value||'';
+    if(!em||!pw){err('Enter email and password');return;}
+    err('Connecting\u2026');
+    window.Cloud.signInOnce(em,pw).then(function(){g.parentNode&&g.parentNode.removeChild(g);toast('Sync reconnected');render();}).catch(function(){err('Sign-in failed');});
+  });
+}
 function isoToDate(iso){var p=iso.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
 function addDaysISO(iso,n){var p=iso.split('-');var d=new Date(+p[0],+p[1]-1,+p[2]+n);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
 function diffDays(a,b){return Math.round((isoToDate(a)-isoToDate(b))/86400000);}
@@ -1249,7 +1397,8 @@ function vSettings(){
     '<button class="rowline" data-act="versions-open">'+I('clock')+'<span class="t">Version history<br><span class="s">Roll back to a recent saved state</span></span>'+I('chevR')+'</button>'+
     '<button class="rowline" data-act="reseed">'+I('doc')+'<span class="t">Reset to original data<br><span class="s">Replace all data with the BCP / ICICI / SCB demo set</span></span>'+I('chevR')+'</button>'+
     '</div>';
-  /* Sync (Firebase) */
+  /* Sync (Firebase) — active on both web and APK. On the APK the login is
+     silent; this just shows status and lets you sign out. */
   var cloudOn=!!(window.Cloud&&window.Cloud.configured&&window.Cloud.configured());
   var cst=(window.Cloud&&window.Cloud.status)?window.Cloud.status():{configured:false};
   h+='<div class="eyebrow">Sync</div><div class="pane">';
@@ -1257,20 +1406,22 @@ function vSettings(){
     h+='<div class="togglerow"><span class="t">'+I('cloud')+' Cloud sync \u00b7 <b style="color:var(--acc)">'+esc(cst.label||'')+'</b></span>'+
       (cst.signedIn?'<button class="btn ghost mini" data-act="cloud-signout">Sign out</button>':'')+'</div>'+
       (cst.email?'<div class="note" style="padding:8px 0 0">Signed in as '+esc(cst.email)+'. Changes sync across every device signed in with this account.</div>'
-        :'<div class="note" style="padding:8px 0 0">Sign in on the cloud screen to start syncing.</div>');
+        :'<div class="note" style="padding:8px 0 0">'+(window.Android?'Not signed in \u2014 tap Reconnect to activate sync.':'Sign in on the cloud screen to start syncing.')+(window.Android&&!cst.signedIn?' <button class="btn ghost mini" data-act="reconnect-sync" style="margin-top:8px">Reconnect sync</button>':'')+'</div>');
   }else{
     h+='<div class="togglerow"><span class="t">'+I('cloud')+' Cloud sync \u00b7 <b>off</b></span></div>'+
       '<div class="note" style="padding:8px 0 0">Data is stored on this device only. To sync across browsers and devices, add your Firebase config in <b>firebase-config.js</b> and reload — see the hosting README.</div>';
   }
   h+='</div>';
-  /* Security — biometric unlock (APK only, shown only when supported) */
-  var bioSupported=!!(window.Cloud&&window.Cloud.biometricSupported&&window.Cloud.biometricSupported());
-  if(bioSupported){
-    var bioOn=!!(window.Cloud.biometricEnabled&&window.Cloud.biometricEnabled());
+  /* Security — APK only: local PIN + fingerprint */
+  if(window.Android){
+    var llBio=!!(window.LocalLock&&LocalLock.bioSupported&&LocalLock.bioSupported());
+    var llBioOn=!!(window.LocalLock&&LocalLock.bioEnabled&&LocalLock.bioEnabled());
     h+='<div class="eyebrow">Security</div><div class="pane">'+
-      '<div class="togglerow"><span class="t">'+I('lock')+' Lock app with fingerprint / face</span>'+
-      '<button class="switch'+(bioOn?' on':'')+'" data-act="toggle-biometric"><i></i></button></div>'+
-      '<div class="note" style="padding:8px 0 0">Off by default \u2014 you stay signed in and the app opens straight away. Turn this on to require your fingerprint (or password) each time the app opens, for privacy.</div></div>';
+      '<button class="rowline" data-act="change-pin">'+I('lock')+'<span class="t">Change PIN<br><span class="s">'+(window.LocalLock&&LocalLock.hasPin&&LocalLock.hasPin()?'PIN is set':'No PIN set')+'</span></span>'+I('chevR')+'</button>'+
+      (llBio?('<div class="togglerow"><span class="t">'+I('lock')+' Unlock with fingerprint</span>'+
+        '<button class="switch'+(llBioOn?' on':'')+'" data-act="toggle-localbio"><i></i></button></div>'+
+        '<div class="note" style="padding:8px 0 0">Use your fingerprint to unlock, with the PIN as fallback.</div>'):'')+
+      '</div>';
   }
   h+='<div class="note">Actionables \u00b7 '+(cloudOn?'offline-first with cloud sync':'fully offline \u00b7 data stays on this device')+'.</div>';
   h+='<div class="appcredit">Developed by <b>Vishal</b><span>For personal use only</span></div>';
@@ -2083,13 +2234,14 @@ document.addEventListener('click',function(e){
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
     case 'open-alerts':openAlertsSheet();break;
-    case 'toggle-biometric':{
-      var wasOn=!!(window.Cloud&&window.Cloud.biometricEnabled&&window.Cloud.biometricEnabled());
-      var r=(window.Cloud&&window.Cloud.setBiometric)?window.Cloud.setBiometric(!wasOn):'error';
-      if(r==='ok'){toast(!wasOn?'App lock enabled \u00b7 fingerprint required':'App lock disabled \u00b7 you\u2019ll stay signed in');}
-      else if(r==='signin'){toast('Sign in first, then enable fingerprint unlock');}
-      else if(r==='unsupported'){toast('This device doesn\u2019t support biometric unlock');}
-      else{toast('Couldn\u2019t change the setting');}
+    case 'reconnect-sync':{reconnectSync();break;}
+    case 'change-pin':{if(window.LocalLock&&LocalLock.changePin)LocalLock.changePin();break;}
+    case 'toggle-localbio':{
+      var wasB=!!(window.LocalLock&&LocalLock.bioEnabled&&LocalLock.bioEnabled());
+      var rb=(window.LocalLock&&LocalLock.setBio)?LocalLock.setBio(!wasB):'error';
+      if(rb==='ok')toast(!wasB?'Fingerprint unlock enabled':'Fingerprint unlock disabled');
+      else if(rb==='unsupported')toast('This device doesn\u2019t support fingerprint');
+      else toast('Couldn\u2019t change the setting');
       render();break;
     }
     case 'alert-toggle':{var atp=el.getAttribute('data-type'),ar=ensureAlertRule(atp);ar.enabled=!ar.enabled;saveState();syncAlertRules();var arr=sheetFor('alerts');if(arr)renderAlertsSheet(arr);if(view.name==='settings')render();break;}
@@ -2440,7 +2592,13 @@ applyTheme();
 syncSchedule();
 if(window.syncAlertRules)syncAlertRules();
 render();
+/* Both platforms init Firebase for sync. On the APK the Firebase login screen
+   is suppressed (silent session) and a local PIN/fingerprint lock gates the UI.
+   On web, Firebase shows its own login as before. */
 try{if(window.Cloud&&window.Cloud.init)window.Cloud.init();}catch(e){}
+if(window.Android){
+  try{ LocalLock.start(); }catch(e){}
+}
 
 /* ================= Excel round-trip template ================= */
 function isoFromMs(ms){if(!ms)return '';var d=new Date(ms);function p(n){return(n<10?'0':'')+n;}return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}

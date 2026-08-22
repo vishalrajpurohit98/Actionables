@@ -21,6 +21,7 @@
   var cfg = window.FIREBASE_CONFIG || null;
   var auth = null, db = null, ref = null, unsub = null;
   var uid = null, unlocked = false;
+  var readyCbs = [];
   var status = { configured: false, signedIn: false, email: '', label: 'Local only' };
   var pushTimer = null, offlineOnly = false, started = false;
 
@@ -236,6 +237,15 @@
       pushTimer = setTimeout(function () { pushTimer = null; pushNow(); }, 450);
     },
     signOut: function () { if (auth) auth.signOut(); },
+    /* First-run silent-login helper for the APK: sign in once to activate sync.
+       After this, Firebase persists the session, so future launches are silent. */
+    hasSession: function () { return !!(auth && auth.currentUser); },
+    signInOnce: function (email, pass) {
+      if (!auth) return Promise.reject(new Error('not-ready'));
+      return auth.signInWithEmailAndPassword((email||'').trim(), pass||'')
+        .then(function () { unlocked = true; subscribe(); setLabel('Synced'); return 'ok'; });
+    },
+    onReady: function (cb) { readyCbs.push(cb); if (auth) cb(); },
     /* Biometric unlock controls (APK only). */
     biometricSupported: function () { return biometricSupported(); },
     biometricEnabled: function () { return biometricEnabled(); },
@@ -282,19 +292,23 @@
       loadSDK().then(function () {
         firebase.initializeApp(cfg);
         auth = firebase.auth();
+        try { readyCbs.forEach(function (cb) { try { cb(); } catch (e) {} }); readyCbs = []; } catch (e) {}
         db = firebase.firestore();
         try { db.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) {}
         auth.onAuthStateChanged(function (user) {
+          var isApk = !!(window.Android);
           if (user) {
             uid = user.uid;
             status.signedIn = true; status.email = user.email || '';
-            var isApk = !!(window.Android);
-            var lockWithBio = biometricEnabled() && biometricSupported();
-            /* APK: stay signed in by default (no password every launch). If the
-               optional fingerprint lock is on, show the lock with biometric.
-               WEB: always keep the password lock each launch (browsers are more
-               exposed and have no biometric fallback). */
-            if (!isApk || lockWithBio) {
+            if (isApk) {
+              /* APK: Firebase session is silent — no Firebase login screen ever.
+                 The local PIN/fingerprint lock (in app.js) is the only gate.
+                 Just start syncing in the background. */
+              unlocked = true;
+              subscribe();
+              setLabel('Synced');
+            } else {
+              /* WEB: keep the Firebase password lock each launch. */
               unlocked = false;
               gate(true);
               var g = document.getElementById('cloudgate');
@@ -304,39 +318,42 @@
                 var up = g.querySelector('#cgUp');
                 var reset = g.querySelector('#cgReset');
                 if (email) { email.value = user.email || ''; email.readOnly = true; email.setAttribute('aria-readonly','true'); }
-                if (sub) sub.textContent = lockWithBio ? 'Unlock with fingerprint, or enter your password' : 'Enter your password to unlock your workspace';
+                if (sub) sub.textContent = 'Enter your password to unlock your workspace';
                 if (up) up.style.display = 'none';
                 if (reset) reset.style.display = 'inline-block';
-                if (lockWithBio) maybeOfferBiometric(g);
               }
               setLabel('Locked');
-            } else {
-              /* APK, no lock configured — go straight in. */
-              unlocked = true;
-              gate(false);
-              subscribe();
-              setLabel('Synced');
             }
           } else {
             uid = null; status.signedIn = false; status.email = ''; unlocked = false;
             if (unsub) { try { unsub(); } catch (e) {} unsub = null; }
             ref = null;
-            gate(true); setLabel('Signed out');
-            var g = document.getElementById('cloudgate');
-            if (g) {
-              var email = g.querySelector('#cgEmail');
-              var sub = g.querySelector('#cgSub');
-              var up = g.querySelector('#cgUp');
-              if (email) { email.readOnly = false; email.removeAttribute('aria-readonly'); }
-              if (sub) sub.textContent = 'Sign in to access your workspace';
-              if (up) up.style.display = '';
+            if (isApk) {
+              /* APK, no Firebase session yet: don't show the Firebase gate here.
+                 app.js first-run flow will collect email+password via signInOnce()
+                 to activate sync, then set the local PIN. */
+              setLabel('Sign in to sync');
+            } else {
+              gate(true); setLabel('Signed out');
+              var g = document.getElementById('cloudgate');
+              if (g) {
+                var email = g.querySelector('#cgEmail');
+                var sub = g.querySelector('#cgSub');
+                var up = g.querySelector('#cgUp');
+                if (email) { email.readOnly = false; email.removeAttribute('aria-readonly'); }
+                if (sub) sub.textContent = 'Sign in to access your workspace';
+                if (up) up.style.display = '';
+              }
             }
           }
         });
       }).catch(function () {
-        // Authentication is required when Firebase is configured. Keep the app locked if the SDK cannot load.
-        setLabel('Authentication unavailable');
-        gate(true, 'Unable to load authentication. Check your internet connection and reload.');
+        // On the APK we don't block on Firebase — sync just stays off until next load.
+        if (window.Android) { setLabel('Sync offline'); }
+        else {
+          setLabel('Authentication unavailable');
+          gate(true, 'Unable to load authentication. Check your internet connection and reload.');
+        }
       });
     }
   };
