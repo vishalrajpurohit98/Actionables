@@ -61,6 +61,44 @@
     return (err && err.message) || 'Something went wrong.';
   }
 
+  /* ---- Biometric unlock (APK only) ----
+     Only meaningful for a returning user whose Firebase session is still valid;
+     it unlocks the app's local lock screen instead of retyping the password.
+     Enabled flag is stored in localStorage so it's readable here independently. */
+  function biometricEnabled(){ try { return localStorage.getItem('actionables.biometric') === '1'; } catch(e){ return false; } }
+  function biometricSupported(){ try { return !!(window.Android && window.Android.authenticateBiometric && window.Android.biometricAvailable && window.Android.biometricAvailable()); } catch(e){ return false; } }
+  function doBiometricUnlock(g){
+    if (!biometricSupported()) return;
+    window.onBiometricResult = function(ok){
+      if (ok) {
+        unlocked = true;
+        gate(false);
+        subscribe();
+      } else {
+        // fell back or errored — leave the password field available
+        if (g) { var sub = g.querySelector('#cgSub'); if (sub) sub.textContent = 'Enter your password to unlock your workspace'; }
+      }
+    };
+    try { window.Android.authenticateBiometric('Unlock Actionables', 'Use your fingerprint or screen lock'); } catch(e){}
+  }
+  function maybeOfferBiometric(g){
+    if (!g || !biometricEnabled() || !biometricSupported()) return;
+    // Add a "Use fingerprint" button once.
+    if (!g.querySelector('#cgBio')) {
+      var btns = g.querySelector('.cg-btns');
+      if (btns) {
+        var b = document.createElement('button');
+        b.className = 'btn ghost lock-bio'; b.id = 'cgBio';
+        b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><path d="M12 4.5c-3.6 0-6.5 2.6-6.5 6v3"/><path d="M12 4.5c3.6 0 6.5 2.6 6.5 6v5.5"/><path d="M8.5 11.5v2.5a3.5 3.5 0 0 0 7 0v-2.5a3.5 3.5 0 0 0-7 0z"/><path d="M12 12v3"/></svg>Use fingerprint';
+        b.addEventListener('click', function(){ doBiometricUnlock(g); });
+        btns.appendChild(b);
+      }
+    }
+    var sub = g.querySelector('#cgSub'); if (sub) sub.textContent = 'Unlock with fingerprint, or enter your password';
+    // Auto-prompt shortly after the lock screen appears.
+    setTimeout(function(){ doBiometricUnlock(g); }, 350);
+  }
+
   /* ---- Actionables lock/login screen ---- */
   function gate(show, msg) {
     var g = document.getElementById('cloudgate');
@@ -207,6 +245,23 @@
       pushTimer = setTimeout(function () { pushTimer = null; pushNow(); }, 450);
     },
     signOut: function () { if (auth) auth.signOut(); },
+    /* Biometric unlock controls (APK only). */
+    biometricSupported: function () { return biometricSupported(); },
+    biometricEnabled: function () { return biometricEnabled(); },
+    isUnlocked: function () { return unlocked; },
+    setBiometric: function (on) {
+      try {
+        if (on) {
+          if (!biometricSupported()) return 'unsupported';
+          if (!(auth && auth.currentUser)) return 'signin';   // must be logged in first
+          localStorage.setItem('actionables.biometric', '1');
+          return 'ok';
+        } else {
+          localStorage.removeItem('actionables.biometric');
+          return 'ok';
+        }
+      } catch (e) { return 'error'; }
+    },
     /* Manual "Sync now": probe the server, push local up, and flip to Synced.
        Forces the round-trip instead of waiting for Firestore's passive confirm. */
     syncNow: function () {
@@ -242,20 +297,35 @@
           if (user) {
             uid = user.uid;
             status.signedIn = true; status.email = user.email || '';
-            unlocked = false;
-            gate(true);
-            var g = document.getElementById('cloudgate');
-            if (g) {
-              var email = g.querySelector('#cgEmail');
-              var sub = g.querySelector('#cgSub');
-              var up = g.querySelector('#cgUp');
-              var reset = g.querySelector('#cgReset');
-              if (email) { email.value = user.email || ''; email.readOnly = true; email.setAttribute('aria-readonly','true'); }
-              if (sub) sub.textContent = 'Enter your password to unlock your workspace';
-              if (up) up.style.display = 'none';
-              if (reset) reset.style.display = 'inline-block';
+            var isApk = !!(window.Android);
+            var lockWithBio = biometricEnabled() && biometricSupported();
+            /* APK: stay signed in by default (no password every launch). If the
+               optional fingerprint lock is on, show the lock with biometric.
+               WEB: always keep the password lock each launch (browsers are more
+               exposed and have no biometric fallback). */
+            if (!isApk || lockWithBio) {
+              unlocked = false;
+              gate(true);
+              var g = document.getElementById('cloudgate');
+              if (g) {
+                var email = g.querySelector('#cgEmail');
+                var sub = g.querySelector('#cgSub');
+                var up = g.querySelector('#cgUp');
+                var reset = g.querySelector('#cgReset');
+                if (email) { email.value = user.email || ''; email.readOnly = true; email.setAttribute('aria-readonly','true'); }
+                if (sub) sub.textContent = lockWithBio ? 'Unlock with fingerprint, or enter your password' : 'Enter your password to unlock your workspace';
+                if (up) up.style.display = 'none';
+                if (reset) reset.style.display = 'inline-block';
+                if (lockWithBio) maybeOfferBiometric(g);
+              }
+              setLabel('Locked');
+            } else {
+              /* APK, no lock configured — go straight in. */
+              unlocked = true;
+              gate(false);
+              subscribe();
+              setLabel('Synced');
             }
-            setLabel('Locked');
           } else {
             uid = null; status.signedIn = false; status.email = ''; unlocked = false;
             if (unsub) { try { unsub(); } catch (e) {} unsub = null; }

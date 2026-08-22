@@ -1,5 +1,8 @@
 package com.actionables.app;
 
+import android.hardware.biometrics.BiometricPrompt;
+import android.os.CancellationSignal;
+import java.util.concurrent.Executor;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlarmManager;
@@ -467,6 +470,56 @@ public class MainActivity extends Activity {
         public void syncAlertRules(final String rulesJson) {
             runOnJs(new Runnable() { public void run() {
                 AlertScheduler.sync(MainActivity.this, rulesJson);
+            }});
+        }
+
+        /* Returns true if this device can do biometric auth right now (API 29+ path). */
+        @JavascriptInterface
+        public boolean biometricAvailable() {
+            try {
+                if (Build.VERSION.SDK_INT < 29) return false;
+                android.hardware.biometrics.BiometricManager bm =
+                        (android.hardware.biometrics.BiometricManager) getSystemService(Context.BIOMETRIC_SERVICE);
+                if (bm == null) return false;
+                return bm.canAuthenticate() == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS;
+            } catch (Throwable t) { return false; }
+        }
+
+        /* Show the system fingerprint/face prompt. On result, calls back into JS:
+           window.onBiometricResult(true|false). Requires API 28+ (BiometricPrompt). */
+        @JavascriptInterface
+        public void authenticateBiometric(final String title, final String subtitle) {
+            if (Build.VERSION.SDK_INT < 28) { jsCall("window.onBiometricResult && window.onBiometricResult(false,'unsupported');"); return; }
+            runOnUiThread(new Runnable() { public void run() {
+                try {
+                    Executor exec = new Executor() {
+                        public void execute(Runnable r) { runOnUiThread(r); }
+                    };
+                    BiometricPrompt.Builder pb = new BiometricPrompt.Builder(MainActivity.this)
+                            .setTitle(title == null || title.isEmpty() ? "Unlock Actionables" : title)
+                            .setSubtitle(subtitle == null ? "" : subtitle);
+                    // Provide a system cancel button (required on API 28-29).
+                    pb.setNegativeButton("Use password", exec, new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface d, int w) {
+                            jsCall("window.onBiometricResult && window.onBiometricResult(false,'fallback');");
+                        }
+                    });
+                    BiometricPrompt prompt = pb.build();
+                    CancellationSignal cancel = new CancellationSignal();
+                    prompt.authenticate(cancel, exec, new BiometricPrompt.AuthenticationCallback() {
+                        @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                            jsCall("window.onBiometricResult && window.onBiometricResult(true,'');");
+                        }
+                        @Override public void onAuthenticationError(int code, CharSequence errString) {
+                            jsCall("window.onBiometricResult && window.onBiometricResult(false,'error');");
+                        }
+                        @Override public void onAuthenticationFailed() {
+                            /* a single non-match; the prompt stays open for retry — do nothing */
+                        }
+                    });
+                } catch (Throwable t) {
+                    jsCall("window.onBiometricResult && window.onBiometricResult(false,'error');");
+                }
             }});
         }
 

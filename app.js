@@ -1263,6 +1263,15 @@ function vSettings(){
       '<div class="note" style="padding:8px 0 0">Data is stored on this device only. To sync across browsers and devices, add your Firebase config in <b>firebase-config.js</b> and reload — see the hosting README.</div>';
   }
   h+='</div>';
+  /* Security — biometric unlock (APK only, shown only when supported) */
+  var bioSupported=!!(window.Cloud&&window.Cloud.biometricSupported&&window.Cloud.biometricSupported());
+  if(bioSupported){
+    var bioOn=!!(window.Cloud.biometricEnabled&&window.Cloud.biometricEnabled());
+    h+='<div class="eyebrow">Security</div><div class="pane">'+
+      '<div class="togglerow"><span class="t">'+I('lock')+' Lock app with fingerprint / face</span>'+
+      '<button class="switch'+(bioOn?' on':'')+'" data-act="toggle-biometric"><i></i></button></div>'+
+      '<div class="note" style="padding:8px 0 0">Off by default \u2014 you stay signed in and the app opens straight away. Turn this on to require your fingerprint (or password) each time the app opens, for privacy.</div></div>';
+  }
   h+='<div class="note">Actionables \u00b7 '+(cloudOn?'offline-first with cloud sync':'fully offline \u00b7 data stays on this device')+'.</div>';
   h+='<div class="appcredit">Developed by <b>Vishal</b><span>For personal use only</span></div>';
   return h;
@@ -2074,6 +2083,15 @@ document.addEventListener('click',function(e){
     case 'd-important':{var dri=sheetFor('detail');if(dri){var ai=actById(dri.data.id);if(ai){updateAct(dri.data.id,{important:!ai.important});renderDetail(dri);render();}}break;}
     case 'add-for-day':{var dIso=el.getAttribute('data-d');closeTop();openForm(null,{eta:dIso});break;}
     case 'open-alerts':openAlertsSheet();break;
+    case 'toggle-biometric':{
+      var wasOn=!!(window.Cloud&&window.Cloud.biometricEnabled&&window.Cloud.biometricEnabled());
+      var r=(window.Cloud&&window.Cloud.setBiometric)?window.Cloud.setBiometric(!wasOn):'error';
+      if(r==='ok'){toast(!wasOn?'App lock enabled \u00b7 fingerprint required':'App lock disabled \u00b7 you\u2019ll stay signed in');}
+      else if(r==='signin'){toast('Sign in first, then enable fingerprint unlock');}
+      else if(r==='unsupported'){toast('This device doesn\u2019t support biometric unlock');}
+      else{toast('Couldn\u2019t change the setting');}
+      render();break;
+    }
     case 'alert-toggle':{var atp=el.getAttribute('data-type'),ar=ensureAlertRule(atp);ar.enabled=!ar.enabled;saveState();syncAlertRules();var arr=sheetFor('alerts');if(arr)renderAlertsSheet(arr);if(view.name==='settings')render();break;}
     case 'alert-time-add':{var inp=document.getElementById('alertTimeInput');var tv=inp?inp.value:'';if(tv){if(!Array.isArray(S.alertTimes))S.alertTimes=[];if(S.alertTimes.indexOf(tv)<0){S.alertTimes.push(tv);saveState();syncAlertRules();}}var arr2=sheetFor('alerts');if(arr2)renderAlertsSheet(arr2);break;}
     case 'alert-time-del':{var tv3=el.getAttribute('data-time');S.alertTimes=(S.alertTimes||[]).filter(function(x){return x!==tv3;});saveState();syncAlertRules();var arr3=sheetFor('alerts');if(arr3)renderAlertsSheet(arr3);break;}
